@@ -454,6 +454,20 @@ func targetKind(kind string) string {
 	return "doc"
 }
 
+// autoApproval is the approval an entry takes on the way in when its author's
+// time approves itself (the setting a super admin turns on for a salaried
+// person, kept on the person in Postgres): the entry's work starts at or after
+// the moment it was turned on. Nil when it does not apply. The setting is read
+// every time, so turning it on or off takes effect on the next entry.
+func (s *TimeLog) autoApproval(ctx context.Context, orgID, principalID string, start time.Time) (map[string]any, error) {
+	since, err := s.Store.AutoApproveSince(ctx, orgID, principalID)
+	if err != nil || since == nil || start.Before(*since) {
+		return nil, err
+	}
+	return map[string]any{"hearth_approval": "approved", "hearth_decided_by": emberops.Ref(principalID),
+		"hearth_decided_at": s.tsv(time.Now()), "hearth_decision_note": timelog.AutoApprovedNote}, nil
+}
+
 func (s *TimeLog) record(ctx context.Context, orgID string, actor core.Subjects, docID string, minutes int, on time.Time, note string, requireDoc bool) (*timelog.Entry, error) {
 	kind := ""
 	if docID != "" {
@@ -486,14 +500,26 @@ func (s *TimeLog) record(ctx context.Context, orgID string, actor core.Subjects,
 	}
 	row := mapping.TZ{Loc: s.loc()}.TimeEntryRow(rec, nil, "")
 	delete(row, "doctype")
+	auto, err := s.autoApproval(ctx, orgID, actor.Principal(), on)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range auto {
+		row[k] = v
+	}
 	if _, err := s.C.UpsertTimeEntry(ctx, row); err != nil {
 		if isForbidden(err) {
 			return nil, timelog.ErrForbidden
 		}
 		return nil, err
 	}
-	return &timelog.Entry{ID: id, DocumentID: docID, PrincipalID: actor.Principal(), StartedAt: on, EndedAt: &end,
-		Minutes: &minutes, Note: strings.TrimSpace(note)}, nil
+	e := &timelog.Entry{ID: id, DocumentID: docID, PrincipalID: actor.Principal(), StartedAt: on, EndedAt: &end,
+		Minutes: &minutes, Note: strings.TrimSpace(note)}
+	if auto != nil {
+		yes, now := true, time.Now()
+		e.Approved, e.DecidedAt, e.DecidedBy, e.DecidedNote = &yes, &now, actor.Principal(), timelog.AutoApprovedNote
+	}
+	return e, nil
 }
 
 func (s *TimeLog) Log(ctx context.Context, orgID string, actor core.Subjects, docID string, minutes int, on time.Time, note string) (*timelog.Entry, error) {
@@ -698,6 +724,21 @@ func (s *TimeLog) Stop(ctx context.Context, orgID, principalID string) (*timelog
 		return nil, err
 	}
 	es[0].PrincipalID = principalID
+	auto, err := s.autoApproval(ctx, orgID, principalID, es[0].StartedAt)
+	if err != nil {
+		return nil, err
+	}
+	if auto != nil {
+		_, emp, err := s.owner(ctx, r)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.patch(ctx, id, emp, auto); err != nil {
+			return nil, err
+		}
+		yes, now := true, time.Now()
+		es[0].Approved, es[0].DecidedAt, es[0].DecidedBy, es[0].DecidedNote = &yes, &now, principalID, timelog.AutoApprovedNote
+	}
 	return &es[0], nil
 }
 
@@ -849,7 +890,74 @@ func (s *TimeLog) ApproveMany(ctx context.Context, orgID, actorID string, entryI
 	if errors.Is(err, timelog.ErrNotYours) {
 		return 0, timelog.ErrBatchRefused
 	}
-	return n, err
+	if err != nil {
+		return n, err
+	}
+	// The audit row Postgres writes for a bulk approval, kept in Hearth's own
+	// database whichever back end holds the entries.
+	return n, s.Store.AuditApproveMany(ctx, orgID, actorID, ids)
+}
+
+// AutoApproveMany approves a person's waiting entries by their own auto-approve
+// setting: decider the person, note the reason, as the entries filed after the
+// setting are. Refused while the setting is off; all or nothing on whether every
+// entry is theirs, finished, waiting and not removed, checked before any write.
+func (s *TimeLog) AutoApproveMany(ctx context.Context, orgID, personID string, entryIDs []string, reason string) (int, error) {
+	if strings.TrimSpace(reason) == "" {
+		return 0, errors.New("timelog: say why")
+	}
+	if len(entryIDs) == 0 {
+		return 0, errors.New("timelog: choose at least one entry")
+	}
+	since, err := s.Store.AutoApproveSince(ctx, orgID, personID)
+	if err != nil {
+		return 0, err
+	}
+	if since == nil {
+		return 0, timelog.ErrAutoApproveOff
+	}
+	var want []any
+	for _, id := range entryIDs {
+		if _, err := uuid.Parse(id); err != nil {
+			return 0, errors.New("timelog: that is not an entry")
+		}
+		want = append(want, id)
+	}
+	rows, err := s.detail(ctx, []emberops.Filter{{Field: "hearth_id", Op: "in", Value: want}}, "", 0)
+	if err != nil {
+		return 0, err
+	}
+	es, err := s.entries(ctx, rows)
+	if err != nil {
+		return 0, err
+	}
+	ok := map[string]bool{}
+	for _, e := range es {
+		if e.PrincipalID == personID && e.EndedAt != nil && e.DeletedAt == nil && e.DecidedAt == nil {
+			ok[strings.ToLower(e.ID)] = true
+		}
+	}
+	for _, id := range entryIDs {
+		if !ok[strings.ToLower(id)] {
+			return 0, timelog.ErrBatchRefused
+		}
+	}
+	byID := map[string]emberops.Row{}
+	for _, r := range rows {
+		byID[strings.ToLower(r.S("hearth_id"))] = r
+	}
+	now := time.Now()
+	for _, id := range entryIDs {
+		_, emp, err := s.owner(ctx, byID[strings.ToLower(id)])
+		if err != nil {
+			return 0, err
+		}
+		if err := s.patch(ctx, id, emp, map[string]any{"hearth_approval": "approved", "hearth_decided_by": emberops.Ref(personID),
+			"hearth_decided_at": s.tsv(now), "hearth_decision_note": strings.TrimSpace(reason)}); err != nil {
+			return 0, err
+		}
+	}
+	return len(entryIDs), s.Store.AuditAutoApprove(ctx, orgID, personID, entryIDs, strings.TrimSpace(reason))
 }
 
 func (s *TimeLog) Reopen(ctx context.Context, orgID, actorID, entryID string) error {

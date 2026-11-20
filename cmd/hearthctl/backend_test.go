@@ -33,7 +33,7 @@ func TestTimeImportInEmberOpsModeWritesAndChecksEmberOps(t *testing.T) {
 	c := emberops.New(emberops.Config{BaseURL: u, Service: emberops.StaticToken("svc-tok")})
 	f.Put("User", map[string]any{"name": "ann@example.com", "hearth_id": annID, "full_name": "Ann"})
 	f.Put("Employee", map[string]any{"name": "EMP-ann", "hearth_id": annID, "user_id": "ann@example.com"})
-	tl := &stores.TimeLog{Base: stores.Base{C: c}, Dir: stores.Directory{C: c}}
+	tl := &stores.TimeLog{Store: noAutoApprove{}, Base: stores.Base{C: c}, Dir: stores.Directory{C: c}}
 	imp := &timeImporter{az: personFinder{annID}, svc: tl, org: "org", who: annID}
 	rows := []timeImportRow{{Start: time.Date(2026, 10, 2, 13, 0, 0, 0, time.UTC), Minutes: 90, Note: "Reconstructed from GitHub activity: x"}}
 
@@ -52,6 +52,13 @@ func TestTimeImportInEmberOpsModeWritesAndChecksEmberOps(t *testing.T) {
 	if len(f.All("Timesheet Detail")) != 1 {
 		t.Fatal("the entry was written twice")
 	}
+}
+
+// noAutoApprove is the Postgres half of time for a test that has no Postgres: nobody's time approves itself.
+type noAutoApprove struct{ timelog.Store }
+
+func (noAutoApprove) AutoApproveSince(context.Context, string, string) (*time.Time, error) {
+	return nil, nil
 }
 
 type spyTime struct {

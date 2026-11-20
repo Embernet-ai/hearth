@@ -88,6 +88,8 @@ func main() {
 		err = runTimeImport(ctx, os.Args[2:])
 	case "time-remove":
 		err = runTimeRemove(ctx, os.Args[2:])
+	case "time-approve":
+		err = runTimeApprove(ctx, os.Args[2:])
 	case "service-token":
 		err = runServiceToken(ctx, os.Args[2:])
 	case "person-time":
@@ -129,6 +131,7 @@ func usage() {
   service-token -as ADMIN -name NAME [-team Sales] [-days N] -out FILE  make a service its own agent principal on a team with a read-only API token
   person-time -as ADMIN -person EMAIL [-approver EMAIL|none] [-auto-approve on|off]  set who signs off a person's time, and whether it approves itself
   time-remove -as EMAIL -file IDS -reason WHY [-apply]  remove time entries as a super admin, audited, dry run by default
+  time-approve -person EMAIL -reason WHY [-apply] [-limit N]  approve a salaried person's waiting time by their auto-approve, audited, dry run by default
   emberops-migrate [--dry-run]  copy Postgres data into EmberOps (see docs/emberops-backend.md)
 
 Configuration comes from the same environment the server reads:

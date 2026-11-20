@@ -26,7 +26,6 @@ import (
 
 	"github.com/Embernet-ai/hearth/internal/authz"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
-	"github.com/Embernet-ai/hearth/internal/timelog"
 )
 
 // readEntryIDs parses the id file. Any line that is not an id stops the run.
@@ -107,7 +106,13 @@ func runTimeRemove(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve %s's access: %w", *as, err)
 	}
-	lines, err := timelog.New(pools.Web, az).RemoveMany(ctx, orgID, actor, ids, *reason, *apply)
+	// The same stores the server uses: with HEARTH_BACKEND=emberops the entries are in EmberOps, and the Postgres service
+	// would answer "not found" for every one of them.
+	svc, _, err := backendStores(ctx, pools.Web, az)
+	if err != nil {
+		return err
+	}
+	lines, err := svc.RemoveMany(ctx, orgID, actor, ids, *reason, *apply)
 	if err != nil {
 		return err
 	}
