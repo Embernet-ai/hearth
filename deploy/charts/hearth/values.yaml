@@ -31,7 +31,7 @@ fullnameOverride: ""
 # probe reports healthy. That failure is completely silent and has happened once.
 image:
   repository: ghcr.io/embernet-ai/hearth
-  tag: "2.22.3"
+  tag: "2.22.4"
   pullPolicy: Always
   # Only needed for a private mirror of the image. The public one needs none.
   pullSecrets: []
