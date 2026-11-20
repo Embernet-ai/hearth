@@ -90,6 +90,9 @@ const (
 	// an importer clearing its own rows (time.remove_imported).
 	ActionTimeRemove         = "time.remove"
 	ActionTimeRemoveImported = "time.remove_imported"
+
+	// ActionChannelArchive is an admin taking a channel out of every list (hearthctl channel-remove).
+	ActionChannelArchive = "channel.archive"
 )
 
 // Entry is one thing that happened.
