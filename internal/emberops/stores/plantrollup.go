@@ -15,10 +15,70 @@ import (
 // structure from Postgres and recompute the numbers from EmberOps, the way the SQL does: work is what links to the asset
 // with kind "concerns", time and parts are on that work, downtime is the asset's unplanned outages.
 //
-// Labour cost is not here: a person's rate is an Activity Cost in EmberOps, which the migration does not write (docs, "Things
-// the migration does not carry"), and Hearth has no capacity rows at Fireball, so the figure is zero on both sides.
+// Labour cost is a person's minutes on that work at their rate, and a rate is an Activity Cost in EmberOps (the same one
+// TimeLog.SetCapacity writes and TimeLog.rates reads). A site with no pay rates reads zero in both modes; a rate set
+// later has to count here exactly as capacity.rate_cents counts in Postgres, or /plant under-reports labour in this mode.
 
 type ownNumbers struct{ open, minutes, cost, downtime int }
+
+// sheetMinutes is time booked on an asset's work, by the Timesheet (and so the Employee) it sits in.
+type sheetMinutes struct {
+	asset   string
+	minutes float64
+}
+
+// labour adds each person's minutes on an asset's work at their Activity Cost rate to that asset's cost. Nobody with
+// a rate, no cost, the same as Postgres pricing minutes by capacity.rate_cents.
+func (s *Plant) labour(ctx context.Context, out map[string]*ownNumbers, bySheet map[string][]sheetMinutes) error {
+	if len(bySheet) == 0 {
+		return nil
+	}
+	costs, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: "Activity Cost", Reference: true,
+		Fields: []string{"employee", "costing_rate"}}, listCap)
+	if err != nil {
+		return err
+	}
+	rate := map[string]float64{} // Employee name -> currency per hour
+	for _, c := range costs {
+		if c.Has("employee") && c.F("costing_rate") > 0 {
+			rate[c.S("employee")] = c.F("costing_rate")
+		}
+	}
+	if len(rate) == 0 {
+		return nil
+	}
+	sheets := make([]string, 0, len(bySheet))
+	for n := range bySheet {
+		sheets = append(sheets, n)
+	}
+	emp := map[string]string{}
+	for _, part := range chunks(sheets, 100) {
+		rows, err := s.C.List(ctx, emberops.ListQuery{Doctype: "Timesheet", Fields: []string{"name", "employee"}, Limit: 500,
+			Filters: []emberops.Filter{{Field: "name", Op: "in", Value: inVals(part)}}})
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			emp[r.S("name")] = r.S("employee")
+		}
+	}
+	perAsset := map[string]float64{}
+	for sheet, entries := range bySheet {
+		r, ok := rate[emp[sheet]]
+		if !ok {
+			continue
+		}
+		for _, e := range entries {
+			perAsset[e.asset] += e.minutes * r / 60 / s.centValue()
+		}
+	}
+	for a, cents := range perAsset {
+		if out[a] != nil {
+			out[a].cost += int(math.Round(cents))
+		}
+	}
+	return nil
+}
 
 func (s *Plant) centValue() float64 {
 	if s.CurrencyPerCent > 0 {
@@ -136,11 +196,12 @@ func (s *Plant) own(ctx context.Context, ids []string) (map[string]*ownNumbers, 
 		}
 	}
 
-	// Time and parts on that work.
+	// Time and parts on that work. Minutes are kept per timesheet so labour can be priced by whose time it is.
+	bySheet := map[string][]sheetMinutes{}
 	for dt, field := range map[string]string{"Task": "task", "Maintenance Work Order": "maintenance_work_order"} {
 		for _, part := range chunks(byDoctype[dt], 100) {
 			rows, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: "Timesheet Detail", Parent: "Timesheet",
-				Fields:  []string{field, "hours", "hearth_deleted_at"},
+				Fields:  []string{field, "parent", "hours", "hearth_deleted_at"},
 				Filters: []emberops.Filter{{Field: field, Op: "in", Value: inVals(part)}}}, 0)
 			if err != nil {
 				return nil, nil, err
@@ -151,9 +212,13 @@ func (s *Plant) own(ctx context.Context, ids []string) (map[string]*ownNumbers, 
 				}
 				if a := jobAsset[dt+"\x00"+r.S(field)][0]; out[a] != nil {
 					out[a].minutes += int(math.Round(r.F("hours") * 60))
+					bySheet[r.S("parent")] = append(bySheet[r.S("parent")], sheetMinutes{a, r.F("hours") * 60})
 				}
 			}
 		}
+	}
+	if err := s.labour(ctx, out, bySheet); err != nil {
+		return nil, nil, err
 	}
 	for _, part := range chunks(byDoctype["Maintenance Work Order"], 100) {
 		rows, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: "Stock Entry",
