@@ -44,7 +44,7 @@ var hearthOwned = map[string]map[string]bool{
 		"hearth_notes", "hearth_deleted_at", "us_ein", "disabled", "_tags", "website", "hearth_url", "hearth_owner"),
 	"Contact": set("hearth_id", "first_name", "last_name", "designation", "hearth_notes", "email_ids", "phone_nos",
 		"links", "hearth_deleted_at", "hearth_url", "hearth_owner"),
-	"Lead":    set("hearth_id", "lead_name", "company_name", "email_id", "_tags", "website", "hearth_url", "hearth_owner"),
+	"Lead":    set("hearth_id", "lead_name", "first_name", "middle_name", "last_name", "company_name", "email_id", "_tags", "website", "hearth_url", "hearth_owner"),
 	"Comment": set("hearth_id", "comment_type", "reference_doctype", "reference_name", "content", "comment_by"),
 	"Opportunity": set("hearth_id", "opportunity_from", "party_name", "title", "status", "sales_stage",
 		"expected_closing", "opportunity_amount", "currency", "hearth_url", "hearth_owner"),

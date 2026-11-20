@@ -50,13 +50,48 @@ func stageOf(stage string) (status, salesStage string) {
 	case "proposal":
 		return "Open", "Proposal/Price Quote"
 	case "customer", "won":
-		return "Converted", ""
+		// EmberOps sets Converted itself, from the Opportunity's Quotations, and refuses it from anyone else. A won
+		// deal sends no status: a new Opportunity opens Open, and a standing one keeps whatever EmberOps made it.
+		return "", ""
 	case "lost":
 		return "Lost", ""
 	case "no_response":
 		return "Closed", ""
 	}
 	return "Open", ""
+}
+
+// opsStatuses are the Opportunity statuses EmberOps derives from the Quotations on it. Hearth never sends one, and
+// never sends a status over one.
+var opsStatuses = map[string]bool{"Converted": true, "Quotation": true, "Replied": true}
+
+// settableStatus is the status Hearth may send for an Opportunity EmberOps already has: none when EmberOps has
+// moved it on by its own rules.
+func settableStatus(want string, have emberops.Row) string {
+	if want == "" || opsStatuses[want] {
+		return ""
+	}
+	if cur, _ := have["status"].(string); opsStatuses[strings.TrimSpace(cur)] {
+		return ""
+	}
+	return want
+}
+
+// splitName is how EmberOps cuts a Lead's name into first, middle and last (ERPNext's parse_full_name). A Lead's
+// lead_name is rebuilt from those three on every save, so they are what has to be sent for the name to hold.
+func splitName(full string) (first, middle, last string) {
+	n := strings.Fields(full)
+	if len(n) == 0 {
+		return "", "", ""
+	}
+	first = n[0]
+	if len(n) > 2 {
+		middle = strings.Join(n[1:len(n)-1], " ")
+	}
+	if len(n) > 1 {
+		last = n[len(n)-1]
+	}
+	return first, middle, last
 }
 
 func (s *Syncer) deals(ctx context.Context, companyIDs []string) ([]deal, error) {
@@ -160,7 +195,13 @@ func (s *Syncer) oneDeal(ctx context.Context, rep *Report, c company, d deal, le
 	}
 
 	status, stage := stageOf(d.Stage)
-	doc := map[string]any{"opportunity_from": from, "party_name": party, "title": d.Name, "status": status}
+	if haveOpp {
+		status = settableStatus(status, opp)
+	}
+	doc := map[string]any{"opportunity_from": from, "party_name": party, "title": d.Name}
+	if status != "" {
+		doc["status"] = status
+	}
 	if stage != "" {
 		doc["sales_stage"] = stage
 	}
@@ -183,7 +224,11 @@ func (s *Syncer) oneDeal(ctx context.Context, rep *Report, c company, d deal, le
 			return
 		}
 	}
-	detail := fmt.Sprintf("%s %s, %s", from, c.Name, status)
+	shown := status
+	if shown == "" {
+		shown = "status left to EmberOps"
+	}
+	detail := fmt.Sprintf("%s %s, %s", from, c.Name, shown)
 	if !write {
 		s.add(rep, Action{"opportunity", d.ID, d.Name, "would " + verb, detail})
 		return
@@ -193,6 +238,18 @@ func (s *Syncer) oneDeal(ctx context.Context, rep *Report, c company, d deal, le
 		return
 	}
 	s.add(rep, Action{"opportunity", d.ID, d.Name, verb, detail})
+}
+
+// leadDoc is what Hearth sends for a Lead. EmberOps owns lead_name once the Lead exists: it is rebuilt from the
+// three name parts on every save, so sending it again only ever shows as a difference, and the parts are what hold.
+func leadDoc(who string, c company, exists bool) map[string]any {
+	first, middle, last := splitName(who)
+	doc := map[string]any{"first_name": first, "middle_name": middle, "last_name": last, "company_name": c.Name,
+		"_tags": tagsFor(c)}
+	if !exists {
+		doc["lead_name"] = strings.Join(strings.Fields(who), " ")
+	}
+	return doc
 }
 
 // lead finds or makes the Lead for a prospect that has a deal, and returns its
@@ -214,7 +271,7 @@ func (s *Syncer) lead(ctx context.Context, rep *Report, c company, write bool) (
 	if cts, err := s.contacts(ctx, c.ID); err == nil && len(cts) > 0 {
 		who, email = cts[0].Name, cts[0].Email
 	}
-	doc := map[string]any{"lead_name": who, "company_name": c.Name, "_tags": tagsFor(c)}
+	doc := leadDoc(who, c, ok)
 	if strings.TrimSpace(email) != "" {
 		doc["email_id"] = strings.TrimSpace(email)
 	}

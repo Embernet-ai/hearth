@@ -104,7 +104,7 @@ func (s *Syncer) all(ctx context.Context, dt string) ([]emberops.Row, error) {
 		fields = []string{"name", "hearth_id", "owner"}
 	case "Lead":
 		// Everything the sync compares, so thousands of Leads are one read and not one read each.
-		fields = []string{"name", "hearth_id", "owner", "lead_name", "company_name", "email_id", "website", "hearth_url",
+		fields = []string{"name", "hearth_id", "owner", "lead_name", "first_name", "middle_name", "last_name", "company_name", "email_id", "website", "hearth_url",
 			"hearth_owner", "_user_tags"}
 	}
 	rows, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: dt, Fields: fields}, readAll)
