@@ -17,9 +17,29 @@ import (
 // on the spine.
 type pgTime struct {
 	timelog.Store
-	approves map[string]bool // "actor>subject"
-	estimate map[string]*int
-	removed  []string // entry ids AuditRemoval was told about
+	approves  map[string]bool // "actor>subject"
+	estimate  map[string]*int
+	removed   []string             // entry ids AuditRemoval was told about
+	auto      map[string]time.Time // principal -> when their time began approving itself
+	approved  [][]string           // the ids of each AuditApproveMany
+	autoAudit [][]string           // the ids of each AuditAutoApprove
+}
+
+func (p *pgTime) AuditAutoApprove(_ context.Context, _, _ string, ids []string, _ string) error {
+	p.autoAudit = append(p.autoAudit, ids)
+	return nil
+}
+
+func (p *pgTime) AutoApproveSince(_ context.Context, _, principal string) (*time.Time, error) {
+	if t, ok := p.auto[principal]; ok {
+		return &t, nil
+	}
+	return nil, nil
+}
+
+func (p *pgTime) AuditApproveMany(_ context.Context, _, _ string, ids []string) error {
+	p.approved = append(p.approved, ids)
+	return nil
 }
 
 func (p *pgTime) CanApprove(_ context.Context, _, actor, subject string) (bool, error) {
@@ -511,5 +531,117 @@ func TestTimeLogWeekLoadHelper(t *testing.T) {
 	}
 	if e.f.CallCount("week_load") != 1 {
 		t.Fatal("expected one call")
+	}
+}
+
+// A salaried person's time approves itself as it is logged, on this back end as
+// on the Postgres one: the setting lives on the person, the entry lives in
+// EmberOPS, and the entry must carry the approval when it is written.
+func TestTimeLogAutoApprovesWhatTheSettingCovers(t *testing.T) {
+	e := newTimeEnv(t)
+	e.pg.auto = map[string]time.Time{bob: monday.Add(-time.Hour)}
+	bobCtx := e.as("bob-tok")
+	in, err := e.s.Log(bobCtx, org, actor(bob), taskID, 60, monday, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Approved == nil || !*in.Approved || in.DecidedAt == nil || in.DecidedNote != timelog.AutoApprovedNote {
+		t.Fatalf("returned entry = %+v", in)
+	}
+	own, err := e.s.LogOwn(bobCtx, org, actor(bob), "", 30, monday.Add(time.Hour), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Before the setting began is left for the approver, as in Postgres.
+	before, _ := e.s.Log(bobCtx, org, actor(bob), taskID, 20, monday.Add(-48*time.Hour), "")
+	// Somebody without the setting is unchanged.
+	annCtx := e.as("ann-tok")
+	other, _ := e.s.Log(annCtx, org, actor(ann), taskID, 10, monday, "")
+
+	got := map[string]string{}
+	for _, r := range e.f.All("Timesheet Detail") {
+		got[r["hearth_id"].(string)] = r["hearth_approval"].(string)
+	}
+	for id, want := range map[string]string{in.ID: "approved", own.ID: "approved", before.ID: "pending", other.ID: "pending"} {
+		if got[id] != want {
+			t.Fatalf("entry %s is %q, want %q (all: %v)", id, got[id], want, got)
+		}
+	}
+	from, to := week()
+	mine, _ := e.s.Mine(bobCtx, org, bob, from, to, false)
+	for _, m := range mine {
+		if m.ID == in.ID && (!m.WasApproved() || m.DecidedNote != timelog.AutoApprovedNote || m.DecidedBy != bob) {
+			t.Fatalf("read back = %+v", m)
+		}
+	}
+	// What is already approved is no longer waiting for anybody.
+	if pend, _ := e.s.Pending(annCtx, org, ann); len(pend) != 1 || pend[0].ID != before.ID {
+		t.Fatalf("ann's queue = %v", pend)
+	}
+	// A bulk approval leaves its audit row.
+	if _, err := e.s.ApproveMany(annCtx, org, ann, []string{before.ID}); err != nil || len(e.pg.approved) != 1 || e.pg.approved[0][0] != before.ID {
+		t.Fatalf("approve many audit = %v %v", e.pg.approved, err)
+	}
+}
+
+// A timer stopped by somebody whose time approves itself books an approved entry.
+func TestTimeLogTimerStopAutoApproves(t *testing.T) {
+	e := newTimeEnv(t)
+	e.pg.auto = map[string]time.Time{ann: time.Now().Add(-time.Hour)}
+	ctx := e.as("ann-tok")
+	if _, err := e.s.Start(ctx, org, actor(ann), woID, "pm"); err != nil {
+		t.Fatal(err)
+	}
+	en, err := e.s.Stop(ctx, org, ann)
+	if err != nil || en.Approved == nil || !*en.Approved || en.DecidedNote != timelog.AutoApprovedNote {
+		t.Fatalf("stop = %+v %v", en, err)
+	}
+	rows := e.f.All("Timesheet Detail")
+	if len(rows) != 1 || rows[0]["hearth_approval"] != "approved" || rows[0]["hearth_decision_note"] != timelog.AutoApprovedNote {
+		t.Fatalf("rows = %v", rows)
+	}
+}
+
+// A person whose time approves itself has the time from before the setting
+// approved by the setting, not by a human.
+func TestTimeLogAutoApproveManyDecidesBySettingNotAPerson(t *testing.T) {
+	e := newTimeEnv(t)
+	bobCtx := e.as("bob-tok")
+	old1, _ := e.s.Log(bobCtx, org, actor(bob), taskID, 60, monday, "")
+	old2, _ := e.s.Log(bobCtx, org, actor(bob), woID, 30, monday, "")
+	annEntry, _ := e.s.Log(e.as("ann-tok"), org, actor(ann), taskID, 10, monday, "")
+	why := "salaried, approved by the setting at his request"
+
+	if _, err := e.s.AutoApproveMany(bobCtx, org, bob, []string{old1.ID}, why); !errors.Is(err, timelog.ErrAutoApproveOff) {
+		t.Fatalf("setting off: %v", err)
+	}
+	e.pg.auto = map[string]time.Time{bob: monday.Add(24 * time.Hour)}
+	if _, err := e.s.AutoApproveMany(bobCtx, org, bob, []string{old1.ID, annEntry.ID}, why); !errors.Is(err, timelog.ErrBatchRefused) {
+		t.Fatalf("somebody else's entry in the batch: %v", err)
+	}
+	if n, err := e.s.AutoApproveMany(bobCtx, org, bob, []string{old1.ID, old2.ID}, why); err != nil || n != 2 {
+		t.Fatalf("auto approve many: %d %v", n, err)
+	}
+	got := map[string]map[string]any{}
+	for _, r := range e.f.All("Timesheet Detail") {
+		got[r["hearth_id"].(string)] = r
+	}
+	for _, id := range []string{old1.ID, old2.ID} {
+		if got[id]["hearth_approval"] != "approved" || got[id]["hearth_decision_note"] != why {
+			t.Fatalf("entry %s = %v", id, got[id])
+		}
+	}
+	if got[annEntry.ID]["hearth_approval"] != "pending" {
+		t.Fatal("somebody else's entry changed")
+	}
+	if len(e.pg.autoAudit) != 1 || len(e.pg.autoAudit[0]) != 2 {
+		t.Fatalf("audit = %v", e.pg.autoAudit)
+	}
+	from, to := week()
+	mine, _ := e.s.Mine(bobCtx, org, bob, from, to, false)
+	for _, m := range mine {
+		if m.ID == old1.ID && (!m.WasApproved() || m.DecidedBy != bob) {
+			t.Fatalf("read back = %+v", m)
+		}
 	}
 }

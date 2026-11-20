@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,6 +77,97 @@ func (s *Service) ApproveMany(ctx context.Context, orgID, actorID string, entryI
 		return 0, fmt.Errorf("timelog: commit: %w", err)
 	}
 	return len(ids), nil
+}
+
+// AutoApproveSince is when this person's time began approving itself, or nil
+// while it does not. Entries whose work starts at or after it are approved as
+// they are logged.
+func (s *Service) AutoApproveSince(ctx context.Context, orgID, principalID string) (*time.Time, error) {
+	var since *time.Time
+	err := s.db.QueryRow(ctx, `SELECT time_auto_approve_since FROM principals WHERE id = $1 AND org_id = $2`,
+		principalID, orgID).Scan(&since)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("timelog: auto approve since: %w", err)
+	}
+	return since, nil
+}
+
+// AuditApproveMany writes the audit row for a bulk approval a back end made in
+// its own store, where the entries are not in this database to be updated.
+func (s *Service) AuditApproveMany(ctx context.Context, orgID, actorID string, entryIDs []string) error {
+	return audit.Record(ctx, s.db, audit.Entry{
+		OrgID: orgID, ActorID: actorID, Action: audit.ActionTimeApproveBulk,
+		EntityType: "time_entry", After: map[string]any{"approved": len(entryIDs), "entries": entryIDs},
+	})
+}
+
+// ErrAutoApproveOff is returned when entries are to be approved by a person's
+// auto-approve setting and the setting is off.
+var ErrAutoApproveOff = errors.New("timelog: this person's time does not approve itself; turn the setting on first")
+
+// AutoApproveMany approves the named waiting entries of one person by their own
+// auto-approve setting. See Store.
+func (s *Service) AutoApproveMany(ctx context.Context, orgID, personID string, entryIDs []string, reason string) (int, error) {
+	ids, err := uniqueUUIDs(entryIDs)
+	if err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, errors.New("timelog: choose at least one entry")
+	}
+	if strings.TrimSpace(reason) == "" {
+		return 0, errors.New("timelog: say why")
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("timelog: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, `
+		UPDATE time_entries t
+		   SET approved = true, decided_at = now(), decided_by = p.id, decided_note = $3, auto_approved = true
+		  FROM principals p
+		 WHERE t.id = ANY($4::uuid[])
+		   AND t.org_id = $1
+		   AND p.id = $2 AND p.org_id = $1 AND p.time_auto_approve_since IS NOT NULL
+		   AND t.principal_id = p.id
+		   AND t.ended_at IS NOT NULL
+		   AND t.decided_at IS NULL
+		   AND t.deleted_at IS NULL`,
+		orgID, personID, reason, ids)
+	if err != nil {
+		return 0, fmt.Errorf("timelog: auto approve many: %w", err)
+	}
+	if int(tag.RowsAffected()) != len(ids) {
+		if since, serr := s.AutoApproveSince(ctx, orgID, personID); serr == nil && since == nil {
+			return 0, ErrAutoApproveOff
+		}
+		return 0, ErrBatchRefused
+	}
+	if err := audit.Record(ctx, tx, autoApproveAudit(orgID, personID, ids, reason)); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("timelog: commit: %w", err)
+	}
+	return len(ids), nil
+}
+
+func autoApproveAudit(orgID, personID string, ids []string, reason string) audit.Entry {
+	return audit.Entry{
+		OrgID: orgID, Action: audit.ActionTimeApproveBulk, EntityType: "time_entry",
+		After: map[string]any{"approved": len(ids), "entries": ids, "person": personID,
+			"decider": "auto-approve setting", "reason": reason},
+	}
+}
+
+// AuditAutoApprove writes the audit row for a bulk auto-approval a back end made
+// in its own store.
+func (s *Service) AuditAutoApprove(ctx context.Context, orgID, personID string, entryIDs []string, reason string) error {
+	return audit.Record(ctx, s.db, autoApproveAudit(orgID, personID, entryIDs, reason))
 }
 
 // ImportedEntry is one imported entry still waiting on a decision, beside

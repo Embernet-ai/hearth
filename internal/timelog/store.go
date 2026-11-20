@@ -46,6 +46,21 @@ type Store interface {
 	// RemoveMany is the admin removal: a super admin names entries and a reason,
 	// and apply false reports what would go without changing anything.
 	RemoveMany(ctx context.Context, orgID string, actor core.Subjects, ids []string, reason string, apply bool) ([]RemovalLine, error)
+	// AutoApproveSince is when a person's time began approving itself, nil while
+	// the setting is off. A back end that keeps entries outside Postgres asks it
+	// because the setting lives on the person, which stays in Postgres.
+	AutoApproveSince(ctx context.Context, orgID, principalID string) (*time.Time, error)
+	// AutoApproveMany approves a person's waiting entries by their own auto-approve
+	// setting, for time filed before the setting began: the decider is the setting
+	// (the person's id and the reason as the note, auto_approved set), never a human.
+	// Refused while the setting is off. All or nothing. The audit row names no actor.
+	AutoApproveMany(ctx context.Context, orgID, personID string, entryIDs []string, reason string) (int, error)
+	// AuditAutoApprove writes the audit row AutoApproveMany writes, for a back end
+	// that made the decisions in its own store.
+	AuditAutoApprove(ctx context.Context, orgID, personID string, entryIDs []string, reason string) error
+	// AuditApproveMany writes the audit row for a bulk approval a back end made
+	// itself, the same row ApproveMany writes in Postgres.
+	AuditApproveMany(ctx context.Context, orgID, actorID string, entryIDs []string) error
 	// AuditRemoval writes the audit row for a removal a back end made itself.
 	AuditRemoval(ctx context.Context, orgID, actorID, entryID, via, reason string, before RemovedEntry) error
 	Reopen(ctx context.Context, orgID, actorID, entryID string) error

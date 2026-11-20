@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Embernet-ai/hearth/internal/authz"
+	"github.com/Embernet-ai/hearth/internal/timelog"
 )
 
 type decision struct {
@@ -179,5 +180,77 @@ func TestSettingAnApproverIsAudited(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the approver's queue does not list the entry")
+	}
+}
+
+// A back end that keeps entries elsewhere reads the setting through AutoApproveSince
+// and records its bulk approvals through AuditApproveMany.
+func TestTimeAutoApproveSinceAndBulkAuditForAnotherBackEnd(t *testing.T) {
+	f := setup(t)
+	extra(t, f)
+	ctx := context.Background()
+	f.superAdmin(t, f.bob)
+
+	if since, err := f.svc.AutoApproveSince(ctx, f.org, f.alice); err != nil || since != nil {
+		t.Fatalf("setting off: %v %v", since, err)
+	}
+	if err := f.az.SetTimeAutoApprove(ctx, f.org, f.bob, f.alice, true); err != nil {
+		t.Fatal(err)
+	}
+	since, err := f.svc.AutoApproveSince(ctx, f.org, f.alice)
+	if err != nil || since == nil || time.Since(*since) > time.Minute {
+		t.Fatalf("setting on: %v %v", since, err)
+	}
+	if since, err := f.svc.AutoApproveSince(ctx, f.org, "00000000-0000-0000-0000-000000000000"); err != nil || since != nil {
+		t.Fatalf("unknown person: %v %v", since, err)
+	}
+
+	ids := []string{"11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"}
+	if err := f.svc.AuditApproveMany(ctx, f.org, f.bob, ids); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := f.pools.Web.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'time.approve.bulk' AND actor_id = $1
+		AND after->>'approved' = '2'`, f.bob).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("audit rows: %d %v", n, err)
+	}
+}
+
+// Time from before the setting is approved by the setting, never by a person, and
+// the audit row names nobody.
+func TestTimeAutoApproveManyDecidesBySetting(t *testing.T) {
+	f := setup(t)
+	extra(t, f)
+	ctx := context.Background()
+	f.superAdmin(t, f.bob)
+	alice := f.subj(t, f.alice)
+	why := "salaried, approved by the setting at his request"
+
+	old, err := f.svc.LogOwn(ctx, f.org, alice, "", 30, time.Now().Add(-48*time.Hour), "old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.AutoApproveMany(ctx, f.org, f.alice, []string{old.ID}, why); !errors.Is(err, timelog.ErrAutoApproveOff) {
+		t.Fatalf("setting off: %v", err)
+	}
+	if err := f.az.SetTimeAutoApprove(ctx, f.org, f.bob, f.alice, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.AutoApproveMany(ctx, f.org, f.bob, []string{old.ID}, why); !errors.Is(err, timelog.ErrAutoApproveOff) {
+		t.Fatalf("somebody whose setting is off: %v", err)
+	}
+	if n, err := f.svc.AutoApproveMany(ctx, f.org, f.alice, []string{old.ID}, why); err != nil || n != 1 {
+		t.Fatalf("auto approve many: %d %v", n, err)
+	}
+	if d := f.decisionOf(t, old.ID); !d.approved || !d.auto || d.by != f.alice || d.note != why {
+		t.Fatalf("decision = %+v", d)
+	}
+	if _, err := f.svc.AutoApproveMany(ctx, f.org, f.alice, []string{old.ID}, why); !errors.Is(err, timelog.ErrBatchRefused) {
+		t.Fatalf("deciding twice: %v", err)
+	}
+	var n int
+	if err := f.pools.Web.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'time.approve.bulk' AND actor_id IS NULL
+		AND after->>'person' = $1 AND after->>'reason' = $2`, f.alice, why).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("audit rows: %d %v", n, err)
 	}
 }
