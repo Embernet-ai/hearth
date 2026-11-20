@@ -852,6 +852,7 @@ func (s *Syncer) remove(ctx context.Context, rep *Report, c company) {
 	}
 	s.del(ctx, rep, "Customer", c.ID, c.Name, "customer")
 	s.del(ctx, rep, "Supplier", c.ID, c.Name, "supplier")
+	s.del(ctx, rep, "Lead", c.ID, c.Name, "lead")
 }
 
 func (s *Syncer) del(ctx context.Context, rep *Report, dt, id, name, what string) {
@@ -976,6 +977,7 @@ func (s *Syncer) show(ctx context.Context, rep *Report, c company) {
 	}
 	one("customer", "Customer", c.ID, c.Name)
 	one("supplier", "Supplier", c.ID, c.Name)
+	one("lead", "Lead", c.ID, c.Name)
 	cts, _ := s.contacts(ctx, c.ID)
 	for _, ct := range cts {
 		one("contact", "Contact", ct.ID, ct.Name)

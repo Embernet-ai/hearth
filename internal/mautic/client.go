@@ -302,6 +302,62 @@ func (c *Client) EnsureField(ctx context.Context, object, alias, label string) e
 	}, nil)
 }
 
+// FieldDef is what a Mautic field definition says about the values it takes.
+type FieldDef struct {
+	Type  string // text, email, url, tel, select, region, country, ...
+	Limit int    // charLengthLimit, 0 when the field has none
+}
+
+// FieldDefs reads every field of one object ("contact" or "company") by alias, so the caller sends no value longer than the field
+// takes. Mautic's own definitions are the source: a limit changed in Mautic is followed, and no field is hard-coded here.
+func (c *Client) FieldDefs(ctx context.Context, object string) (map[string]FieldDef, error) {
+	var out struct {
+		Fields json.RawMessage `json:"fields"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/fields/"+object, url.Values{"limit": {"500"}}, nil, &out); err != nil {
+		return nil, err
+	}
+	var have map[string]struct {
+		Alias string `json:"alias"`
+		Type  string `json:"type"`
+		Limit *int   `json:"charLengthLimit"`
+	}
+	_ = json.Unmarshal(out.Fields, &have) // [] when there are none
+	defs := map[string]FieldDef{}
+	for _, f := range have {
+		d := FieldDef{Type: f.Type}
+		if f.Limit != nil && *f.Limit > 0 {
+			d.Limit = *f.Limit
+		}
+		defs[f.Alias] = d
+	}
+	return defs, nil
+}
+
+// FindCompany is the id of the company whose name is this one (case does not matter), or 0 when there is none. Mautic keeps company
+// names unique, so a create that collides can be turned into the existing company.
+func (c *Client) FindCompany(ctx context.Context, name string) (int64, error) {
+	var out struct {
+		Companies json.RawMessage `json:"companies"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/companies", url.Values{"search": {name}, "limit": {"100"}}, nil, &out); err != nil {
+		return 0, err
+	}
+	var have map[string]struct {
+		ID     json.Number `json:"id"`
+		Fields struct {
+			All map[string]any `json:"all"`
+		} `json:"fields"`
+	}
+	_ = json.Unmarshal(out.Companies, &have) // [] when there are none
+	for _, co := range have {
+		if n, _ := co.Fields.All["companyname"].(string); strings.EqualFold(strings.TrimSpace(n), strings.TrimSpace(name)) {
+			return co.ID.Int64()
+		}
+	}
+	return 0, nil
+}
+
 // Users maps each Mautic user's email address, lower case, to the user id.
 func (c *Client) Users(ctx context.Context) (map[string]int64, error) {
 	var out struct {

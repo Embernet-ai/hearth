@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,8 @@ type Mautic interface {
 	SegmentAdd(ctx context.Context, segmentID, contactID int64) error
 	SegmentRemove(ctx context.Context, segmentID, contactID int64) error
 	EnsureField(ctx context.Context, object, alias, label string) error
+	FieldDefs(ctx context.Context, object string) (map[string]mautic.FieldDef, error)
+	FindCompany(ctx context.Context, name string) (int64, error)
 	Users(ctx context.Context) (map[string]int64, error)
 	Stats(ctx context.Context, table, order string, limit int, filters ...mautic.Where) ([]mautic.Row, error)
 	Email(ctx context.Context, id int64) (mautic.Names, error)
@@ -151,6 +154,9 @@ type Syncer struct {
 	db  *pgxpool.Pool
 	mc  Mautic
 	org string
+
+	defsMu    sync.Mutex
+	fieldDefs map[string]map[string]mautic.FieldDef
 
 	mu       sync.Mutex
 	segs     map[string]int64 // Mautic segment alias to id
@@ -564,7 +570,11 @@ func (s *Syncer) pushOne(ctx context.Context, c contact, l *link, types [][2]str
 
 	first, last := splitName(c.Name)
 	f := mautic.Fields{"firstname": first, "lastname": last, "email": strings.TrimSpace(c.Email), "phone": c.Phone,
-		"position": c.Title, "company": clip(c.CompanyName, mauticNameMax), contactIDField: c.ID}
+		"position": c.Title, "company": c.CompanyName, contactIDField: c.ID}
+	if why := s.fit(ctx, "contact", f); why != "" {
+		s.rep.add("skip", "contact", c.ID, c.Name, why)
+		return
+	}
 	owner := int64(0)
 	if c.OwnerEmail != "" {
 		owner = s.users[strings.ToLower(strings.TrimSpace(c.OwnerEmail))]
@@ -766,12 +776,17 @@ func (s *Syncer) ensureCompany(ctx context.Context, id string) int64 {
 		}
 		return 0
 	}
-	f := mautic.Fields{"companyname": clip(co.Name, mauticNameMax), "companywebsite": co.Website, "companyaddress1": co.Street, "companycity": co.City,
+	f := mautic.Fields{"companyname": co.Name, "companywebsite": co.Website, "companyaddress1": co.Street, "companycity": co.City,
 		"companystate": co.State, "companyzipcode": co.Postcode, "companycountry": co.Country, companyIDField: co.ID}
 	if co.OwnerEmail != "" {
 		if u := s.users[strings.ToLower(strings.TrimSpace(co.OwnerEmail))]; u != 0 {
 			f["owner"] = u
 		}
+	}
+	if why := s.fit(ctx, "company", f); why != "" {
+		s.rep.add("skip", "company", id, co.Name, why)
+		s.company[id] = 0
+		return 0
 	}
 	hash := hashOf(f)
 	var mid int64
@@ -796,18 +811,7 @@ func (s *Syncer) ensureCompany(ctx context.Context, id string) int64 {
 		s.company[id] = mid
 		return mid
 	}
-	nid, uerr := s.mc.UpsertCompany(ctx, mid, f)
-	if mautic.IsNotFound(uerr) {
-		nid, uerr = s.mc.UpsertCompany(ctx, 0, f)
-	}
-	if dropRefused(f, uerr) {
-		// Mautic refused the state or country as one it does not list. The company goes without it, and the hash above is of
-		// what Hearth holds, so the next run sees nothing changed and does not ask again.
-		nid, uerr = s.mc.UpsertCompany(ctx, mid, f)
-		if mautic.IsNotFound(uerr) {
-			nid, uerr = s.mc.UpsertCompany(ctx, 0, f)
-		}
-	}
+	nid, uerr := s.upsertCompany(ctx, mid, f)
 	if uerr != nil {
 		s.rep.add("failed", "company", id, co.Name, uerr.Error())
 		s.company[id] = 0
@@ -852,10 +856,84 @@ func (s *Syncer) retire(ctx context.Context, l *link) {
 	s.rep.add("update", "contact", l.ContactID, "", "left its segments: deleted in Hearth or no address")
 }
 
-// mauticNameMax is the longest company name Mautic takes, on the company and on a contact's own company field.
-const mauticNameMax = 64
+// upsertCompany sends a company and answers what Mautic refuses over, so one odd value does not cost the whole record: a company
+// somebody deleted in Mautic is made again; a state or country its select does not list is left off (Hearth holds free text like
+// "OH"); and a name that Mautic already holds on another company is not created twice but adopted, so the Hearth company is
+// linked to the Mautic one and brings its Hearth id across.
+func (s *Syncer) upsertCompany(ctx context.Context, mid int64, f mautic.Fields) (int64, error) {
+	nid, err := s.mc.UpsertCompany(ctx, mid, f)
+	if mautic.IsNotFound(err) {
+		mid = 0
+		nid, err = s.mc.UpsertCompany(ctx, 0, f)
+	}
+	for tries := 0; err != nil && tries < 3; tries++ {
+		switch {
+		case dropRefused(f, err):
+			nid, err = s.mc.UpsertCompany(ctx, mid, f)
+		case mid == 0 && nameTaken(err):
+			name, _ := f["companyname"].(string)
+			found, ferr := s.mc.FindCompany(ctx, name)
+			if ferr != nil || found == 0 {
+				return 0, err
+			}
+			mid = found
+			nid, err = s.mc.UpsertCompany(ctx, mid, f)
+		default:
+			return nid, err
+		}
+	}
+	return nid, err
+}
 
-// clip cuts a value to at most n characters, so a long name is stored short and not refused whole.
+// nameTaken is Mautic's answer to a company name another company already has.
+func nameTaken(err error) bool {
+	e, ok := err.(*mautic.APIError)
+	return ok && e.Status == 400 && strings.Contains(e.Body, "companyname") && strings.Contains(e.Body, "unique")
+}
+
+// fit makes f something Mautic will take, from Mautic's own field definitions (read once per object): a text value is cut to the
+// field's character limit, a web address that is too long is left off (a cut one points nowhere), and an email address that is
+// too long cannot be sent, so it answers why and the record is skipped. Keys that are not fields (owner, tags) are left alone.
+func (s *Syncer) fit(ctx context.Context, object string, f mautic.Fields) string {
+	defs := s.defs(ctx, object)
+	for k, v := range f {
+		str, ok := v.(string)
+		d, known := defs[k]
+		if !ok || !known || d.Limit == 0 || len([]rune(str)) <= d.Limit {
+			continue
+		}
+		switch d.Type {
+		case "email":
+			return "the address " + quote(str) + " is longer than the " + strconv.Itoa(d.Limit) + " characters Mautic takes in " + k
+		case "url":
+			delete(f, k)
+		default:
+			f[k] = clip(str, d.Limit)
+		}
+	}
+	return ""
+}
+
+// defs is the field definitions of one Mautic object, read the first time they are needed. When they cannot be read nothing is
+// cut, and Mautic's own answer says what it refused.
+func (s *Syncer) defs(ctx context.Context, object string) map[string]mautic.FieldDef {
+	s.defsMu.Lock()
+	defer s.defsMu.Unlock()
+	if s.fieldDefs == nil {
+		s.fieldDefs = map[string]map[string]mautic.FieldDef{}
+	}
+	if d, ok := s.fieldDefs[object]; ok {
+		return d
+	}
+	d, err := s.mc.FieldDefs(ctx, object)
+	if err != nil {
+		d = nil
+	}
+	s.fieldDefs[object] = d
+	return d
+}
+
+// clip cuts a value to at most n characters.
 func clip(v string, n int) string {
 	v = strings.TrimSpace(v)
 	if r := []rune(v); len(r) > n {

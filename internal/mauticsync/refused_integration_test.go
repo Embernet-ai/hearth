@@ -20,6 +20,13 @@ import (
 // strict answers like the real Mautic: a 400 for a state or country that is not in its lists, and for a name over 64 characters.
 type strict struct{ *fake }
 
+func (s strict) FieldDefs(_ context.Context, object string) (map[string]mautic.FieldDef, error) {
+	if object == "company" {
+		return map[string]mautic.FieldDef{"companyname": {Type: "text", Limit: 64}}, nil
+	}
+	return map[string]mautic.FieldDef{"company": {Type: "text", Limit: 64}}, nil
+}
+
 func (s strict) UpsertCompany(ctx context.Context, id int64, fl mautic.Fields) (int64, error) {
 	if v, _ := fl["companystate"].(string); v != "" && v != "Ohio" {
 		return 0, &mautic.APIError{Status: 400, Method: "POST", Path: "/companies/new", Body: `{"errors":[{"code":400,"message":"companystate: The selected choice is invalid."}]}`}
