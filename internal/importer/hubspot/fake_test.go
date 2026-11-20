@@ -21,6 +21,7 @@ type fakeHub struct {
 	mu       sync.Mutex
 	objs     map[string][]fakeObj // object to its records
 	assoc    map[string][]string  // "from>to:id" to the ids it points at
+	primary  map[string]string    // "from>to:id" to the one of them that is the primary association
 	owners   []Owner              // served when ownersOK
 	ownersOK bool
 	stages   map[string]string
@@ -41,7 +42,7 @@ type fakeReq struct {
 }
 
 func newFakeHub(t *testing.T) *fakeHub {
-	f := &fakeHub{t: t, objs: map[string][]fakeObj{}, assoc: map[string][]string{}, stages: map[string]string{}}
+	f := &fakeHub{t: t, objs: map[string][]fakeObj{}, assoc: map[string][]string{}, primary: map[string]string{}, stages: map[string]string{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -74,6 +75,14 @@ func (f *fakeHub) link(from, to, id string, targets ...string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.assoc[from+">"+to+":"+id] = targets
+}
+
+// linkPrimary is link where one of the targets is the record's primary association, listed after the others as HubSpot may.
+func (f *fakeHub) linkPrimary(from, to, id, primary string, others ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.assoc[from+">"+to+":"+id] = append(append([]string{}, others...), primary)
+	f.primary[from+">"+to+":"+id] = primary
 }
 
 // searches returns the "since" of every search of an object, in order.
@@ -157,7 +166,11 @@ func (f *fakeHub) serve(w http.ResponseWriter, r *http.Request) {
 			var tos []map[string]any
 			for _, t := range f.assoc[from+">"+to+":"+id] {
 				n, _ := strconv.ParseInt(t, 10, 64)
-				tos = append(tos, map[string]any{"toObjectId": n})
+				typ := 279
+				if t == f.primary[from+">"+to+":"+id] {
+					typ = primaryAssociation[from+">"+to]
+				}
+				tos = append(tos, map[string]any{"toObjectId": n, "associationTypes": []any{map[string]any{"typeId": typ, "category": "HUBSPOT_DEFINED"}}})
 			}
 			if len(tos) > 0 {
 				res = append(res, map[string]any{"from": map[string]any{"id": id}, "to": tos})

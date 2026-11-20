@@ -45,6 +45,9 @@ type Options struct {
 	Apply bool
 	// Since is where an object with no high-water mark starts reading. It is required the first time.
 	Since time.Time
+	// ForceSince reads from Since even where a mark exists (the mark itself never moves backwards). It is how a field
+	// that could not be filled earlier, such as an owner with no mapping yet, is filled after the mapping exists.
+	ForceSince bool
 	// Baseline is when the first import finished. A record it carried across whose change time is no later than this has
 	// not been touched in Hearth since, so HubSpot may update it. Defaults to Since.
 	Baseline time.Time
@@ -104,7 +107,18 @@ type Report struct {
 	OwnersUnmapped map[string]int
 	UnknownStages  map[string]int
 	NotCarried     map[string]string
+	// Fields counts, per object and field, the values written into an empty field (Fill) and the values that replaced
+	// another (Replace), so a run that is about to change thousands of records shows what kind of change it is.
+	Fields map[string]map[string]*FieldCount
+	// Replaced lists the first values that replaced another, for a person to read before saying go.
+	Replaced []Change
 }
+
+// Change is one value that replaced another.
+type Change struct{ Object, HubSpotID, Field, From, To string }
+
+// FieldCount is one field's writes.
+type FieldCount struct{ Fill, Replace int }
 
 func (r *Report) problem(format string, a ...any) {
 	r.ProblemTotal++
@@ -190,7 +204,7 @@ func (im *Importer) wants(object string) bool {
 func (im *Importer) Run(ctx context.Context) (*Report, error) {
 	im.rep = &Report{Apply: im.opt.Apply, Objects: map[string]*Count{}, Since: map[string]time.Time{},
 		HighWater: map[string]time.Time{}, OwnersUnmapped: map[string]int{}, UnknownStages: map[string]int{},
-		NotCarried: map[string]string{}}
+		NotCarried: map[string]string{}, Fields: map[string]map[string]*FieldCount{}}
 
 	// One run at a time: two would each decide a record is new.
 	conn, err := im.db.Acquire(ctx)
@@ -287,6 +301,9 @@ func fnvLock(org string) int64 {
 func (im *Importer) sinceFor(ctx context.Context, object string) (time.Time, error) {
 	var hw time.Time
 	err := pgx.ErrNoRows
+	if im.opt.ForceSince && !im.opt.Since.IsZero() {
+		return im.opt.Since.UTC(), nil
+	}
 	if im.haveState {
 		err = im.db.QueryRow(ctx, `SELECT high_water FROM hubspot_import_state WHERE org_id=$1 AND object=$2`, im.org, object).Scan(&hw)
 	}
@@ -507,6 +524,30 @@ func (im *Importer) audit(ctx context.Context, action, etype, entity, object, hi
 	return audit.Record(ctx, im.db, audit.Entry{OrgID: im.org, ActorID: im.actor.Principal(), Action: action,
 		EntityType: etype, EntityID: entity,
 		Before: before, After: map[string]any{"hubspot_object": object, "hubspot_id": hid, "fields": after}})
+}
+
+// countFields records what a plan will write, by field.
+func (im *Importer) countFields(object, hid string, p fieldPlan, cur map[string]string) {
+	for f := range p.set {
+		m := im.rep.Fields[object]
+		if m == nil {
+			m = map[string]*FieldCount{}
+			im.rep.Fields[object] = m
+		}
+		c := m[f]
+		if c == nil {
+			c = &FieldCount{}
+			m[f] = c
+		}
+		if strings.TrimSpace(cur[f]) == "" {
+			c.Fill++
+		} else {
+			c.Replace++
+			if len(im.rep.Replaced) < 250 {
+				im.rep.Replaced = append(im.rep.Replaced, Change{object, hid, f, cur[f], p.set[f]})
+			}
+		}
+	}
 }
 
 func (im *Importer) addConflicts(object, hid, entity string, p fieldPlan, cur map[string]string, mode trust) {

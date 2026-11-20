@@ -81,3 +81,14 @@ func TestStageMapIsTheFirstImportsAndReportsUnknown(t *testing.T) {
 		t.Error("a stage nobody mapped must be reported, not guessed")
 	}
 }
+
+func TestWebsitesCompareAsAddressesNotText(t *testing.T) {
+	for _, same := range [][2]string{{"acme.example", "https://www.acme.example/"}, {"HTTP://Acme.example", "acme.example"}} {
+		if !fieldsEqual("website", same[0], same[1]) {
+			t.Errorf("%q and %q are one address", same[0], same[1])
+		}
+	}
+	if fieldsEqual("website", "acme.example/a", "acme.example/b") || fieldsEqual("website", "acme.example", "other.example") {
+		t.Error("different pages or hosts are different addresses")
+	}
+}

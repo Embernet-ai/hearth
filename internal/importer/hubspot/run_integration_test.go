@@ -188,7 +188,7 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 	h.add(Contacts, "2002", later, map[string]string{"firstname": "Newly", "lastname": "Made", "email": "new@example.com", "hubspot_owner_id": "77"})
 	h.add(Contacts, "2003", later, map[string]string{"firstname": "Loose", "email": "loose@example.com", "phone": "216-555-0142"})
 	h.add(Contacts, "2004", later, map[string]string{"firstname": "Quiet", "email": "quiet@example.com"})
-	h.link(Contacts, Companies, "2002", "1003")
+	h.linkPrimary(Contacts, Companies, "2002", "1003", "1099") // 1099 is also associated, but 1003 is its company
 	h.link(Contacts, Companies, "2004", "1099")
 	h.add(Deals, "3001", later, map[string]string{"dealname": "Old deal", "dealstage": "s1", "amount": "2500.5"})
 	h.add(Deals, "3002", later, map[string]string{"dealname": "Won deal", "dealstage": "s2", "amount": "1500", "closedate": "2026-10-01T00:00:00.000Z"})
@@ -271,6 +271,13 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 	}
 	if n := f.count(`SELECT count(*) FROM audit_log WHERE org_id=$1 AND action='crm.hubspot_import.update' AND entity_id=$2`, f.org, acme); n != 1 {
 		t.Errorf("the update of the legacy company left %d audit rows", n)
+	}
+
+	if fc := applied.Fields[Companies]["name"]; fc == nil || fc.Replace != 1 || fc.Fill != 0 {
+		t.Errorf("name writes = %+v, want one replacement (the untouched legacy company)", fc)
+	}
+	if fc := applied.Fields[Companies]["city"]; fc == nil || fc.Fill != 3 || fc.Replace != 0 {
+		t.Errorf("city writes = %+v, want three fills (two companies and the linked one)", fc)
 	}
 
 	// Contacts: 1 updated (title), 2 created (one pulled company's), 1 linked by email.
@@ -392,6 +399,12 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 		t.Errorf("skips = %v", fourth.Objects[Companies].SkipWhy)
 	}
 	_ = oldNote
+
+	// -force-since reads from the date given even where a mark exists, and never moves the mark back.
+	f.run(false, Options{Baseline: baseline, Since: t0, ForceSince: true, Only: []string{Companies}})
+	if s := f.hub.searches(Companies); !s[len(s)-1].Equal(t0) {
+		t.Errorf("a forced run asked for changes since %s, want %s", s[len(s)-1], t0)
+	}
 }
 
 func TestFirstRunNeedsToKnowWhereToStart(t *testing.T) {

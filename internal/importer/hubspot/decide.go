@@ -43,7 +43,13 @@ func fieldsEqual(field, a, b string) bool {
 	switch field {
 	case "phone":
 		return samePhone(a, b)
-	case "domain", "email", "website", "linkedin":
+	case "website":
+		// "acme.example", "https://www.acme.example/" and "HTTP://acme.example" are one web address.
+		if da, db := domainOf(a), domainOf(b); da != "" && db != "" {
+			return da == db && strings.EqualFold(pathOf(a), pathOf(b))
+		}
+		return strings.EqualFold(strings.TrimRight(a, "/"), strings.TrimRight(b, "/"))
+	case "domain", "email", "linkedin":
 		return strings.EqualFold(strings.TrimRight(a, "/"), strings.TrimRight(b, "/"))
 	}
 	return a == b
@@ -109,4 +115,14 @@ func plan(want, cur, snap map[string]string, mode trust, placeholder map[string]
 		}
 	}
 	return p
+}
+
+// pathOf is what follows the host of a web address, without a trailing slash, so two addresses to the same host that go to
+// different pages are not called the same.
+func pathOf(v string) string {
+	v = urlPrefix.ReplaceAllString(strings.TrimSpace(v), "")
+	if i := strings.IndexAny(v, "/?#"); i >= 0 {
+		return strings.TrimRight(v[i:], "/")
+	}
+	return ""
 }
