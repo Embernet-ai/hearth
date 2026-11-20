@@ -26,6 +26,9 @@ type Config struct {
 	Mappings []Mapping `json:"mappings"`
 	// Protect lists addresses the sync never removes from any group.
 	Protect []string `json:"protect"`
+	// Remove turns on removals. Off, the sync only adds and reports what it
+	// would have removed: nobody loses access until somebody chose that.
+	Remove bool `json:"remove"`
 }
 
 // Member is one entry of a directory group. Role is MEMBER, MANAGER or OWNER.
@@ -39,7 +42,9 @@ type Change struct {
 	Group  string
 	Email  string
 	Remove bool
-	Why    string
+	// Skipped is a removal reported but not applied, because Config.Remove is off.
+	Skipped bool
+	Why     string
 }
 
 func norm(s string) string { return strings.ToLower(strings.TrimSpace(s)) }

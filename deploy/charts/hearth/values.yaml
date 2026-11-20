@@ -448,6 +448,30 @@ crmSync:
   clientIdKey: client-id
   clientSecretKey: client-secret
 
+# --- Google Workspace groups ------------------------------------------------------
+# Group members kept in step with Hearth teams and departments, on a schedule. See docs/groups-sync.md. Keyless: the job
+# gets a Vord token for its own client, Google's STS trades it for a federated credential, and that signs the
+# domain-wide delegation assertion for the service account. Only plain members are added or removed; owners, managers and
+# the protect list never are. apply false makes every run a dry run that only logs.
+groupsSync:
+  enabled: false
+  apply: true
+  schedule: "27 * * * *"
+  # Each entry: {group: crew@example.com, teams: [Crew], departments: [Operations]}
+  mappings: []
+  protect: []
+  # Off: the job only adds, and logs what it would remove. On: it also removes plain members who are not on the mapped
+  # team or department. Nobody loses access until this is turned on on purpose.
+  remove: false
+  vordTokenUrl: https://vord.example.com/id/realms/fireball/protocol/openid-connect/token
+  clientId: hearth-groups
+  # The provider audience, the service account that holds the delegation, and the admin it acts as.
+  audience: ""
+  serviceAccount: ""
+  subject: ""
+  secretName: hearth-groups-client
+  clientSecretKey: client-secret
+
 # --- Mautic (email marketing) ----------------------------------------------------
 # Hearth's contacts and companies sent to Mautic, and what Mautic records (sent, opened, clicked, form, unsubscribe) brought back
 # onto the contact's timeline, with opt-outs honoured both ways. See docs/mautic-sync.md. Off until a person has read a dry run

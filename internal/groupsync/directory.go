@@ -39,6 +39,11 @@ type Google struct {
 	Account  string // service account email
 	Subject  string // the admin it acts as
 	Key      *rsa.PrivateKey
+	// Sign, when set, signs the delegation assertion instead of Key. It is how
+	// a keyless deployment does it: Google's IAM signs on behalf of the account.
+	Sign func(ctx context.Context, claims []byte) (string, error)
+	// Static is a ready access token (an operator's one hour run). Never stored.
+	Static string
 
 	token   string
 	expires time.Time
@@ -96,6 +101,9 @@ func (g *Google) tokenURL() string {
 func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
 func (g *Google) accessToken(ctx context.Context) (string, error) {
+	if g.Static != "" {
+		return g.Static, nil
+	}
 	if g.token != "" && time.Now().Before(g.expires.Add(-time.Minute)) {
 		return g.token, nil
 	}
@@ -105,13 +113,23 @@ func (g *Google) accessToken(ctx context.Context) (string, error) {
 		"iss": g.Account, "sub": g.Subject, "scope": Scope, "aud": g.tokenURL(),
 		"iat": now.Unix(), "exp": now.Add(50 * time.Minute).Unix(),
 	})
-	in := b64(hdr) + "." + b64(cl)
-	h := sha256.Sum256([]byte(in))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, g.Key, crypto.SHA256, h[:])
-	if err != nil {
-		return "", err
+	var assertion string
+	if g.Sign != nil {
+		a, err := g.Sign(ctx, cl)
+		if err != nil {
+			return "", err
+		}
+		assertion = a
+	} else {
+		in := b64(hdr) + "." + b64(cl)
+		h := sha256.Sum256([]byte(in))
+		sig, err := rsa.SignPKCS1v15(rand.Reader, g.Key, crypto.SHA256, h[:])
+		if err != nil {
+			return "", err
+		}
+		assertion = in + "." + b64(sig)
 	}
-	form := url.Values{"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"}, "assertion": {in + "." + b64(sig)}}
+	form := url.Values{"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"}, "assertion": {assertion}}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, g.tokenURL(), strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := g.client().Do(req)
