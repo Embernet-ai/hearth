@@ -214,11 +214,25 @@ func (s *TimeOff) Cancel(ctx context.Context, orgID, actorID, id string) error {
 	if !(r.Status == "pending" || (r.Status == "approved" && r.StartsOn.After(today))) {
 		return timeoff.ErrDenied
 	}
-	if _, err := s.C.Upsert(ctx, timeOffDoctype, id, map[string]any{"status": "cancelled"}); err != nil {
+	var event string
+	if row, err := s.C.GetByHearthID(ctx, timeOffDoctype, id); err == nil {
+		event = row.S("calendar_event")
+	}
+	if _, err := s.C.Upsert(ctx, timeOffDoctype, id, map[string]any{"status": "cancelled", "calendar_event": nil}); err != nil {
 		return err
 	}
-	if row, err := s.C.GetByHearthID(ctx, timeOffDoctype, id); err == nil && row.S("calendar_event") != "" {
-		_ = s.C.Delete(ctx, "Event", row.S("calendar_event"))
+	return s.dropEvent(ctx, event)
+}
+
+// dropEvent takes an "Out" off the calendar. The service identity does it, not the person: EmberOPS gives
+// staff no delete on an Event, not even their own, so a delete as the person was refused and the Out stayed
+// for good. The request must have stopped linking the event first (EmberOPS refuses to delete a linked doc).
+func (s *TimeOff) dropEvent(ctx context.Context, event string) error {
+	if event == "" {
+		return nil
+	}
+	if err := s.C.Delete(emberops.WithUser(ctx, nil), "Event", event); err != nil {
+		return fmt.Errorf("timeoff: the request is cancelled but its Out could not be taken off the calendar: %w", err)
 	}
 	return nil
 }
@@ -440,11 +454,11 @@ func (s *TimeOff) Change(ctx context.Context, orgID, actorID, id string, c timeo
 		v["decided_by"], v["decided_at"], v["decision_note"] = emberops.Ref(actorID), s.ts(&now), note
 		v["calendar_event"] = emberops.Ref(eventID)
 		if _, err := s.C.Upsert(ctx, timeOffDoctype, id, v); err != nil {
-			_ = s.C.DeleteByHearthID(ctx, "Event", eventID)
+			_ = s.C.DeleteByHearthID(emberops.WithUser(ctx, nil), "Event", eventID)
 			return nil, s.refused(err)
 		}
-		if oldEvent != "" {
-			_ = s.C.Delete(ctx, "Event", oldEvent)
+		if err := s.dropEvent(ctx, oldEvent); err != nil {
+			return nil, err
 		}
 	default:
 		// A submitted Leave Application is cancelled and annotated and nothing else, so the change
@@ -455,12 +469,12 @@ func (s *TimeOff) Change(ctx context.Context, orgID, actorID, id string, c timeo
 		}
 		who := s.nameOf(ctx, actorID)
 		if _, err := s.C.Upsert(ctx, timeOffDoctype, id, map[string]any{
-			"status": "cancelled", "decision_note": timeoff.ChangedNote(who, note),
+			"status": "cancelled", "decision_note": timeoff.ChangedNote(who, note), "calendar_event": nil,
 		}); err != nil {
 			return nil, s.refused(err)
 		}
-		if oldEvent != "" {
-			_ = s.C.Delete(ctx, "Event", oldEvent)
+		if err := s.dropEvent(ctx, oldEvent); err != nil {
+			return nil, err
 		}
 		finalID = uuid.NewString()
 		if err := s.fileApproved(ctx, orgID, actorID, finalID, &after, values(&after), note); err != nil {
@@ -499,7 +513,7 @@ func (s *TimeOff) fileApproved(ctx context.Context, orgID, actorID, id string, r
 	vals["decision_note"] = note
 	vals["calendar_event"] = emberops.Ref(eventID)
 	if _, err := s.C.Upsert(ctx, timeOffDoctype, id, vals); err != nil {
-		_ = s.C.DeleteByHearthID(ctx, "Event", eventID)
+		_ = s.C.DeleteByHearthID(emberops.WithUser(ctx, nil), "Event", eventID)
 		return err
 	}
 	return nil
@@ -532,11 +546,12 @@ func (s *TimeOff) CancelFor(ctx context.Context, orgID, actorID, id, note string
 	}
 	if _, err := s.C.Upsert(ctx, timeOffDoctype, id, map[string]any{
 		"status": "cancelled", "decided_at": s.ts(&now), "decision_note": timeoff.CancelledNote(s.nameOf(ctx, actorID), note),
+		"calendar_event": nil,
 	}); err != nil {
 		return s.refused(err)
 	}
-	if oldEvent != "" {
-		_ = s.C.Delete(ctx, "Event", oldEvent)
+	if err := s.dropEvent(ctx, oldEvent); err != nil {
+		return err
 	}
 	after := *before
 	after.Status = "cancelled"
