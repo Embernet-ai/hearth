@@ -3,6 +3,8 @@ package mauticsync
 import (
 	"strings"
 	"testing"
+
+	"github.com/Embernet-ai/hearth/internal/mautic"
 )
 
 func TestSegmentsFollowTheCompanyTypesAndTags(t *testing.T) {
@@ -64,5 +66,34 @@ func TestTheHashChangesWithWhatIsSent(t *testing.T) {
 	}
 	if a == hashOf(map[string]any{"x": 1, "optout": true}) {
 		t.Fatal("an opt-out did not change the hash")
+	}
+}
+
+// The first live run failed 239 companies over a state or country Mautic does not list, and one over a name past 64 characters.
+func TestARefusedStateOrCountryIsDroppedAndALongNameIsClipped(t *testing.T) {
+	f := mautic.Fields{"companyname": "Acme", "companystate": "OH", "companycountry": "Atlantis"}
+	refused := &mautic.APIError{Status: 400, Method: "POST", Path: "/companies/new",
+		Body: `{"errors":[{"code":400,"message":"companystate: The selected choice is invalid., companycountry: The selected choice is invalid."}]}`}
+	if !dropRefused(f, refused) {
+		t.Fatal("a 400 over the state and country was not handled")
+	}
+	if _, has := f["companystate"]; has {
+		t.Error("the refused state is still being sent")
+	}
+	if _, has := f["companycountry"]; has {
+		t.Error("the refused country is still being sent")
+	}
+	if f["companyname"] != "Acme" {
+		t.Error("the rest of the company was touched")
+	}
+	if dropRefused(f, &mautic.APIError{Status: 500, Body: "companystate"}) {
+		t.Error("a server error was treated as a refused choice")
+	}
+	if dropRefused(mautic.Fields{"companyname": "x"}, refused) {
+		t.Error("it claimed to drop what was not there, which would retry the same refused call forever")
+	}
+	long := strings.Repeat("Maripak ", 12)
+	if got := clip(long, mauticNameMax); len([]rune(got)) > 64 || !strings.HasPrefix(got, "Maripak") {
+		t.Errorf("clip = %q (%d characters)", got, len([]rune(got)))
 	}
 }
