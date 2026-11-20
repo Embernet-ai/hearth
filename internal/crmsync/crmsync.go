@@ -52,6 +52,11 @@ type Ops interface {
 	Update(ctx context.Context, doctype, name string, values map[string]any) (emberops.Row, error)
 }
 
+// readAll is the most records the sync reads of one doctype. The client's own default for a list is 5000, and Fireball
+// holds more Leads than that, so the sync named a limit it cannot reach: every Lead past the 5000th looked missing, was
+// "created" again on every run, and its notes and calls had no record to attach to.
+const readAll = 1_000_000
+
 // Syncer runs one organisation's sync.
 type Syncer struct {
 	db  *pgxpool.Pool
@@ -102,7 +107,7 @@ func (s *Syncer) all(ctx context.Context, dt string) ([]emberops.Row, error) {
 		fields = []string{"name", "hearth_id", "owner", "lead_name", "company_name", "email_id", "website", "hearth_url",
 			"hearth_owner", "_user_tags"}
 	}
-	rows, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: dt, Fields: fields}, 0)
+	rows, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: dt, Fields: fields}, readAll)
 	if err != nil {
 		return nil, err
 	}
@@ -871,7 +876,7 @@ func (s *Syncer) union(ctx context.Context, rep *Report, write bool) {
 	for _, role := range []string{"customer", "supplier"} {
 		rd := roleDoctype[role]
 		rows, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: rd.dt, Fields: []string{"name", "hearth_id", "disabled"},
-			Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, 0)
+			Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, readAll)
 		if err != nil {
 			s.add(rep, Action{"union", "", rd.dt, "failed", err.Error()})
 			continue
