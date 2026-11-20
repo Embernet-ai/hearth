@@ -72,7 +72,7 @@ var props = map[string][]string{
 	Companies: {"name", "domain", "website", "linkedin_company_page", "address", "city", "state", "zip", "country",
 		"annualrevenue", "hubspot_owner_id", "createdate"},
 	Contacts: {"firstname", "lastname", "email", "phone", "mobilephone", "jobtitle", "hs_linkedin_url", "hubspot_owner_id",
-		"createdate"},
+		"createdate", PropOptOut, PropHardBounce, PropBadAddress},
 	Deals: {"dealname", "amount", "closedate", "dealstage", "hubspot_owner_id", "createdate"},
 	Notes: {"hs_note_body", "hs_timestamp"},
 	Calls: {"hs_call_title", "hs_call_body", "hs_call_duration", "hs_call_direction", "hs_call_disposition", "hs_timestamp"},

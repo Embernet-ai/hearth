@@ -112,6 +112,8 @@ type Report struct {
 	Fields map[string]map[string]*FieldCount
 	// Replaced lists the first values that replaced another, for a person to read before saying go.
 	Replaced []Change
+	// OptOuts is what the run did about contacts HubSpot has unsubscribed or hard bounced.
+	OptOuts OptOutCount
 }
 
 // Change is one value that replaced another.

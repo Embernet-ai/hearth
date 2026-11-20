@@ -116,17 +116,20 @@ func (im *Importer) contacts(ctx context.Context, objs []Object, cnt *Count) err
 			return err
 		}
 		want := im.contactWant(o)
-		if h, ok := hits[o.ID]; ok {
-			im.updateContact(ctx, o, want, h.r, h.via, rows, cnt)
-			continue
-		}
-		if holder, ok := adopt[o.ID]; ok && !im.linked[holder] {
-			if row, found := rows[holder]; found && !row.deleted {
-				im.linkContact(ctx, o, want, row, cnt)
-				continue
+		func() {
+			if h, ok := hits[o.ID]; ok {
+				im.updateContact(ctx, o, want, h.r, h.via, rows, cnt)
+				return
 			}
-		}
-		im.createContact(ctx, o, want, cnt)
+			if holder, ok := adopt[o.ID]; ok && !im.linked[holder] {
+				if row, found := rows[holder]; found && !row.deleted {
+					im.linkContact(ctx, o, want, row, cnt)
+					return
+				}
+			}
+			im.createContact(ctx, o, want, cnt)
+		}()
+		im.carryOptOut(ctx, o)
 	}
 	return nil
 }
