@@ -83,6 +83,8 @@ Tags before 1.0.0 carry only the bare version string in the tag body. That is wh
 none of them produced a release note without going back to the commit. Do not
 repeat it.
 
+**Platforms.** `RELEASE_PLATFORMS` holds `amd64`. A tag builds the amd64 image only; the multi-arch image comes in a second, small bump release behind it.
+
 **6. Watch the publish.**
 
 ```bash

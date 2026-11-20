@@ -91,7 +91,10 @@ jobs:
       - name: build and push
         run: |
           set -euo pipefail
-          # amd64 only. The multi-arch image follows in a small bump release.
+          # RELEASE_PLATFORMS says amd64. The multi-arch image follows in a small bump
+          # release that changes nothing else, once the amd64 one is live and reads stable.
+          mode="$(tr -d '[:space:]' < RELEASE_PLATFORMS)"
+          [ "$mode" = "amd64" ] || { echo "::error::RELEASE_PLATFORMS must say amd64 until the multi-arch bump lands, not '$mode'"; exit 1; }
           first=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
           podman build --platform linux/amd64 -f Containerfile \
             --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
