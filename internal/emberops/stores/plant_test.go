@@ -243,3 +243,28 @@ func TestAssetTreeRollupsComeFromEmberOps(t *testing.T) {
 		t.Fatalf("line = %+v", line)
 	}
 }
+
+// A playground is somebody's sandbox. Its sync used to copy the sandbox's spaces to EmberOPS and, when none collided by name,
+// delete every other space there, which is the real org's. A playground's edit now changes nothing in EmberOPS.
+func TestPlaygroundSpaceSyncLeavesEmberOPSAlone(t *testing.T) {
+	e, _, pg := newPlant(t)
+	pg.spaces = []*plant.SpaceAccess{{ID: "dddddddd-0000-0000-0000-000000000001", Name: "Sandbox", Kind: "folder"}}
+	e.f.Put("Hearth Space", map[string]any{"name": "Engineering", "hearth_id": "eeeeeeee-0000-0000-0000-000000000001", "space_name": "Engineering"})
+	sync := &stores.SpaceSync{C: e.c, Source: pg, Dir: e.dir,
+		Real: func(_ context.Context, orgID string) (bool, error) { return orgID != "playground", nil }}
+	if err := sync.Sync(e.as("svc-tok"), "playground"); err != nil {
+		t.Fatal(err)
+	}
+	spaces := e.f.All("Hearth Space")
+	if len(spaces) != 1 || spaces[0]["space_name"] != "Engineering" {
+		t.Fatalf("a playground's sync changed EmberOPS: %v", spaces)
+	}
+	// The real org still syncs: the sandbox space is not in it, the real one is kept as the source says.
+	pg.spaces = []*plant.SpaceAccess{{ID: "eeeeeeee-0000-0000-0000-000000000001", Name: "Engineering", Kind: "folder"}}
+	if err := sync.Sync(e.as("svc-tok"), org); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.f.All("Hearth Space")); n != 1 {
+		t.Fatalf("real org sync left %d spaces", n)
+	}
+}

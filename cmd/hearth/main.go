@@ -387,7 +387,12 @@ func run() error {
 	})
 	var spaceSync *stores.SpaceSync
 	if ops != nil {
-		spaceSync = &stores.SpaceSync{C: ops, Source: plantSvc, Dir: stores.Directory{C: ops}, Loc: cfg.EmberOPSTimezone, Log: log}
+		spaceSync = &stores.SpaceSync{C: ops, Source: plantSvc, Dir: stores.Directory{C: ops}, Loc: cfg.EmberOPSTimezone, Log: log,
+			Real: func(ctx context.Context, orgID string) (bool, error) {
+				var real bool
+				err := pools.Web.QueryRow(ctx, `SELECT playground_of IS NULL FROM orgs WHERE id = $1`, orgID).Scan(&real)
+				return real, err
+			}}
 		set = stores.EmberOPS(ops, stores.PG{
 			Docs: docsSvc, Views: viewsSvc, Rules: rulesSvc, Teams: teamsSvc, Time: timeSvc, TimeOff: timeOffSvc,
 			Maint: maintSvc, Plant: plantSvc, CRM: crmSvc, DeptReqs: deptReqSvc, Calendar: calendarSvc, Canvas: canvasSvc,
