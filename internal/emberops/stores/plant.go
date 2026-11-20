@@ -46,6 +46,10 @@ type SpaceSync struct {
 	Dir    Directory
 	Loc    *time.Location
 	Log    *slog.Logger
+	// Real says whether an org is a company rather than somebody's playground. EmberOPS has one org per site, so a
+	// playground has no counterpart there, and its sync would copy sandbox spaces over the real ones and then delete
+	// every space it does not know, which is all of the real org's. Nil treats every org as real.
+	Real func(ctx context.Context, orgID string) (bool, error)
 
 	mu     sync.Mutex
 	digest map[string]string // org -> digest of what was last sent
@@ -62,6 +66,15 @@ func (s *SpaceSync) log() *slog.Logger {
 
 // Sync brings EmberOPS's spaces in line with Hearth's for one org.
 func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
+	if s.Real != nil {
+		real, err := s.Real(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		if !real {
+			return nil
+		}
+	}
 	spaces, err := s.Source.SpaceAccessAll(ctx, orgID)
 	if err != nil {
 		return err
