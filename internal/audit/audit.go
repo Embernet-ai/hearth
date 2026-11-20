@@ -91,6 +91,13 @@ const (
 	ActionTimeRemove         = "time.remove"
 	ActionTimeRemoveImported = "time.remove_imported"
 
+	// ActionTimeOffChange and ActionTimeOffCancel are an approver or an admin changing or
+	// cancelling somebody else's time off request. One row per change; before and after
+	// hold the dates, the days, the half day, the kind and the status, and after holds
+	// the note the person who changed it gave.
+	ActionTimeOffChange = "time_off.change"
+	ActionTimeOffCancel = "time_off.cancel"
+
 	// ActionChannelArchive is an admin taking a channel out of every list (hearthctl channel-remove).
 	ActionChannelArchive = "channel.archive"
 )

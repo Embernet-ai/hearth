@@ -3,6 +3,10 @@
   import { F, S, A } from '../../lib/gofuncs';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
+  // The days taken: the working days the dates span, less half a day when the first day is a half.
+  const taken = (r: any) => (r?.HalfDay ? r.Days - 0.5 : r?.Days);
+  const plural = (r: any) => (taken(r) === 1 ? '' : 's');
+  const iso = (t: any) => F.m(t, 'Format', '2006-01-02');
 </script>
 
 {#snippet content(dot: any)}
@@ -20,7 +24,7 @@
             <strong>{d1?.RequesterName}</strong>
             <span  class={"status timeoff-" + S(d1?.Status)}>{d1?.Status}</span>
           </div>
-          <div>{F.leaveKind(d1?.Kind)} &middot; {F.m(d1?.StartsOn, "Format", "Mon 2 Jan")} – {F.m(d1?.EndsOn, "Format", "Mon 2 Jan 2006")} &middot; <strong>{d1?.Days}</strong> working day{#if F.t(F.ne(d1?.Days, 1))}s{/if}</div>
+          <div>{F.leaveKind(d1?.Kind)} &middot; {F.m(d1?.StartsOn, "Format", "Mon 2 Jan")} – {F.m(d1?.EndsOn, "Format", "Mon 2 Jan 2006")} &middot; <strong>{taken(d1)}</strong> working day{plural(d1)}{#if F.t(d1?.HalfDay)} (first day a half day){/if}</div>
           {#if F.t(d1?.Reason)}<p  class="muted">Reason: {d1?.Reason}</p>{/if}
           {#if F.t(d1?.Comments)}<p  class="muted">Comments: {d1?.Comments}</p>{/if}
           {#if F.t(F.eq(d1?.Status, "pending"))}
@@ -32,7 +36,35 @@
               </div>
             </form>
           {:else}
-            <p  class="muted small">{d1?.Status} by {d1?.DeciderName}{#if F.t(d1?.DecidedAt)} {F.ago(d1?.DecidedAt)}{/if}{#if F.t(d1?.DecisionNote)}: {d1?.DecisionNote}{/if}</p>
+            {#if F.t(F.eq(d1?.Status, "cancelled"))}
+              {#if F.t(d1?.DecisionNote)}<p  class="muted small">{d1?.DecisionNote}{#if F.t(d1?.DecidedAt)} {F.ago(d1?.DecidedAt)}{/if}</p>{/if}
+            {:else}
+              <p  class="muted small">{d1?.Status} by {d1?.DeciderName}{#if F.t(d1?.DecidedAt)} {F.ago(d1?.DecidedAt)}{/if}{#if F.t(d1?.DecisionNote)}: {d1?.DecisionNote}{/if}</p>
+            {/if}
+          {/if}
+          {#if F.t(F.or(F.eq(d1?.Status, "pending"), F.eq(d1?.Status, "approved")))}
+            <details  class="timeoff-change">
+              <summary  class="ghost small">Change or cancel</summary>
+              <form  method="post"  action={"/time-off/" + S(d1?.ID) + "/change"}  class="stack timeoff-form">
+                <div  class="row">
+                  <label  class="stack">From <input  type="date"  name="starts_on"  value={iso(d1?.StartsOn)}  required></label>
+                  <label  class="stack">To <input  type="date"  name="ends_on"  value={iso(d1?.EndsOn)}  required></label>
+                </div>
+                <label  class="stack">Type of leave
+                  <select  name="kind"  required>
+                    {#each F.rng(dot?.TimeOffKinds) as [k4, d4]}<option  value={S(d4?.Key)}  selected={d4?.Key === d1?.Kind}>{d4?.Label}</option>{/each}
+                  </select>
+                </label>
+                <label  class="row"><input  type="checkbox"  name="half_day"  value="1"  checked={!!d1?.HalfDay}> The first day is a half day.</label>
+                <label  class="stack">Note on the request <textarea  name="comments"  rows="2">{d1?.Comments}</textarea></label>
+                <label  class="stack">Why you are changing it <input  name="note"  placeholder="Sent to {d1?.RequesterName} (optional)"></label>
+                <div  class="row"><button  type="submit"  class="primary">Save the change</button></div>
+              </form>
+              <form  method="post"  action={"/time-off/" + S(d1?.ID) + "/cancel-for"}  class="stack"  data-confirm={"Cancel " + S(d1?.RequesterName) + "'s time off request?"}>
+                <input  name="note"  placeholder="Why it is cancelled (optional)">
+                <div  class="row"><button  type="submit"  class="ghost">Cancel this request</button></div>
+              </form>
+            </details>
           {/if}
         </li>
       {/each}
@@ -54,6 +86,7 @@
     </label>
     <label  class="stack">Reason <textarea  name="reason"  rows="2"  placeholder="Optional"></textarea></label>
     <label  class="stack">Other comments <textarea  name="comments"  rows="2"  placeholder="Optional"></textarea></label>
+    <label  class="row"><input  type="checkbox"  name="half_day"  value="1"> The first day is a half day.</label>
     <label  class="row"><input  type="checkbox"  name="acknowledged"  required> I understand that this request is subject to approval.</label>
     <div  class="row"><button  type="submit"  class="primary">Send request</button></div>
     <p  class="muted small">Working days (Monday to Friday) are counted for you.</p>
@@ -65,10 +98,12 @@
       {#each F.rng(dot?.TimeOff) as [k3, d3]}
         <li  id={"r-" + S(d3?.ID)}  class="timeoff-item">
           <div  class="row spread">
-            <span>{F.leaveKind(d3?.Kind)} &middot; {F.m(d3?.StartsOn, "Format", "Mon 2 Jan")} – {F.m(d3?.EndsOn, "Format", "Mon 2 Jan 2006")} &middot; {d3?.Days} day{#if F.t(F.ne(d3?.Days, 1))}s{/if}</span>
+            <span>{F.leaveKind(d3?.Kind)} &middot; {F.m(d3?.StartsOn, "Format", "Mon 2 Jan")} – {F.m(d3?.EndsOn, "Format", "Mon 2 Jan 2006")} &middot; {taken(d3)} day{plural(d3)}{#if F.t(d3?.HalfDay)} (first day a half day){/if}</span>
             <span  class={"status timeoff-" + S(d3?.Status)}>{d3?.Status}</span>
           </div>
-          {#if F.t(d3?.DeciderName)}<p  class="muted small">by {d3?.DeciderName}{#if F.t(d3?.DecisionNote)}: {d3?.DecisionNote}{/if}</p>{/if}
+          {#if F.t(F.eq(d3?.Status, "cancelled"))}
+            {#if F.t(d3?.DecisionNote)}<p  class="muted small">{d3?.DecisionNote}</p>{/if}
+          {:else if F.t(d3?.DeciderName)}<p  class="muted small">by {d3?.DeciderName}{#if F.t(d3?.DecisionNote)}: {d3?.DecisionNote}{/if}</p>{/if}
           {#if F.t(F.or(F.eq(d3?.Status, "pending"), F.eq(d3?.Status, "approved")))}
             <form  method="post"  action={"/time-off/" + S(d3?.ID) + "/cancel"}  class="inline"                    data-confirm="Cancel this time off request?">
               <button  type="submit"  class="ghost small">Cancel request</button>

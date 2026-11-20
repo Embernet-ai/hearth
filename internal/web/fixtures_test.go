@@ -30,6 +30,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/plant"
 	"github.com/Embernet-ai/hearth/internal/timelog"
+	"github.com/Embernet-ai/hearth/internal/timeoff"
 )
 
 var updateFixtures = flag.Bool("update-fixtures", false, "write ui/src/views/fixtures")
@@ -106,7 +107,20 @@ func fixtures() map[string]page {
 	rollup := &docs.ReportEntry{ID: "11111111-1111-1111-1111-111111111111", Day: "2026-10-26",
 		Author: "Gabriel", SpacePath: "Engineering / White Team"}
 
+	// Time off: what an approver or an admin sees of somebody else's requests, and what the person sees of their own.
+	leave := func(id, status string, half bool) *timeoff.Request {
+		return &timeoff.Request{ID: id, RequesterID: "p2", RequesterName: "Aria", Kind: "vacation", Status: status, Days: 3, HalfDay: half,
+			StartsOn: time.Date(2026, 12, 7, 0, 0, 0, 0, time.UTC), EndsOn: time.Date(2026, 12, 9, 0, 0, 0, 0, time.UTC),
+			Comments: "flying out Sunday", DeciderName: "Yessid", CreatedAt: end}
+	}
+	cancelled := leave("c1", "cancelled", false)
+	cancelled.DecisionNote = "Cancelled by Yessid: the trip moved"
+
 	return map[string]page{
+		"timeoff-decide": {Title: "Time off", TimeOffKinds: timeoff.Kinds,
+			TimeOffToDecide: []*timeoff.Request{leave("t1", "pending", false), leave("t2", "approved", true), cancelled}},
+		"timeoff-own": {Title: "Time off", TimeOffKinds: timeoff.Kinds,
+			TimeOff: []*timeoff.Request{leave("t2", "approved", true), cancelled}},
 		"settings-nobody":  {Title: "Settings"},
 		"settings-finance": {Title: "Settings", Can: authz.Held{authz.Finance: true}},
 		"settings-owner":   {Title: "Settings", IsAdmin: true},

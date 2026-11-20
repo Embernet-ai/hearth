@@ -44,6 +44,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/timelog"
+	"github.com/Embernet-ai/hearth/internal/timeoff"
 )
 
 var (
@@ -132,6 +133,8 @@ type Service struct {
 	sales    crm.Sales
 	// time is the admin time removal (WithTime). Nil leaves that route 404.
 	time timelog.Store
+	// timeoff is the time off routes and tools (WithTimeOff). Nil leaves them 404.
+	timeoff timeoff.Store
 }
 
 func New(db *pgxpool.Pool, s Subjects, d Spine) *Service {
@@ -299,6 +302,7 @@ func (s *Service) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/whoami", s.whoami)
 	s.crmRoutes(mux)
 	s.timeRoutes(mux)
+	s.timeOffRoutes(mux)
 	return s.authenticated(mux)
 }
 

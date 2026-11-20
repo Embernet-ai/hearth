@@ -10,6 +10,7 @@ package fake
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -36,6 +37,12 @@ type Frappe struct {
 	Seen []string
 	// Users records the acting user of every request, parallel to Calls.
 	Users []string
+	// HRMS makes the site store time off as HRMS Leave Applications, which can be cancelled
+	// and annotated once decided and nothing else (see decidedTimeOff).
+	HRMS bool
+	// RejectNew, when set, may refuse a record about to be created, as EmberOPS does for an
+	// overlap or a leave balance. It returns the reason, or "" to accept.
+	RejectNew func(doctype string, vals map[string]any) string
 }
 
 // New starts a fake accepting the given tokens (token -> user).
@@ -249,6 +256,12 @@ func (f *Frappe) method(w http.ResponseWriter, r *http.Request, name, user strin
 			return
 		}
 		reply(w, "message", nil)
+	case "emberops_hearth.api.time_off_backend":
+		if f.HRMS {
+			reply(w, "message", "Leave Application")
+		} else {
+			reply(w, "message", "Hearth Time Off Request")
+		}
 	case "emberops_hearth.api.get_by_hearth_id":
 		dt, _ := args["doctype"].(string)
 		hid, _ := args["hearth_id"].(string)
@@ -258,6 +271,11 @@ func (f *Frappe) method(w http.ResponseWriter, r *http.Request, name, user strin
 		hid, _ := args["hearth_id"].(string)
 		vals, _ := args["values"].(map[string]any)
 		res, err := f.upsert(dt, hid, vals, user)
+		var bad invalid
+		if errors.As(err, &bad) {
+			fail(w, 417, "ValidationError", err.Error())
+			return
+		}
 		if err != nil {
 			fail(w, 404, "DoesNotExistError", err.Error())
 			return
@@ -491,8 +509,15 @@ func (f *Frappe) upsert(doctype, hid string, vals map[string]any, user string) (
 	vals["hearth_id"] = strings.ToLower(hid)
 	d := f.byHearthID(doctype, hid)
 	created := d == nil
+	if created && f.RejectNew != nil {
+		if why := f.RejectNew(doctype, vals); why != "" {
+			return nil, invalid(why)
+		}
+	}
 	if created {
 		d = map[string]any{"owner": user}
+	} else if err := f.decidedTimeOff(doctype, d, vals); err != nil {
+		return nil, err
 	}
 	for k, v := range vals {
 		d[k] = v
@@ -689,4 +714,37 @@ func match(d map[string]any, f []any) bool {
 		return (hs != "") == set
 	}
 	return true
+}
+
+// invalid is a refusal the addon makes as a validation error (HTTP 417), not a missing record.
+type invalid string
+
+func (e invalid) Error() string { return string(e) }
+
+// decidedTimeOff is the addon's rule for a decided request on a site with HRMS (emberops_hearth/api.py
+// _amend_decided_leave): once approved, denied or cancelled it can be cancelled and
+// annotated and nothing else. Changing dates, kind or days means cancelling it and
+// filing a new request.
+func (f *Frappe) decidedTimeOff(doctype string, d, vals map[string]any) error {
+	if doctype != "Hearth Time Off Request" || !f.HRMS {
+		return nil
+	}
+	cur, _ := d["status"].(string)
+	if cur != "approved" && cur != "denied" && cur != "cancelled" {
+		return nil
+	}
+	if want, ok := vals["status"].(string); ok && want != cur && !(want == "cancelled" && cur != "cancelled") {
+		return invalid(fmt.Sprintf("already %s; cancel it and file a new request", cur))
+	}
+	if cur == "cancelled" {
+		if want, ok := vals["status"].(string); ok && want != "cancelled" {
+			return invalid("is cancelled and cannot change")
+		}
+	}
+	for _, k := range []string{"starts_on", "ends_on", "leave_kind", "days", "half_day", "reason", "employee"} {
+		if v, ok := vals[k]; ok && fmt.Sprint(v) != fmt.Sprint(d[k]) {
+			return invalid(fmt.Sprintf("already decided; change %s by cancelling it and filing a new request", k))
+		}
+	}
+	return nil
 }

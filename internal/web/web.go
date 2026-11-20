@@ -1325,6 +1325,8 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /time-off", s.postTimeOff)
 	authed.HandleFunc("POST /time-off/{id}/decide", s.postDecideTimeOff)
 	authed.HandleFunc("POST /time-off/{id}/cancel", s.postCancelTimeOff)
+	authed.HandleFunc("POST /time-off/{id}/change", s.postChangeTimeOff)
+	authed.HandleFunc("POST /time-off/{id}/cancel-for", s.postCancelForTimeOff)
 	authed.HandleFunc("POST /tutorial/enter", s.postEnterPlayground)
 	authed.HandleFunc("POST /tutorial/leave", s.postLeavePlayground)
 	authed.HandleFunc("POST /tutorial/reset", s.postResetPlayground)

@@ -56,14 +56,19 @@ type Request struct {
 	StartsOn      time.Time
 	EndsOn        time.Time
 	Days          int
-	Kind          string
-	Reason        string
-	Comments      string
-	Status        string
-	DeciderName   string
-	DecidedAt     *time.Time
-	DecisionNote  string
-	CreatedAt     time.Time
+	// HalfDay is "the first day counts as half". Days stays the whole working
+	// days the dates span; Length is what is actually taken.
+	HalfDay      bool
+	Kind         string
+	Reason       string
+	Comments     string
+	Status       string
+	DeciderName  string
+	DecidedAt    *time.Time
+	DecisionNote string
+	CreatedAt    time.Time
+	// CalendarEventID is the "Out" on the calendar once approved. Never sent to a page.
+	CalendarEventID *string `json:"-"`
 }
 
 // Params is what the form sends.
@@ -71,6 +76,8 @@ type Params struct {
 	StartsOn, EndsOn time.Time
 	Kind             string
 	Reason, Comments string
+	// HalfDay makes the first day half a day.
+	HalfDay bool
 	// Acknowledged is "I understand this request is subject to approval".
 	Acknowledged bool
 }
@@ -91,6 +98,9 @@ func WorkingDays(from, to time.Time) int {
 type Notifier interface {
 	TimeOffRequested(ctx context.Context, orgID string, r *Request, approverIDs []string)
 	TimeOffDecided(ctx context.Context, orgID, deciderID string, r *Request)
+	// TimeOffChanged tells the requester that somebody else changed or cancelled
+	// their request (r.Status says which), with the reason the person gave.
+	TimeOffChanged(ctx context.Context, orgID, actorID string, r *Request, note string)
 }
 
 type Service struct {
@@ -118,21 +128,9 @@ func (s *Service) Ask(ctx context.Context, orgID, actorID string, p Params) (*Re
 	if !p.Acknowledged {
 		return nil, fmt.Errorf("%w: please confirm that the request is subject to approval", ErrInvalid)
 	}
-	if p.StartsOn.IsZero() || p.EndsOn.IsZero() {
-		return nil, fmt.Errorf("%w: a start and an end date are needed", ErrInvalid)
-	}
-	if p.EndsOn.Before(p.StartsOn) {
-		return nil, fmt.Errorf("%w: the end date is before the start date", ErrInvalid)
-	}
-	if p.EndsOn.Sub(p.StartsOn) > 366*24*time.Hour {
-		return nil, fmt.Errorf("%w: that is more than a year", ErrInvalid)
-	}
-	if KindLabel(p.Kind) == p.Kind {
-		return nil, fmt.Errorf("%w: choose a type of leave", ErrInvalid)
-	}
-	days := WorkingDays(p.StartsOn, p.EndsOn)
-	if days == 0 {
-		return nil, fmt.Errorf("%w: those dates are all weekend", ErrInvalid)
+	days, err := p.Check()
+	if err != nil {
+		return nil, err
 	}
 
 	r := &Request{
@@ -140,11 +138,12 @@ func (s *Service) Ask(ctx context.Context, orgID, actorID string, p Params) (*Re
 		Days: days, Kind: p.Kind, Reason: strings.TrimSpace(p.Reason),
 		Comments: strings.TrimSpace(p.Comments), Status: "pending",
 	}
-	err := s.db.QueryRow(ctx, `
-		INSERT INTO time_off_requests (id, org_id, requester_id, starts_on, ends_on, days, kind, reason, comments)
-		SELECT $1, $2, p.id, $4, $5, $6, $7, $8, $9 FROM principals p WHERE p.id = $3 AND p.org_id = $2
+	r.HalfDay = p.HalfDay
+	err = s.db.QueryRow(ctx, `
+		INSERT INTO time_off_requests (id, org_id, requester_id, starts_on, ends_on, days, kind, reason, comments, half_day)
+		SELECT $1, $2, p.id, $4, $5, $6, $7, $8, $9, $10 FROM principals p WHERE p.id = $3 AND p.org_id = $2
 		RETURNING created_at, (SELECT display_name FROM principals WHERE id = $3)`,
-		r.ID, orgID, actorID, r.StartsOn, r.EndsOn, r.Days, r.Kind, r.Reason, r.Comments).
+		r.ID, orgID, actorID, r.StartsOn, r.EndsOn, r.Days, r.Kind, r.Reason, r.Comments, r.HalfDay).
 		Scan(&r.CreatedAt, &r.RequesterName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrDenied
@@ -189,7 +188,8 @@ func (s *Service) deciders(ctx context.Context, orgID, requesterID string) ([]st
 
 const columns = `
 	r.id::text, r.requester_id::text, p.display_name, r.starts_on, r.ends_on, r.days, r.kind,
-	r.reason, r.comments, r.status, COALESCE(dp.display_name, ''), r.decided_at, r.decision_note, r.created_at
+	r.reason, r.comments, r.status, COALESCE(dp.display_name, ''), r.decided_at, r.decision_note, r.created_at,
+	r.half_day
 	FROM time_off_requests r
 	JOIN principals p ON p.id = r.requester_id
 	LEFT JOIN principals dp ON dp.id = r.decided_by`
@@ -201,7 +201,7 @@ func scan(rows pgx.Rows) ([]*Request, error) {
 		r := &Request{}
 		if err := rows.Scan(&r.ID, &r.RequesterID, &r.RequesterName, &r.StartsOn, &r.EndsOn, &r.Days,
 			&r.Kind, &r.Reason, &r.Comments, &r.Status, &r.DeciderName, &r.DecidedAt,
-			&r.DecisionNote, &r.CreatedAt); err != nil {
+			&r.DecisionNote, &r.CreatedAt, &r.HalfDay); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -221,11 +221,14 @@ func (s *Service) Mine(ctx context.Context, orgID, actorID string) ([]*Request, 
 }
 
 // ToDecide is everybody else's requests the actor may decide: pending first
-// (oldest first, the one waiting longest), then the recent decisions.
+// (oldest first, the one waiting longest), then the recent decisions and the
+// approved ones still to come or under way, which is what an approver changes or
+// cancels.
 func (s *Service) ToDecide(ctx context.Context, orgID, actorID string) ([]*Request, error) {
 	rows, err := s.db.Query(ctx, `SELECT `+columns+`
 		WHERE r.org_id = $1 AND r.requester_id <> $2 AND `+mayDecide+`
-		  AND (r.status = 'pending' OR r.decided_at > now() - interval '30 days')
+		  AND (r.status = 'pending' OR r.decided_at > now() - interval '30 days'
+		       OR (r.status = 'approved' AND r.ends_on >= current_date))
 		ORDER BY (r.status = 'pending') DESC, r.starts_on
 		LIMIT 200`, orgID, actorID)
 	if err != nil {

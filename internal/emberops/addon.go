@@ -70,3 +70,15 @@ func (c *Client) WeekLoad(ctx context.Context, employee, weekStart string) (Week
 	err := c.CallGet(ctx, "emberops_hearth.api.week_load", q, &r)
 	return r, err
 }
+
+// HRMSLeaveDoctype is what time_off_backend answers on a site that has HRMS.
+const HRMSLeaveDoctype = "Leave Application"
+
+// TimeOffBackend is the doctype that stores time off on the site: Leave Application with
+// HRMS, which cancels and refiles rather than editing a decided request, else Hearth Time
+// Off Request.
+func (c *Client) TimeOffBackend(ctx context.Context) (string, error) {
+	var dt string
+	err := c.CallGet(ctx, "emberops_hearth.api.time_off_backend", url.Values{}, &dt)
+	return dt, err
+}

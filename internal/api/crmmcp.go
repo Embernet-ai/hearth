@@ -115,6 +115,9 @@ var crmTools = []crmTool{
 type crmMCP struct {
 	mux   *http.ServeMux
 	byKey map[string]crmTool
+	tools []crmTool
+	// changes names what a write tool changes, for the refusal a read-only caller gets.
+	changes string
 }
 
 // CRMTools is the CRM as an connector tool set, or nil when this deployment has no CRM
@@ -125,7 +128,7 @@ func (s *Service) CRMTools() agents.ToolSet {
 	}
 	mux := http.NewServeMux()
 	s.crmRoutes(mux)
-	t := &crmMCP{mux: mux, byKey: map[string]crmTool{}}
+	t := &crmMCP{mux: mux, byKey: map[string]crmTool{}, tools: crmTools, changes: "the CRM"}
 	for _, x := range crmTools {
 		t.byKey[x.name] = x
 	}
@@ -134,7 +137,7 @@ func (s *Service) CRMTools() agents.ToolSet {
 
 func (t *crmMCP) Tools(c *agents.Caller, write bool) []agents.Tool {
 	var out []agents.Tool
-	for _, x := range crmTools {
+	for _, x := range t.tools {
 		if x.write && !write {
 			continue
 		}
@@ -156,7 +159,7 @@ func (t *crmMCP) Call(ctx context.Context, c *agents.Caller, name string, args m
 		return nil, false
 	}
 	if x.write && !write {
-		return text("this token cannot change the CRM", true), true
+		return text("this token cannot change "+t.changes, true), true
 	}
 	rest := map[string]any{}
 	for k, v := range args {
