@@ -954,7 +954,7 @@ func (r *Report) Print(w io.Writer) {
 // show reads back what EmberOps holds for one company and its contacts.
 func (s *Syncer) show(ctx context.Context, rep *Report, c company) {
 	keep := []string{"name", "customer_name", "supplier_name", "hearth_id", "hearth_domain", "hearth_notes",
-		"hearth_company_kind", "us_ein", "disabled", "_user_tags", "_tags", "email_id", "first_name", "last_name", "links"}
+		"hearth_company_kind", "us_ein", "disabled", "_user_tags", "_tags", "email_id", "first_name", "last_name", "links", "unsubscribed"}
 	one := func(kind, dt, id, label string) {
 		row, err := s.ops.GetByHearthID(ctx, dt, id)
 		if errors.Is(err, emberops.ErrNotFound) {
