@@ -243,10 +243,14 @@ func (f *fx) closeTree(t *testing.T, actor core.Subjects) closeTree {
 	c.a2 = mk("A2", &c.a)
 	c.bDone = mk("B", &c.parent)
 	c.c = mk("C", &c.parent)
-	c.c1 = mk("C1", &c.c)
 	set(c.a2, docs.StatusDone)
 	set(c.bDone, docs.StatusDone)
 	set(c.c, docs.StatusCancelled)
+	// C1 is filed under C after C was cancelled: cancelling a task now takes
+	// its open subtasks with it, so an open task beneath a cancelled one has to
+	// arrive afterwards (a move or a late add), which is the case the walk must
+	// still reach.
+	c.c1 = mk("C1", &c.c)
 	set(c.a1, docs.StatusInProgress)
 	d, err := f.svc.Get(ctx, f.org, actor, c.bDone)
 	if err != nil {

@@ -456,8 +456,14 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 	}
 	out := render(d)
 	if n := len(closed.IDs); n > 0 {
-		// Closing a task closed its open subtasks too.
-		out["closed_subtasks"] = closed.IDs
+		// A status change on a task moved its open subtasks too. The first
+		// version only closed, and closed_subtasks keeps that meaning (done or
+		// cancelled); cascaded_subtasks and cascaded_to say it for any status.
+		out["cascaded_subtasks"] = closed.IDs
+		out["cascaded_to"] = closed.Status
+		if docs.IsClosedStatus(closed.Status) {
+			out["closed_subtasks"] = closed.IDs
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

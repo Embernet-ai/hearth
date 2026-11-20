@@ -248,9 +248,13 @@ func (f *Fanout) changed(ctx context.Context, orgID string, ref core.Ref, actor 
 			From       string `json:"from"`
 			To         string `json:"to"`
 			ClosedWith string `json:"closed_with"`
+			WithParent string `json:"with_parent"`
 		}
 		if err := json.Unmarshal(p.Payload, &body); err == nil && body.To != "" {
 			excerpt = "now " + body.To
+		}
+		if body.ClosedWith == "" {
+			body.ClosedWith = body.WithParent
 		}
 		if body.ClosedWith != "" {
 			// A subtask closed along with its parent. Whoever follows the
@@ -274,7 +278,11 @@ func (f *Fanout) changed(ctx context.Context, orgID string, ref core.Ref, actor 
 			if watchers = kept; len(watchers) == 0 {
 				return nil
 			}
-			excerpt = "now done, closed with the task it sits under"
+			if body.To == "done" {
+				excerpt = "now done, closed with the task it sits under"
+			} else {
+				excerpt = "now " + body.To + ", moved with the task it sits under"
+			}
 		}
 	} else {
 		// A plain edit. Telling somebody "changed" for every keystroke-sized

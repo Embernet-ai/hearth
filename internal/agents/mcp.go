@@ -649,7 +649,10 @@ func (m *MCP) toolUpdate(ctx context.Context, c *Caller, args map[string]any) *T
 		return toolErr("could not change it: " + err.Error())
 	}
 	if n := len(closed.IDs); n > 0 {
-		return toolText(fmt.Sprintf("Updated %s. Closed with %d open subtask(s): %s.", id, n, strings.Join(closed.IDs, ", ")))
+		if closed.Status == docs.StatusDone {
+			return toolText(fmt.Sprintf("Updated %s. Closed with %d open subtask(s): %s.", id, n, strings.Join(closed.IDs, ", ")))
+		}
+		return toolText(fmt.Sprintf("Updated %s. Moved %d open subtask(s) to %s with it: %s.", id, n, docs.StatusLabel(closed.Status), strings.Join(closed.IDs, ", ")))
 	}
 	return toolText("Updated " + id + ".")
 }

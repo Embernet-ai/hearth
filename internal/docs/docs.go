@@ -497,9 +497,9 @@ type TaskPatch struct {
 	StartedAt   *time.Time
 	CompletedAt *time.Time
 
-	// KeepSubtasks stops "done" from closing the task's open subtasks. Only an
+	// KeepSubtasks stops a status change from moving the task's open subtasks. Only an
 	// import sets it: a history brought over from elsewhere says what was
-	// finished, and closing the rest on the way in would invent work done.
+	// finished, and moving the rest on the way in would invent work done.
 	KeepSubtasks bool
 }
 
@@ -676,15 +676,18 @@ func (s *Service) Update(ctx context.Context, orgID string, actor core.Subjects,
 		}
 	}
 
-	// Closing a task closes what is inside it, in this same transaction so the
-	// parent is never done with open subtasks beneath it, and a failure part
-	// way leaves both as they were. Only on the move to done, not on a save of
-	// a task that already was, and never the other way: reopening a parent
-	// leaves its subtasks as they are.
+	// Changing a task's status moves what is inside it, in this same
+	// transaction so a parent and its open subtasks never disagree and a
+	// failure part way leaves both as they were. Only when the status really
+	// changes, not on a save of a task already in it, and only downward: a
+	// subtask's change never reaches its parent or its siblings. Finished and
+	// cancelled subtasks keep their status, so reopening a parent reopens
+	// nothing.
 	var closed []string
-	if t := p.Task; t != nil && t.Status != nil && *t.Status == StatusDone &&
-		(curStatus == nil || *curStatus != StatusDone) && !t.KeepSubtasks {
-		if closed, err = s.closeSubtasks(ctx, tx, orgID, id, principal); err != nil {
+	var cascadedTo string
+	if t := p.Task; t != nil && t.Status != nil && !t.KeepSubtasks {
+		cascadedTo = *t.Status
+		if closed, err = s.cascadeFrom(ctx, tx, orgID, id, principal, curStatus, t.Status); err != nil {
 			return nil, err
 		}
 	}
@@ -692,7 +695,7 @@ func (s *Service) Update(ctx context.Context, orgID string, actor core.Subjects,
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("docs: commit: %w", err)
 	}
-	NoteClosed(ctx, closed)
+	NoteCascaded(ctx, cascadedTo, closed)
 	return s.load(ctx, orgID, id)
 }
 

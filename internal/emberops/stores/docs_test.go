@@ -144,16 +144,18 @@ func (p *spine) GetAsSystem(ctx context.Context, _ string, id string) (*docs.Doc
 
 func (p *spine) Update(ctx context.Context, _ string, _ core.Subjects, id string, up docs.UpdateParams) (*docs.Document, error) {
 	d := p.rows[id]
-	if up.Task != nil && up.Task.Status != nil && *up.Task.Status == docs.StatusDone {
-		// What the real service does inside its transaction: subtasks follow.
+	if up.Task != nil && up.Task.Status != nil {
+		// What the real service does inside its transaction: open subtasks
+		// follow the new status, finished and cancelled ones stay.
+		to := *up.Task.Status
 		var ids []string
 		for kid, parent := range p.parents {
-			if parent == id && p.rows[kid].Task.Status != docs.StatusDone {
-				p.rows[kid].Task.Status = docs.StatusDone
+			if st := p.rows[kid].Task.Status; parent == id && !docs.IsClosedStatus(st) && st != to {
+				p.rows[kid].Task.Status = to
 				ids = append(ids, kid)
 			}
 		}
-		docs.NoteClosed(ctx, ids)
+		docs.NoteCascaded(ctx, to, ids)
 	}
 	if up.Title != nil {
 		d.Title = *up.Title
@@ -525,5 +527,61 @@ func TestDocsClosingATaskSendsItsClosedSubtasksToEmberOPS(t *testing.T) {
 	}
 	if got[parent.ID] != "Completed" || got[kid.ID] != "Completed" {
 		t.Fatalf("EmberOPS statuses: %v", got)
+	}
+}
+
+// Every status a parent is given reaches EmberOPS for its open subtasks, a
+// finished one is not sent again, and a subtask's own change sends nothing for
+// its parent.
+func TestDocsAnyStatusOnAParentSendsItsOpenSubtasksToEmberOPS(t *testing.T) {
+	for _, tc := range []struct{ to, ops string }{
+		{docs.StatusCancelled, "Cancelled"}, {docs.StatusInProgress, "Working"}, {docs.StatusBlocked, "Blocked"},
+	} {
+		t.Run(tc.to, func(t *testing.T) {
+			e := newEnv(t)
+			pg := newSpine()
+			pg.parents = map[string]string{}
+			s := &stores.Docs{Store: pg, Base: e.base, Dir: e.dir}
+			ctx := e.as("ann-tok")
+
+			parent, _ := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindTask, Title: "Ignition"})
+			open, _ := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindTask, Title: "Alice"})
+			finished, _ := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindTask, Title: "Dave"})
+			pg.parents[open.ID], pg.parents[finished.ID] = parent.ID, parent.ID
+			done := docs.StatusDone
+			if _, err := s.Update(ctx, org, actor(ann), finished.ID, docs.UpdateParams{Task: &docs.TaskPatch{Status: &done}}); err != nil {
+				t.Fatal(err)
+			}
+
+			cctx, sink := docs.WithClosedSink(ctx)
+			to := tc.to
+			if _, err := s.Update(cctx, org, actor(ann), parent.ID, docs.UpdateParams{Task: &docs.TaskPatch{Status: &to}}); err != nil {
+				t.Fatal(err)
+			}
+			if len(sink.IDs) != 1 || sink.IDs[0] != open.ID || sink.Status != tc.to {
+				t.Fatalf("the sink should name the open subtask and %s: %v %q", tc.to, sink.IDs, sink.Status)
+			}
+			got := map[string]any{}
+			for _, tk := range e.f.All("Task") {
+				got[tk["hearth_id"].(string)] = tk["status"]
+			}
+			if got[parent.ID] != tc.ops || got[open.ID] != tc.ops || got[finished.ID] != "Completed" {
+				t.Fatalf("EmberOPS statuses: %v", got)
+			}
+
+			// A subtask's own change: its parent is not sent, so EmberOPS keeps
+			// the parent's status as it was.
+			back := docs.StatusTodo
+			if _, err := s.Update(ctx, org, actor(ann), open.ID, docs.UpdateParams{Task: &docs.TaskPatch{Status: &back}}); err != nil {
+				t.Fatal(err)
+			}
+			got = map[string]any{}
+			for _, tk := range e.f.All("Task") {
+				got[tk["hearth_id"].(string)] = tk["status"]
+			}
+			if got[open.ID] != "Open" || got[parent.ID] != tc.ops || got[finished.ID] != "Completed" {
+				t.Fatalf("a subtask's change moved something else: %v", got)
+			}
+		})
 	}
 }
