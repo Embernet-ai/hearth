@@ -31,6 +31,12 @@ A group's wanted members are the active people in any listed team or department,
 
 ## Credentials
 
-`HEARTH_GOOGLE_GROUPS_KEY_FILE` is a service account key file and `HEARTH_GOOGLE_GROUPS_SUBJECT` is the admin it acts as, through domain-wide delegation. The one scope it asks for is `https://www.googleapis.com/auth/admin.directory.group.member`, which has to be delegated to that service account in the Admin console. Without it Google answers `unauthorized_client` and the command says which scope is missing.
+Where the Google organization forbids service account keys, run it keyless, the way the mail relay does. Set `HEARTH_GOOGLE_GROUPS_VORD_TOKEN_URL`, `HEARTH_GOOGLE_GROUPS_CLIENT_ID`, `HEARTH_GOOGLE_GROUPS_CLIENT_SECRET`, `HEARTH_GOOGLE_GROUPS_AUDIENCE` (the workload identity provider), `HEARTH_GOOGLE_GROUPS_SERVICE_ACCOUNT` (the account that holds the delegation) and `HEARTH_GOOGLE_GROUPS_SUBJECT` (the admin it acts as). The command gets a Vord token, trades it at Google's STS, has IAM sign the delegation assertion as the service account, and trades that for a Directory token. The federated identity needs `roles/iam.serviceAccountTokenCreator` on the service account.
 
-Run it as a one-off Job like `deploy/jobs/crm-sync.yaml`, or on a schedule.
+Elsewhere, `HEARTH_GOOGLE_GROUPS_KEY_FILE` plus `HEARTH_GOOGLE_GROUPS_SUBJECT` use a service account key file. For a one hour run by a person, `HEARTH_GOOGLE_GROUPS_ACCESS_TOKEN` is a ready Directory token and is used as is.
+
+The one scope it asks for is `https://www.googleapis.com/auth/admin.directory.group.member`, which has to be delegated to the service account in the Admin console. Without it Google answers `unauthorized_client` and the command says which scope is missing.
+
+## On a schedule
+
+The chart's `groupsSync` values render a ConfigMap with the mapping and a CronJob that runs `groups-sync -apply` (set `apply: false` for a run that only logs). A one-off Job like `deploy/jobs/crm-sync.yaml` works too.

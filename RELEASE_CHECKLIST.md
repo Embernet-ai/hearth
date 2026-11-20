@@ -23,5 +23,5 @@ Only the lead pushes it: `git tag -a vX.Y.Z -m "Hearth X.Y.Z"` then `git push or
 1. The pod log shows the schema migration (`schema migrated`, from and to) and `listening`.
 2. `/healthz` reports the release revision and `profile: release`.
 3. The things the release changed, read on the live system: counts, the page, the job's report. Not a status word.
-4. The CronJobs (`hearth-backup`, and `hearth-crm-sync` when `crmSync.enabled`) are listed with the new image on their next run.
+4. The CronJobs (`hearth-backup`, `hearth-crm-sync` when `crmSync.enabled`, and `hearth-groups-sync` when `groupsSync.enabled`) are listed with the new image on their next run.
 5. Anything a one-off Job left behind is deleted, with its cause named if it failed.

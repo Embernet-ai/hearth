@@ -161,3 +161,92 @@ func TestNewGoogleRefusesABadKey(t *testing.T) {
 		t.Fatal("accepted a bad key")
 	}
 }
+
+func TestFederatedChainReachesTheDirectoryWithNoKey(t *testing.T) {
+	var seen []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/vord", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.Form.Get("grant_type") != "client_credentials" || r.Form.Get("client_id") != "hearth-groups" || r.Form.Get("client_secret") != "s3" {
+			http.Error(w, `{"error":"bad"}`, 401)
+			return
+		}
+		seen = append(seen, "vord")
+		_, _ = w.Write([]byte(`{"access_token":"vt"}`))
+	})
+	mux.HandleFunc("/sts", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.Form.Get("subject_token") != "vt" || r.Form.Get("audience") != "//iam/aud" {
+			http.Error(w, `{"error":"bad"}`, 401)
+			return
+		}
+		seen = append(seen, "sts")
+		_, _ = w.Write([]byte(`{"access_token":"ft"}`))
+	})
+	mux.HandleFunc("/iam/projects/-/serviceAccounts/sa@example.com:signJwt", func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		if r.Header.Get("Authorization") != "Bearer ft" || !strings.Contains(b["payload"], `"sub":"admin@example.com"`) || !strings.Contains(b["payload"], Scope) {
+			http.Error(w, "bad", 403)
+			return
+		}
+		seen = append(seen, "sign")
+		_, _ = w.Write([]byte(`{"signedJwt":"signed.jwt.value"}`))
+	})
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.Form.Get("assertion") != "signed.jwt.value" {
+			http.Error(w, `{"error":"bad"}`, 400)
+			return
+		}
+		seen = append(seen, "token")
+		_, _ = w.Write([]byte(`{"access_token":"dt","expires_in":3600}`))
+	})
+	mux.HandleFunc("/groups/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer dt" {
+			http.Error(w, "no", 401)
+			return
+		}
+		seen = append(seen, "list")
+		_, _ = w.Write([]byte(`{"members":[{"email":"a@example.com","role":"MEMBER","type":"USER"}]}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	f := &Federated{VordTokenURL: srv.URL + "/vord", ClientID: "hearth-groups", ClientSecret: "s3", Audience: "//iam/aud",
+		ServiceAccount: "sa@example.com", STSURL: srv.URL + "/sts", IAMBase: srv.URL + "/iam"}
+	g, err := NewFederatedGoogle(f, "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.APIBase, g.TokenURL = srv.URL, srv.URL+"/token"
+	ms, err := g.Members(context.Background(), "g@example.com")
+	if err != nil || len(ms) != 1 {
+		t.Fatalf("%v %v", ms, err)
+	}
+	if got := strings.Join(seen, ","); got != "vord,sts,sign,token,list" {
+		t.Fatalf("chain = %s", got)
+	}
+}
+
+func TestFederatedNamesTheBrokenLinkWithoutLeaking(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(401)
+		_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"SECRETECHO"}`))
+	}))
+	defer srv.Close()
+	f := &Federated{VordTokenURL: srv.URL, ClientID: "c", ClientSecret: "s", Audience: "a", ServiceAccount: "sa@example.com"}
+	_, err := f.Signer()(context.Background(), []byte("{}"))
+	if err == nil || !strings.Contains(err.Error(), "vord token") || strings.Contains(err.Error(), "SECRETECHO") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := (&Federated{}).Signer()(context.Background(), nil); err == nil {
+		t.Fatal("an unconfigured chain must refuse")
+	}
+}
+
+func TestStaticTokenIsUsedAsIs(t *testing.T) {
+	g := &Google{Static: "operator"}
+	if tok, err := g.accessToken(context.Background()); err != nil || tok != "operator" {
+		t.Fatalf("%q %v", tok, err)
+	}
+}

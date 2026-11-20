@@ -57,4 +57,16 @@ expect "and it can be turned on" "$out" 'ingress-policy'
 out=$(render --set opensearch.enabled=false)
 reject "opensearch is off by default" "$out" 'component: opensearch'
 
+out=$(render)
+reject "groups sync is off by default" "$out" 'groups-sync'
+out=$(render --set groupsSync.enabled=true --set 'groupsSync.mappings[0].group=crew@example.com' --set 'groupsSync.mappings[0].teams[0]=Crew' --set 'groupsSync.protect[0]=boss@example.com' --set groupsSync.audience=//iam/aud --set groupsSync.serviceAccount=sa@example.com --set groupsSync.subject=admin@example.com)
+expect "groups sync is a CronJob" "$out" 'name: hearth-groups-sync'
+expect "the mapping reaches the pod" "$out" 'crew@example.com'
+expect "the protect list reaches the pod" "$out" 'boss@example.com'
+expect "it applies by default" "$out" '- -apply'
+expect "the Vord secret comes from a Secret" "$out" 'key: client-secret'
+reject "no Google key is mounted or named" "$out" 'GOOGLE_GROUPS_KEY_FILE|private_key'
+out=$(render --set groupsSync.enabled=true --set groupsSync.apply=false)
+reject "apply false is a dry run" "$out" '- -apply'
+
 exit $fail

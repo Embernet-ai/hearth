@@ -6,9 +6,8 @@ package main
 //	hearthctl groups-sync -config groups.json -apply     make it so
 //
 // The config maps each group to Hearth teams and departments (see
-// internal/groupsync). The service account key comes from
-// HEARTH_GOOGLE_GROUPS_KEY_FILE and the admin it acts as from
-// HEARTH_GOOGLE_GROUPS_SUBJECT. Only plain members are added or removed.
+// internal/groupsync). How it reaches Google is in groupsDirectory. Only plain
+// members are added or removed.
 
 import (
 	"context"
@@ -42,15 +41,7 @@ func runGroupsSync(ctx context.Context, args []string) error {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
-	keyFile, subject := os.Getenv("HEARTH_GOOGLE_GROUPS_KEY_FILE"), os.Getenv("HEARTH_GOOGLE_GROUPS_SUBJECT")
-	if keyFile == "" || subject == "" {
-		return errors.New("HEARTH_GOOGLE_GROUPS_KEY_FILE and HEARTH_GOOGLE_GROUPS_SUBJECT are required")
-	}
-	key, err := os.ReadFile(keyFile)
-	if err != nil {
-		return err
-	}
-	dir, err := groupsync.NewGoogle(key, subject)
+	dir, err := groupsDirectory()
 	if err != nil {
 		return err
 	}
@@ -74,4 +65,32 @@ func runGroupsSync(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("%d change(s), %s\n", len(changes), mode)
 	return err
+}
+
+// groupsDirectory picks how to reach Google, in this order: a ready access
+// token (an operator's one hour run), the keyless Vord federation the cluster
+// uses, or a service account key file where keys are allowed.
+func groupsDirectory() (*groupsync.Google, error) {
+	subject := os.Getenv("HEARTH_GOOGLE_GROUPS_SUBJECT")
+	if tok := os.Getenv("HEARTH_GOOGLE_GROUPS_ACCESS_TOKEN"); tok != "" {
+		return &groupsync.Google{Static: tok}, nil
+	}
+	if os.Getenv("HEARTH_GOOGLE_GROUPS_VORD_TOKEN_URL") != "" {
+		return groupsync.NewFederatedGoogle(&groupsync.Federated{
+			VordTokenURL:   os.Getenv("HEARTH_GOOGLE_GROUPS_VORD_TOKEN_URL"),
+			ClientID:       os.Getenv("HEARTH_GOOGLE_GROUPS_CLIENT_ID"),
+			ClientSecret:   os.Getenv("HEARTH_GOOGLE_GROUPS_CLIENT_SECRET"),
+			Audience:       os.Getenv("HEARTH_GOOGLE_GROUPS_AUDIENCE"),
+			ServiceAccount: os.Getenv("HEARTH_GOOGLE_GROUPS_SERVICE_ACCOUNT"),
+		}, subject)
+	}
+	keyFile := os.Getenv("HEARTH_GOOGLE_GROUPS_KEY_FILE")
+	if keyFile == "" || subject == "" {
+		return nil, errors.New("set HEARTH_GOOGLE_GROUPS_VORD_TOKEN_URL (keyless), or HEARTH_GOOGLE_GROUPS_KEY_FILE and HEARTH_GOOGLE_GROUPS_SUBJECT")
+	}
+	key, err := os.ReadFile(keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return groupsync.NewGoogle(key, subject)
 }
