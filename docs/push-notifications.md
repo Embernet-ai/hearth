@@ -24,7 +24,7 @@ Nothing to add. The sender is part of the Hearth process.
 - Set `HEARTH_PUSH_SUBJECT` (chart: `push.subject`) to a `mailto:` or `https:` contact. The push services see it. It defaults to the public base URL.
 - A pipeline that renders the chart with `helm template` has no cluster to look in and would make a new key every render. Create the Secret yourself (a P-256 key in PEM under the key `key.pem`) and name it in `push.vapid.existingSecret`.
 - `HEARTH_VAPID_KEY_FILE` points at a PEM key file and wins over the database copy. The chart sets it.
-- Hearth must be able to make outbound HTTPS connections on port 443 to the push services: `fcm.googleapis.com` (Chrome, Edge and Opera on Android and desktop), `*.push.services.mozilla.com` (Firefox), `*.push.apple.com` (Safari and iOS), and `*.notify.windows.com`. A subscription naming any other host is refused. Behind an egress proxy, allow those names.
+- Hearth must be able to make outbound HTTPS connections on port 443 to the push services: `fcm.googleapis.com` and numbered `*.google.com/fcm/` hosts (Chrome and Opera on Android and desktop), `*.push.services.mozilla.com` (Firefox), `*.push.apple.com` (Safari and iOS), and `*.notify.windows.com` (Edge). A subscription naming any other host is refused. Behind an egress proxy, allow those names.
 - The page must be served over HTTPS, as browsers require for a service worker and for push.
 - A push that the push service answers with 404 or 410 means the person removed the app or withdrew permission, and the device is forgotten. Other answers are kept as the device's last status and the device stays.
 - Pushes are best effort and are never part of the change that caused them. The inbox row is the record.

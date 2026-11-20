@@ -274,14 +274,15 @@ func TestOnlyABrowsersPushServiceIsAcceptedAndSharedDevicesMove(t *testing.T) {
 	for _, bad := range []string{
 		"http://fcm.googleapis.com/fcm/send/x", "https://169.254.169.254/x", "https://evil.example/fcm.googleapis.com",
 		"https://fcm.googleapis.com.evil.example/x", "https://user@fcm.googleapis.com/x", "https://fcm.googleapis.com:8443/x",
-		"https://localhost/x", "",
+		"https://localhost/x", "", "https://jmt17.google.com/other/x", "https://google.com/fcm/send/x",
+		"https://evilgoogle.com/fcm/send/x",
 	} {
 		if err := s.Subscribe(ctx, e.org, e.alice, browserSub(t, bad), ""); err == nil {
 			t.Errorf("%q was accepted", bad)
 		}
 	}
 	for _, good := range []string{
-		"https://fcm.googleapis.com/fcm/send/abc", "https://updates.push.services.mozilla.com/wpush/v2/abc",
+		"https://fcm.googleapis.com/fcm/send/abc", "https://jmt17.google.com/fcm/send/ccLcDJKZ-iA:APA91b", "https://updates.push.services.mozilla.com/wpush/v2/abc",
 		"https://web.push.apple.com/abc", "https://wns2-par02p.notify.windows.com/w/?token=abc",
 	} {
 		if err := s.Subscribe(ctx, e.org, e.alice, browserSub(t, good), "x"); err != nil {

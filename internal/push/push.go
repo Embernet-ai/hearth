@@ -185,6 +185,10 @@ func (s *Service) PublicKey() string { return s.keys.Public }
 // pushHosts are the browsers' push services: Chrome, Edge and Opera (Google's), Firefox, Safari and the
 // Windows one. A subscription naming any other host is refused, otherwise a signed-in person could aim
 // this server's outbound posts at anything it can reach.
+//
+// Google's is the odd one. Chrome is handed fcm.googleapis.com on most machines and a numbered Google
+// host such as jmt17.google.com on others (seen from a stock Chromium), and both answer at /fcm/. So a
+// google.com host is accepted for that path and no other.
 var pushHosts = []string{"fcm.googleapis.com", "push.services.mozilla.com", "notify.windows.com", "push.apple.com"}
 
 // ValidPushEndpoint reports whether raw is an https address on one of the browsers' push services.
@@ -194,6 +198,9 @@ func ValidPushEndpoint(raw string) bool {
 		return false
 	}
 	h := strings.ToLower(u.Hostname())
+	if strings.HasSuffix(h, ".google.com") && strings.HasPrefix(u.Path, "/fcm/") {
+		return true
+	}
 	for _, p := range pushHosts {
 		if h == p || strings.HasSuffix(h, "."+p) {
 			return true
