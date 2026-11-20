@@ -155,6 +155,13 @@ func NewConnector(a *Service, d Spine, f Finder, p Places, suggestOnly bool) *Co
 	return &Connector{agents: a, docs: d, find: f, places: p, suggestOnly: suggestOnly}
 }
 
+// WithDocs makes the tools read and write documents through the store the pages
+// use, so on the EmberOps back end a task an agent changes reaches EmberOps too.
+func (c *Connector) WithDocs(d Spine) *Connector {
+	c.docs = d
+	return c
+}
+
 // Tools is the catalogue.
 //
 // Four, and the descriptions are written for the model rather than for a
