@@ -49,6 +49,17 @@ record is not already some other HubSpot record. A match is linked and brought u
   same evidence the first import used. A company already in Hearth is never retyped.
 * Deal stages use the first import's stage map. A stage it does not know is reported and left as it is.
 
+## Unsubscribes and bounces
+
+HubSpot knows who asked not to be emailed and whose address bounced. The import reads three contact properties for it
+(`hs_email_optout`, `hs_email_hard_bounce_reason_enum`, `hs_email_bad_address`) and writes Hearth's own opted-out flag on the
+contact: reason `unsubscribed` for an unsubscribe (the person's choice wins when both hold), `bounced` for a hard bounce or a bad
+address. Each one that is newly opted out gets an audit row, `crm.hubspot_import.opt_out`. The properties come with the contacts
+scope the import already uses, so no extra scope is needed. An opt-out is never cleared: a contact already opted out in Hearth is
+left as it is and counted as already opted out. The report line `do not email` says how many contacts HubSpot flags and how many
+a dry run would opt out. Only contacts changed in HubSpot since the mark are read, so a first pass over everyone HubSpot flags is
+`-force-since` from the start. The sync to Mautic and the one to EmberOps both carry the flag on from there.
+
 ## Running it on the cluster
 
 Run it as a one-off Job on the live image, with `HUBSPOT_TOKEN` supplied from a Secret and the database settings copied

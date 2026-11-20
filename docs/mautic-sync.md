@@ -49,7 +49,9 @@ unsubscribed, address bounced, marked do-not-contact. Only contacts the sync sen
 * It does not send email. Campaigns and emails are built and sent in Mautic.
 * It does not create Hearth contacts from Mautic contacts or form submissions. A form submission from somebody Hearth does not know is
   left in Mautic.
-* It does not touch EmberOps. The Hearth to EmberOps sync (`crm-sync`) reads contacts as before; the new columns are not in its field list.
+* It does not write to EmberOps itself. The Hearth to EmberOps sync (`crm-sync`) carries the opt-out there: a contact opted out in Hearth
+  is sent with `unsubscribed` set on its EmberOps Contact, and on the Lead of its company when it is that Lead's person. One way, and only
+  ever set: an opted-out person is marked, and nobody who is not opted out is.
 
 ## Tables
 

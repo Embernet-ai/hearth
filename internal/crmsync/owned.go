@@ -33,7 +33,8 @@ func set(keys ...string) map[string]bool {
 	return m
 }
 
-// hearthOwned is, per doctype, every field the sync may send. "hearth_id" is
+// hearthOwned is, per doctype, every field the sync may send. "unsubscribed" on Contact and Lead is Hearth's opt-out, sent one
+// way and only ever as 1. "hearth_id" is
 // the key every record is found by, and "_tags" and "disabled" are the sync's
 // own controls: tags carry the types, and a disable is how a removed type is
 // passed on.
@@ -43,8 +44,8 @@ var hearthOwned = map[string]map[string]bool{
 	"Supplier": set("hearth_id", "supplier_name", "supplier_type", "hearth_company_kind", "hearth_domain",
 		"hearth_notes", "hearth_deleted_at", "us_ein", "disabled", "_tags", "website", "hearth_url", "hearth_owner"),
 	"Contact": set("hearth_id", "first_name", "last_name", "designation", "hearth_notes", "email_ids", "phone_nos",
-		"links", "hearth_deleted_at", "hearth_url", "hearth_owner"),
-	"Lead":    set("hearth_id", "lead_name", "first_name", "middle_name", "last_name", "company_name", "email_id", "_tags", "website", "hearth_url", "hearth_owner"),
+		"links", "hearth_deleted_at", "hearth_url", "hearth_owner", "unsubscribed"),
+	"Lead":    set("hearth_id", "lead_name", "first_name", "middle_name", "last_name", "company_name", "email_id", "_tags", "website", "hearth_url", "hearth_owner", "unsubscribed"),
 	"Comment": set("hearth_id", "comment_type", "reference_doctype", "reference_name", "content", "comment_by"),
 	"Opportunity": set("hearth_id", "opportunity_from", "party_name", "title", "status", "sales_stage",
 		"expected_closing", "opportunity_amount", "currency", "hearth_url", "hearth_owner"),

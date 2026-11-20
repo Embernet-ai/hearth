@@ -589,6 +589,39 @@ func (s *Service) ContactDetails(ctx context.Context, orgID string, actor core.S
 	return d, nil
 }
 
+// SetContactOptOut opts one person out of marketing email for a stated reason: "unsubscribed", "bounced" or "manual". It
+// never clears an opt-out and never changes the reason of one already set, and it says whether it set one.
+func (s *Service) SetContactOptOut(ctx context.Context, orgID string, actor core.Subjects, id, reason string) (bool, error) {
+	switch reason {
+	case "unsubscribed", "bounced", "manual":
+	default:
+		return false, fmt.Errorf("crm: opt-out reason %q is not unsubscribed, bounced or manual", reason)
+	}
+	if err := s.authz.Require(ctx, actor, core.Ref{Type: core.EntityContact, ID: id}, core.AccessEdit); err != nil {
+		return false, err
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("crm: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	ct, err := tx.Exec(ctx, `UPDATE contacts SET marketing_opt_out_at = now(), marketing_opt_out_reason = $3, updated_at = now()
+		WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL AND marketing_opt_out_at IS NULL`, id, orgID, reason)
+	if err != nil {
+		return false, fmt.Errorf("crm: opt out contact: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return false, nil
+	}
+	if err := jobs.Publish(ctx, tx, jobs.EventSpec{
+		OrgID: orgID, EntityType: string(core.EntityContact), EntityID: id,
+		Event: jobs.EventUpdated, ActorID: actor.Principal(),
+	}); err != nil {
+		return false, err
+	}
+	return true, tx.Commit(ctx)
+}
+
 // SetContactDetails writes the sales columns of one person.
 func (s *Service) SetContactDetails(ctx context.Context, orgID string, actor core.Subjects,
 	id string, d Details) error {

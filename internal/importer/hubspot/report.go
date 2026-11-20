@@ -55,6 +55,14 @@ func (r *Report) Print(w io.Writer) {
 			fmt.Fprintf(w, "  %s %s %s: %q -> %q\n", c.Object, c.HubSpotID, c.Field, shorten(c.From), shorten(c.To))
 		}
 	}
+	if n := r.OptOuts; n.Total() > 0 {
+		verb := "would opt out"
+		if r.Apply {
+			verb = "opted out"
+		}
+		fmt.Fprintf(w, "\ndo not email: HubSpot flags %d contacts; %s %d unsubscribed and %d bounced in Hearth, %d already opted out\n",
+			n.Total(), verb, n.Unsubscribed, n.Bounced, n.Already)
+	}
 	fmt.Fprintf(w, "\nowners: %s; %d HubSpot owners mapped to a Hearth account\n", r.OwnerSource, r.OwnersMapped)
 	if len(r.OwnersUnmapped) > 0 {
 		var ids []string

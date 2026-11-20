@@ -30,6 +30,14 @@ func (s *Syncer) stamp(doc map[string]any, page, id, owner string) {
 	}
 }
 
+// unsubscribe marks a Contact or Lead doc unsubscribed when Hearth holds the person's opt-out. It only ever sets the flag:
+// a person not opted out sends nothing, so EmberOps' own value stands and the sync cannot take an unsubscribe back.
+func unsubscribe(doc map[string]any, optOut bool) {
+	if optOut {
+		doc["unsubscribed"] = 1
+	}
+}
+
 // same says whether EmberOps already holds every value in doc.
 func (s *Syncer) same(ctx context.Context, doc map[string]any, have emberops.Row) bool {
 	return sameDoc(doc, have, func(dt, hid string) string {

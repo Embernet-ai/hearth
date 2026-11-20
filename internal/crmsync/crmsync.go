@@ -105,7 +105,7 @@ func (s *Syncer) all(ctx context.Context, dt string) ([]emberops.Row, error) {
 	case "Lead":
 		// Everything the sync compares, so thousands of Leads are one read and not one read each.
 		fields = []string{"name", "hearth_id", "owner", "lead_name", "first_name", "middle_name", "last_name", "company_name", "email_id", "website", "hearth_url",
-			"hearth_owner", "_user_tags"}
+			"hearth_owner", "_user_tags", "unsubscribed"}
 	}
 	rows, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: dt, Fields: fields}, readAll)
 	if err != nil {
@@ -479,6 +479,9 @@ type company struct {
 type contact struct {
 	ID, Name, Email, Phone, Title, Notes, CompanyID string
 	Owner                                           string
+	// OptOut is true once the person has stopped being emailed (marketing_opt_out_at is set). It goes to EmberOps one way,
+	// as the Contact and Lead unsubscribed flag, and is never sent as false, so nothing here can clear it there.
+	OptOut bool
 }
 
 func (s *Syncer) companies(ctx context.Context, only []string) ([]company, error) {
@@ -522,7 +525,7 @@ func (s *Syncer) companies(ctx context.Context, only []string) ([]company, error
 
 func (s *Syncer) contacts(ctx context.Context, companyID string) ([]contact, error) {
 	rows, err := s.db.Query(ctx, `SELECT c.id::text, c.name, c.email, c.phone, c.title, c.notes,
-		       coalesce((SELECT p.display_name FROM principals p WHERE p.id = c.owner_id), '')
+		       coalesce((SELECT p.display_name FROM principals p WHERE p.id = c.owner_id), ''), c.marketing_opt_out_at IS NOT NULL
 		FROM contacts c WHERE c.org_id=$1 AND c.company_id=$2 AND c.deleted_at IS NULL ORDER BY c.name, c.id`, s.org, companyID)
 	if err != nil {
 		return nil, fmt.Errorf("crmsync: read contacts: %w", err)
@@ -531,7 +534,7 @@ func (s *Syncer) contacts(ctx context.Context, companyID string) ([]contact, err
 	var out []contact
 	for rows.Next() {
 		c := contact{CompanyID: companyID}
-		if err := rows.Scan(&c.ID, &c.Name, &c.Email, &c.Phone, &c.Title, &c.Notes, &c.Owner); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Email, &c.Phone, &c.Title, &c.Notes, &c.Owner, &c.OptOut); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -754,6 +757,7 @@ func (s *Syncer) people(ctx context.Context, rep *Report, c company, contacts []
 			doc["links"] = []any{map[string]any{"link_doctype": "Lead", "link_name": mapping.Ref(c.ID)}}
 		}
 		s.stamp(doc, "contacts", ct.ID, ct.Owner)
+		unsubscribe(doc, ct.OptOut)
 		crow, ok, err := fetch(ctx, s.ops, "Contact", ct.ID)
 		if err != nil {
 			s.add(rep, Action{"contact", ct.ID, ct.Name, "failed", err.Error()})
