@@ -47,7 +47,7 @@ const (
 	// People is colleagues, teams and provisioning.
 	People Capability = "people"
 
-	// Agents is machine access: agents, API tokens, webhooks, MCP.
+	// Agents is machine access: agents, API tokens, webhooks, the connector.
 	Agents Capability = "agents"
 )
 

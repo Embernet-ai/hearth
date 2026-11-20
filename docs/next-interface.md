@@ -1,7 +1,7 @@
 # The interface
 
 Hearth's interface is an Astro and Svelte app in `ui/`, built to static files that are embedded in the one Go binary. It is the only
-interface: the Go templates it replaced are gone. Nothing about the API, MCP, the CRM sync, the service worker, offline writes, the
+interface: the Go templates it replaced are gone. Nothing about the API, the assistant connector, the CRM sync, the service worker, offline writes, the
 calendar feed or inbound mail changes because of it.
 
 ## How it is served

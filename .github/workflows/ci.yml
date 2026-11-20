@@ -102,6 +102,18 @@ jobs:
           curl -sf http://127.0.0.1:9200/_cluster/health >/dev/null             || { echo "::error::OpenSearch never became healthy"; podman logs opensearch | tail -50; exit 1; }
           echo "ok: OpenSearch live"
 
+      # vendor/ is exactly what scripts/vendor.sh makes, which is `go mod vendor` minus the
+      # notes some dependencies ship for coding assistants.
+      - name: vendor tree is what the script makes
+        run: |
+          scripts/vendor.sh
+          if ! git diff --quiet -- vendor go.mod go.sum || [ -n "$(git ls-files --others --exclude-standard vendor)" ]; then
+            echo "::error::vendor/ is not what scripts/vendor.sh produces; run it and commit the result"
+            git status --short vendor go.mod go.sum | head -20
+            exit 1
+          fi
+          echo "ok: vendor tree is consistent"
+
       - name: gofmt
         run: |
           # Our own files only: vendor/ holds other people's code as they wrote it.

@@ -3082,7 +3082,7 @@ func (r *runner) inboundIsClosedWithoutTheKey() {
 }
 
 // -----------------------------------------------------------------------------
-// Agents, MCP, and canvas
+// Agents, the connector, and canvas
 // -----------------------------------------------------------------------------
 
 var (
@@ -3205,8 +3205,8 @@ func (r *runner) rpc(token, method string, params map[string]any) (map[string]an
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// What every streamable-HTTP MCP client sends, and what the official SDK
-	// Hearth serves MCP with requires.
+	// What every streamable-HTTP connector client sends, and what the official SDK
+	// Hearth serves the connector with requires.
 	req.Header.Set("Accept", "application/json, text/event-stream")
 
 	// A brand new client with no cookies, so nothing here can accidentally be
@@ -3318,7 +3318,7 @@ func (r *runner) agentWritesAreAttributed(token, agentID, stamp string) {
 		// gap. An agent keeps admin over what it created and grants its
 		// channels edit, so everybody else, the owner included, has edit and
 		// deleting needs admin. The protocol has no delete tool either, on
-		// purpose: an agent that can delete is one bad prompt away from
+		// purpose: an agent that can delete is one bad call away from
 		// clearing a board.
 		//
 		// So the refusal is asserted rather than swallowed, and the work order

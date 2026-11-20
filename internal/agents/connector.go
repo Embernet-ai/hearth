@@ -1,6 +1,6 @@
 package agents
 
-// The Model Context Protocol server.
+// The assistant connector server.
 //
 // JSON-RPC 2.0 over one HTTP endpoint, which is the whole transport. No SDK:
 // the protocol is a request envelope, a response envelope, and three methods,
@@ -118,8 +118,8 @@ type Places interface {
 	SpaceTree(ctx context.Context, orgID string, actor core.Subjects) ([]*plant.Space, error)
 }
 
-// MCP answers protocol requests.
-type MCP struct {
+// Connector answers protocol requests.
+type Connector struct {
 	agents *Service
 	docs   Spine
 	find   Finder
@@ -142,17 +142,17 @@ type ToolSet interface {
 }
 
 // Add offers another tool set through this endpoint.
-func (m *MCP) Add(ts ToolSet) *MCP {
+func (m *Connector) Add(ts ToolSet) *Connector {
 	if ts != nil {
 		m.extra = append(m.extra, ts)
 	}
 	return m
 }
 
-// NewMCP builds the tools. places may be nil, and then list refuses a
+// NewConnector builds the tools. places may be nil, and then list refuses a
 // department filter rather than ignoring it.
-func NewMCP(a *Service, d Spine, f Finder, p Places, suggestOnly bool) *MCP {
-	return &MCP{agents: a, docs: d, find: f, places: p, suggestOnly: suggestOnly}
+func NewConnector(a *Service, d Spine, f Finder, p Places, suggestOnly bool) *Connector {
+	return &Connector{agents: a, docs: d, find: f, places: p, suggestOnly: suggestOnly}
 }
 
 // Tools is the catalogue.
@@ -160,7 +160,7 @@ func NewMCP(a *Service, d Spine, f Finder, p Places, suggestOnly bool) *MCP {
 // Four, and the descriptions are written for the model rather than for a
 // person: an agent chooses a tool from its description, and a vague one is how
 // it picks search when it meant read.
-func (m *MCP) Tools(c *Caller) []Tool {
+func (m *Connector) Tools(c *Caller) []Tool {
 	tools := []Tool{
 		{
 			Name: "search",
@@ -239,7 +239,7 @@ func (m *MCP) Tools(c *Caller) []Tool {
 }
 
 // canWriteDirectly reports whether this caller's writes land immediately.
-func (m *MCP) canWriteDirectly(c *Caller) bool {
+func (m *Connector) canWriteDirectly(c *Caller) bool {
 	if c.Person {
 		return true
 	}
@@ -249,7 +249,7 @@ func (m *MCP) canWriteDirectly(c *Caller) bool {
 // CallTool runs one tool for an already-authenticated caller and returns its
 // answer as text, flagged when it is a refusal. The protocol layer
 // (internal/mcpserver) is everything around this; the decisions are all here.
-func (m *MCP) CallTool(ctx context.Context, c *Caller, name string, args map[string]any) (string, bool) {
+func (m *Connector) CallTool(ctx context.Context, c *Caller, name string, args map[string]any) (string, bool) {
 	r := m.call(ctx, c, name, args)
 	var b strings.Builder
 	for _, part := range r.Content {
@@ -259,7 +259,7 @@ func (m *MCP) CallTool(ctx context.Context, c *Caller, name string, args map[str
 }
 
 // Handle answers one JSON-RPC request.
-func (m *MCP) Handle(ctx context.Context, c *Caller, body []byte) *Response {
+func (m *Connector) Handle(ctx context.Context, c *Caller, body []byte) *Response {
 	var req Request
 	if err := json.Unmarshal(body, &req); err != nil {
 		return rpcErr(nil, codeParse, "that is not JSON")
@@ -311,7 +311,7 @@ func (m *MCP) Handle(ctx context.Context, c *Caller, body []byte) *Response {
 	}
 }
 
-func (m *MCP) instructions(c *Caller) string {
+func (m *Connector) instructions(c *Caller) string {
 	var b strings.Builder
 	b.WriteString("Hearth is a maintenance workspace. You are acting as the agent " +
 		c.AgentName + ", and every action is recorded against that name.\n\n")
@@ -338,7 +338,7 @@ func (m *MCP) instructions(c *Caller) string {
 // Errors come back as a tool result with isError rather than as a JSON-RPC
 // error, which is what the protocol asks for: a model can read and act on the
 // first and can only give up on the second.
-func (m *MCP) call(ctx context.Context, c *Caller, name string, args map[string]any) *ToolResult {
+func (m *Connector) call(ctx context.Context, c *Caller, name string, args map[string]any) *ToolResult {
 	if !c.Can(ScopeRead) {
 		return toolErr("this token cannot read")
 	}
@@ -363,7 +363,7 @@ func (m *MCP) call(ctx context.Context, c *Caller, name string, args map[string]
 	}
 }
 
-func (m *MCP) toolSearch(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
+func (m *Connector) toolSearch(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
 	q := str(args, "query")
 	if q == "" {
 		return toolErr("search needs a query")
@@ -401,7 +401,7 @@ func (m *MCP) toolSearch(ctx context.Context, c *Caller, args map[string]any) *T
 	return toolText(b.String())
 }
 
-func (m *MCP) toolRead(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
+func (m *Connector) toolRead(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
 	id := str(args, "id")
 	if id == "" {
 		return toolErr("read needs an id")
@@ -432,7 +432,7 @@ func (m *MCP) toolRead(ctx context.Context, c *Caller, args map[string]any) *Too
 var listStatuses = []string{docs.StatusTodo, docs.StatusInProgress,
 	docs.StatusBlocked, docs.StatusDone, docs.StatusCancelled}
 
-func (m *MCP) toolList(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
+func (m *Connector) toolList(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
 	limit := num(args, "limit", 20)
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -521,7 +521,7 @@ func (m *MCP) toolList(ctx context.Context, c *Caller, args map[string]any) *Too
 // can see. Shallowest match wins, so the department beats a project that
 // happens to share its name. When nothing matches, the answer names the
 // departments that do exist, so the model can correct itself rather than guess.
-func (m *MCP) findSpace(ctx context.Context, c *Caller, name string) (string, string) {
+func (m *Connector) findSpace(ctx context.Context, c *Caller, name string) (string, string) {
 	if m.places == nil {
 		return "", "filtering by department is not available here"
 	}
@@ -549,7 +549,7 @@ func (m *MCP) findSpace(ctx context.Context, c *Caller, name string) (string, st
 	return best.ID, ""
 }
 
-func (m *MCP) toolCreate(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
+func (m *Connector) toolCreate(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
 	if !c.Can(ScopeSuggest) {
 		return toolErr("this token cannot create anything")
 	}
@@ -596,7 +596,7 @@ func (m *MCP) toolCreate(ctx context.Context, c *Caller, args map[string]any) *T
 	return toolText("Created " + d.ID + ".")
 }
 
-func (m *MCP) toolUpdate(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
+func (m *Connector) toolUpdate(ctx context.Context, c *Caller, args map[string]any) *ToolResult {
 	if !c.Can(ScopeSuggest) {
 		return toolErr("this token cannot change anything")
 	}

@@ -1,9 +1,9 @@
-// Package mcpserver serves Hearth over the Model Context Protocol, on the
+// Package mcpserver serves Hearth's assistant connector over streamable HTTP, on the
 // official Go SDK, the way Thoth does (Fireball-Red-Team/thoth internal/mcp).
 //
 // Two kinds of caller come through the same door:
 //
-//   - A person, with a Vord access token: "connect Claude to Hearth" and sign
+//   - A person, with a Vord access token: "connect an assistant to Hearth" and sign
 //     in. They act as themselves, with exactly the rights they have on the
 //     website, and their writes land directly.
 //   - An agent, with a Hearth agent token (hearth_agent_...), exactly as
@@ -11,7 +11,7 @@
 //     suggestion-only.
 //
 // Nothing here decides what a caller may do. The tools are internal/agents'
-// (MCP.Tools / MCP.CallTool), every one of which takes the caller's subject
+// (Connector.Tools / Connector.CallTool), every one of which takes the caller's subject
 // set, so a person or an agent gets the answers the rest of the product would
 // give them. What is here is the resource-server work the identity provider
 // will not do for us -- the RFC 9728 metadata document, the WWW-Authenticate
@@ -19,7 +19,7 @@
 // (a valid token, the required realm role, a linked account) and a log line
 // per tool call.
 //
-// Identity is resolved before any MCP method runs, including tools/list: the
+// Identity is resolved before any connector method runs, including tools/list: the
 // tool list is built from the caller's rights, so answering it for somebody
 // unidentified would be a map of the building handed out at the door.
 package mcpserver
@@ -92,12 +92,12 @@ type Options struct {
 	RequiredRole string
 
 	Agents   *agents.Service
-	Tools    *agents.MCP
+	Tools    *agents.Connector
 	People   People
 	Subjects Subjects
 }
 
-// Server serves MCP over streamable HTTP.
+// Server serves the connector over streamable HTTP.
 type Server struct{ o Options }
 
 func New(o Options) *Server { return &Server{o: o} }
@@ -133,7 +133,7 @@ func (s *Server) transport() http.Handler {
 	})
 }
 
-// serverFor builds the MCP server this one caller gets: a fresh one per
+// serverFor builds the connector server this one caller gets: a fresh one per
 // request, holding only the tools the caller's rights permit.
 func (s *Server) serverFor(r *http.Request) *sdk.Server {
 	c, ok := callerFrom(r.Context())
@@ -192,7 +192,7 @@ func callerFrom(ctx context.Context) (*agents.Caller, bool) {
 }
 
 // authenticate turns the bearer token into a caller, or refuses -- before
-// any MCP method runs.
+// any connector method runs.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A protocol message is a few kilobytes; an unbounded read is how one
@@ -294,8 +294,8 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 // then, and error takes only the registered values (invalid_token and the
 // rest), which "authentication required" is not. The scope parameter names what
 // to ask for, so a client that reads it asks for the audience scope Vord needs
-// to put hearth-mcp in the token (Anthropic's connector docs: Claude reads
-// scope from this header before it falls back to scopes_supported).
+// to put hearth-mcp in the token (connector clients read
+// scope from this header before they fall back to scopes_supported).
 func (s *Server) challenge(w http.ResponseWriter, code, detail string) {
 	h := fmt.Sprintf(`Bearer realm="hearth", resource_metadata=%q, scope=%q`,
 		s.metadataURL(), strings.Join(s.scopes(), " "))
@@ -372,7 +372,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 
 // --- errors ------------------------------------------------------------------
 
-// writeError answers a refusal before any MCP method ran: plain HTTP with a
+// writeError answers a refusal before any connector method ran: plain HTTP with a
 // JSON body. A tool that runs and fails is different -- a normal protocol
 // answer with isError set, so the model can read it and correct itself.
 func writeError(w http.ResponseWriter, code int, title, detail string) {

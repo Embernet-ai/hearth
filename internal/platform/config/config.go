@@ -126,7 +126,7 @@ type Config struct {
 	// not the same question.
 	OIDCRequiredRoles []string
 
-	// MCP: people connecting an assistant (Claude) to Hearth sign in with Vord
+	// The assistant connector: people connecting an assistant to Hearth sign in with Vord
 	// (internal/mcpserver). MCPAudience is the audience their access token
 	// must carry -- the Vord client scope "hearth-mcp" -- and empty turns
 	// person sign-in off (agent tokens keep working). MCPPublicURL is where
@@ -393,7 +393,7 @@ func Load() (*Config, error) {
 	}
 	if cfg.MCPAudience != "" && cfg.MCPAudience == cfg.OIDCClientID {
 		// The browser login's client is not a resource. A token minted for the
-		// login page must not double as a key to the MCP endpoint.
+		// login page must not double as a key to the connector endpoint.
 		fail("HEARTH_MCP_AUDIENCE must not be the browser login's client id (%q)", cfg.OIDCClientID)
 	}
 	if cfg.MCPRequiredRole != "" && cfg.MCPAudience == "" {

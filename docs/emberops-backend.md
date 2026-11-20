@@ -136,7 +136,7 @@ Postgres still holds the spine of every document and everything not in the table
 - Tag rename renames the Activity Type, but entries already tagged keep the old text until edited.
 - Property values, Employee Group membership, Department Request status and canvas content edited inside EmberOps do not flow back.
 - `hearthctl daily-report` and `hearthctl time-import` go through the same stores as the server (`cmd/hearthctl/backend.go`): with `HEARTH_BACKEND=emberops` (and the `HEARTH_EMBEROPS_*` and `HEARTH_OIDC_*` settings in the Job's environment) their rows land in EmberOps, using the service client.
-- Agents, the MCP server and the playground build their own services from the Postgres ones, so what they read of the domains above is the spine, not EmberOps.
+- Agents, the assistant connector and the playground build their own services from the Postgres ones, so what they read of the domains above is the spine, not EmberOps.
 
 ## What a real site taught us
 

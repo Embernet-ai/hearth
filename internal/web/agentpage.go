@@ -1,8 +1,8 @@
 package web
 
-// Agents, the MCP endpoint, and the canvas.
+// Agents, the connector endpoint, and the canvas.
 //
-// The MCP endpoint is the second place on this application a machine talks to
+// The connector endpoint is the second place on this application a machine talks to
 // rather than a person, and like the first it sits outside the session
 // middleware and authenticates with a bearer token.
 

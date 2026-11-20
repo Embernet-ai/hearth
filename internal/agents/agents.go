@@ -23,7 +23,7 @@
 //
 // # Proposing rather than writing
 //
-// An agent that writes directly is one bad prompt away from reassigning every
+// An agent that writes directly is one bad call away from reassigning every
 // work order on site, and "it is attributable afterwards" does not help the
 // shift that lost its morning. Writes that are not obviously safe become
 // suggestions, and nothing in that table has changed anything until a person

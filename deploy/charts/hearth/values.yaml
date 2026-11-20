@@ -98,7 +98,7 @@ oidc:
 # behind a proxy is the proxy.
 trustedProxies: ""
 
-# MCP: connecting an assistant (Claude) to Hearth at https://<publicBaseUrl>/mcp
+# The assistant connector: connecting an assistant to Hearth at https://<publicBaseUrl>/mcp
 # and signing in with Vord (internal/mcpserver). Hearth agent tokens work
 # whether or not this is on.
 #
