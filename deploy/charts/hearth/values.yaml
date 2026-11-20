@@ -117,6 +117,9 @@ mcp:
 
 # ─── Secrets, referenced and never created ─────────────────────────────────────
 existingSecret: hearth
+# -- A separate Secret that holds only the Postgres password (key secretKeys.postgresPassword), for an install that
+# makes that one credential from code and keeps the rest in existingSecret. Empty reads it from existingSecret, as before.
+postgresPasswordSecret: ""
 secretKeys:
   postgresPassword: POSTGRES_PASSWORD
   s3AccessKey: S3_ACCESS_KEY

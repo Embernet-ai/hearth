@@ -18,6 +18,11 @@ out=$(render)
 expect "bundled postgres is the default" "$out" 'name: hearth-postgres|kind: StatefulSet'
 expect "the default database URL points at the bundled server" "$out" 'sslmode=disable'
 
+out=$(render --set postgresPasswordSecret=pg-only --set crmSync.enabled=true --set mauticSync.enabled=true --set groupsSync.enabled=true)
+expect "a separate password Secret is read by the app, the jobs and Postgres" "$out" 'name: pg-only'
+[ "$(grep -c 'name: pg-only' <<<"$out")" -ge 6 ] && echo "ok: every reader uses it" || { echo "FAIL: only some readers use the separate password Secret"; fail=1; }
+reject "the default reads no separate password Secret" "$(render)" 'pg-only'
+
 out=$(render --set postgresql.enabled=false --set externalDatabase.host=db.example.com --set externalDatabase.sslmode=verify-full)
 expect "external host reaches the URL" "$out" '@db.example.com:5432/hearth\?sslmode=verify-full'
 expect "the pod waits for the external host" "$out" 'nc -z db.example.com 5432'
