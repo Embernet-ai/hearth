@@ -15,7 +15,12 @@ gets its grants, its event, a share with the Sales team if it is new, and an aud
 Each object keeps its own high-water mark (`hubspot_import_state`), the newest HubSpot change time an applied run read.
 The next run asks HubSpot only for changes at or after it, so a record changed at the very instant of the mark is read
 again, which is harmless. The first time there is no mark and `-since` says where to start (when the last import ran).
-A dry run never moves a mark, and neither does an apply that had a failure.
+A dry run never moves a mark, and neither does an apply that had a failure. `-force-since T` reads from `T` even where a
+mark exists (the mark never moves back). It is how a field that could not be filled earlier gets filled later, for example
+owners once the owner map exists.
+
+The report says, per object and field, how many values fill a blank and how many replace one, and lists the first
+replacements, so a run about to touch thousands of records shows what kind of change it is before anyone says go.
 
 ## What it matches, and what it will not do
 
@@ -34,8 +39,10 @@ record is not already some other HubSpot record. A match is linked and brought u
 * A web address another company holds stays on the website of the second company, as before.
 * Nothing is deleted. A record deleted in Hearth stays deleted.
 * A contact or deal pointing at a company Hearth does not have causes that company to be read by id and imported first.
-* Owners map to Hearth accounts by email. If the token cannot read HubSpot owners, `-owner-file` (lines of
-  `HUBSPOT_OWNER_ID,email`) supplies the map. Records whose owner has no account are left unowned and counted by owner id.
+* Owners map to Hearth accounts by email. The token needs HubSpot's owners scope to read them. Without it, `-owner-file`
+  (lines of `HUBSPOT_OWNER_ID,email`) supplies the map. Records whose owner has no account are left unowned and counted by
+  owner id, and a later run with `-force-since` fills them once a map exists.
+* A record's primary company (and a deal's primary contact) is the one HubSpot marks primary, not the first it lists.
 * Notes and calls already on the timeline are left as they are, since the timeline is append only. HubSpot meetings and
   tasks are counted in the report and not carried.
 * A new company a deal points at is typed from its deals (client for a Customer or Won stage, otherwise prospect), the
