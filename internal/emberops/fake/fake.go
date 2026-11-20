@@ -190,9 +190,24 @@ func (f *Frappe) resource(w http.ResponseWriter, r *http.Request, rest, user str
 		d["modified"] = stamp()
 		reply(w, "data", d)
 	case r.Method == http.MethodDelete:
-		if _, ok := f.docs[doctype][name]; !ok {
+		d, ok := f.docs[doctype][name]
+		if !ok {
 			fail(w, 404, "DoesNotExistError", doctype+" "+name+" not found")
 			return
+		}
+		if doctype == "Event" && strings.HasPrefix(fmt.Sprint(d["subject"]), "Out: ") {
+			// What live EmberOPS does with a time off "Out" (found on live 2026-11-20): a person has no delete on
+			// an Event, even their own, and a request that still links it keeps it.
+			if user != "svc@example.com" {
+				fail(w, 403, "PermissionError", "User not allowed to delete Event: "+name)
+				return
+			}
+			for _, req := range f.docs["Hearth Time Off Request"] {
+				if fmt.Sprint(req["calendar_event"]) == name {
+					fail(w, 417, "LinkExistsError", "Cannot delete Event "+name+": it is linked with a Hearth Time Off Request")
+					return
+				}
+			}
 		}
 		delete(f.docs[doctype], name)
 		reply(w, "message", "ok")
