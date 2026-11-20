@@ -14,7 +14,7 @@ metadata:
     app.kubernetes.io/component: groups-sync
 data:
   groups.json: |
-    {{- dict "mappings" .Values.groupsSync.mappings "protect" .Values.groupsSync.protect | toPrettyJson | nindent 4 }}
+    {{- dict "mappings" .Values.groupsSync.mappings "protect" .Values.groupsSync.protect "remove" .Values.groupsSync.remove | toPrettyJson | nindent 4 }}
 ---
 apiVersion: batch/v1
 kind: CronJob

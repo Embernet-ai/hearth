@@ -16,7 +16,8 @@ The mapping is a file the operator owns, so no group address lives in the code.
   "mappings": [
     {"group": "crew@example.com", "teams": ["Crew"], "departments": ["Operations"]}
   ],
-  "protect": ["admin@example.com"]
+  "protect": ["admin@example.com"],
+  "remove": false
 }
 ```
 
@@ -24,6 +25,8 @@ A group's wanted members are the active people in any listed team or department,
 
 ## Rules it keeps
 
+- Removals are off unless `"remove": true`. Off, the sync only adds and the report marks each stray member `keep`, so nobody loses access until that is chosen.
+- A mapping that names a team or department Hearth does not have is refused. It would otherwise read as an empty group.
 - Only plain members are added or removed. Owners and managers are set by hand in the directory and are never removed here.
 - An address on `protect` is never removed from any group.
 - A suspended account is not wanted, so it comes off the group, the same as it comes off its teams.

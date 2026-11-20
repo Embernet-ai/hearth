@@ -460,6 +460,9 @@ groupsSync:
   # Each entry: {group: crew@example.com, teams: [Crew], departments: [Operations]}
   mappings: []
   protect: []
+  # Off: the job only adds, and logs what it would remove. On: it also removes plain members who are not on the mapped
+  # team or department. Nobody loses access until this is turned on on purpose.
+  remove: false
   vordTokenUrl: https://vord.example.com/id/realms/fireball/protocol/openid-connect/token
   clientId: hearth-groups
   # The provider audience, the service account that holds the delegation, and the admin it acts as.

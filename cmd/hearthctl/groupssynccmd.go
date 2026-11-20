@@ -56,6 +56,9 @@ func runGroupsSync(ctx context.Context, args []string) error {
 		verb := "add   "
 		if c.Remove {
 			verb = "remove"
+			if c.Skipped {
+				verb = "keep  " // would remove; removals are off
+			}
 		}
 		fmt.Printf("%s %-40s %-40s %s\n", verb, c.Group, c.Email, c.Why)
 	}

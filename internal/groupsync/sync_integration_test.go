@@ -96,11 +96,31 @@ func TestRunFollowsTeamsAndDepartmentsAndSkipsTheSuspended(t *testing.T) {
 	if err != nil || len(ch) != 2 || len(d.added)+len(d.removed) != 0 {
 		t.Fatalf("dry run: %v %v %+v", err, ch, d)
 	}
+	// Removals are off unless the config says so: an add goes through, the
+	// stray is reported as kept.
+	ch, err = groupsync.Run(ctx, pools.Web, d, cfg, true)
+	if err != nil || len(d.added) != 1 || len(d.removed) != 0 {
+		t.Fatalf("additive: %v %+v", err, d)
+	}
+	skipped := 0
+	for _, c := range ch {
+		if c.Skipped {
+			skipped++
+		}
+	}
+	if skipped != 1 {
+		t.Fatalf("one removal should be reported kept: %+v", ch)
+	}
+	d.added = nil
+	cfg.Remove = true
 	if _, err := groupsync.Run(ctx, pools.Web, d, cfg, true); err != nil {
 		t.Fatal(err)
 	}
 	if len(d.added) != 1 || d.added[0] != "onteam@example.com" || len(d.removed) != 1 || d.removed[0] != "gone@example.com" {
 		t.Fatalf("applied: %+v", d)
+	}
+	if _, err := groupsync.Run(ctx, pools.Web, d, groupsync.Config{Remove: true, Mappings: []groupsync.Mapping{{Group: "g@example.com", Teams: []string{"No Such Team"}}}}, true); err == nil {
+		t.Fatal("a team that does not exist must be refused, not read as an empty group")
 	}
 	if _, err := groupsync.Run(ctx, pools.Web, d, groupsync.Config{Mappings: []groupsync.Mapping{{Group: "g@example.com"}}}, true); err == nil {
 		t.Fatal("a mapping with no team or department must be refused, not empty the group")

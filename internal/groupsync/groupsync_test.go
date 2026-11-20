@@ -250,3 +250,10 @@ func TestStaticTokenIsUsedAsIs(t *testing.T) {
 		t.Fatalf("%q %v", tok, err)
 	}
 }
+
+func TestConfigRemoveDefaultsOff(t *testing.T) {
+	var c Config
+	if err := json.Unmarshal([]byte(`{"mappings":[]}`), &c); err != nil || c.Remove {
+		t.Fatalf("%v %v", c, err)
+	}
+}

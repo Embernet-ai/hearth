@@ -63,6 +63,7 @@ out=$(render --set groupsSync.enabled=true --set 'groupsSync.mappings[0].group=c
 expect "groups sync is a CronJob" "$out" 'name: hearth-groups-sync'
 expect "the mapping reaches the pod" "$out" 'crew@example.com'
 expect "the protect list reaches the pod" "$out" 'boss@example.com'
+expect "removals are off by default" "$out" '"remove": false'
 expect "it applies by default" "$out" '- -apply'
 expect "the Vord secret comes from a Secret" "$out" 'key: client-secret'
 reject "no Google key is mounted or named" "$out" 'GOOGLE_GROUPS_KEY_FILE|private_key'

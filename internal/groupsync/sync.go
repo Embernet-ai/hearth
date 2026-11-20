@@ -40,6 +40,32 @@ func Wanted(ctx context.Context, db *pgxpool.Pool, teams, departments []string) 
 	return out, rows.Err()
 }
 
+// Missing returns the names that match no team (kind "team") or no top-level
+// department. A mapping that names something that does not exist would read as
+// "nobody belongs", so it is refused instead of emptying a group.
+func Missing(ctx context.Context, db *pgxpool.Pool, teams, departments []string) ([]string, error) {
+	var out []string
+	check := func(kind, q string, names []string) error {
+		for _, n := range names {
+			var ok bool
+			if err := db.QueryRow(ctx, q, strings.ToLower(strings.TrimSpace(n))).Scan(&ok); err != nil {
+				return err
+			}
+			if !ok {
+				out = append(out, kind+" "+n)
+			}
+		}
+		return nil
+	}
+	if err := check("team", `SELECT EXISTS (SELECT 1 FROM teams WHERE lower(name) = $1)`, teams); err != nil {
+		return nil, err
+	}
+	if err := check("department", `SELECT EXISTS (SELECT 1 FROM spaces WHERE lower(name) = $1)`, departments); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func lower(in []string) []string {
 	out := make([]string, 0, len(in))
 	for _, s := range in {
@@ -57,6 +83,13 @@ func Run(ctx context.Context, db *pgxpool.Pool, dir Directory, cfg Config, apply
 		if strings.TrimSpace(m.Group) == "" || (len(m.Teams) == 0 && len(m.Departments) == 0) {
 			return all, errors.New("every mapping needs a group and at least one team or department")
 		}
+		miss, err := Missing(ctx, db, m.Teams, m.Departments)
+		if err != nil {
+			return all, err
+		}
+		if len(miss) > 0 {
+			return all, fmt.Errorf("%s: no such %s in Hearth, refusing to read it as an empty group", m.Group, strings.Join(miss, ", "))
+		}
 		want, err := Wanted(ctx, db, m.Teams, m.Departments)
 		if err != nil {
 			return all, err
@@ -66,8 +99,11 @@ func Run(ctx context.Context, db *pgxpool.Pool, dir Directory, cfg Config, apply
 			return all, err
 		}
 		for _, c := range Plan(m.Group, want, have, cfg.Protect) {
+			if c.Remove && !cfg.Remove {
+				c.Skipped = true
+			}
 			all = append(all, c)
-			if !apply {
+			if !apply || c.Skipped {
 				continue
 			}
 			if c.Remove {
