@@ -344,7 +344,9 @@ func (s *TimeOff) putOutEvent(ctx context.Context, orgID string, r *timeoff.Requ
 	} else {
 		ev["event_type"] = "Private"
 	}
-	if _, err := s.C.Upsert(ctx, "Event", eventID, ev); err != nil {
+	// Made by the service identity, not the person deciding: a Private event (a person with no department) can only be
+	// touched by its owner, so one the approver owned could never be taken off again by Hearth's own account.
+	if _, err := s.C.Upsert(emberops.WithUser(ctx, nil), "Event", eventID, ev); err != nil {
 		return "", fmt.Errorf("timeoff: calendar: %w", err)
 	}
 	return eventID, nil

@@ -202,6 +202,12 @@ func (f *Frappe) resource(w http.ResponseWriter, r *http.Request, rest, user str
 				fail(w, 403, "PermissionError", "User not allowed to delete Event: "+name)
 				return
 			}
+			// A Private event answers only to its owner, the service account included (live: "does not have access to
+			// this document").
+			if d["event_type"] == "Private" && d["owner"] != user {
+				fail(w, 403, "PermissionError", "User does not have access to this document: Event - "+name)
+				return
+			}
 			for _, req := range f.docs["Hearth Time Off Request"] {
 				if fmt.Sprint(req["calendar_event"]) == name {
 					fail(w, 417, "LinkExistsError", "Cannot delete Event "+name+": it is linked with a Hearth Time Off Request")
