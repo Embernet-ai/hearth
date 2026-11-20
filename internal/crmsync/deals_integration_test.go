@@ -174,18 +174,17 @@ func TestDealsGoAcrossOnlyWhenAskedAndOnlyWithAPartyEmberOpsKnows(t *testing.T) 
 		t.Errorf("a second run made something: %+v", rep.Actions)
 	}
 	o1, _ = x.ops.GetByHearthID(x.ctx, "Opportunity", d1)
-	if o1["status"] != "Converted" {
-		t.Errorf("a won deal reads %v in EmberOps", o1["status"])
+	// EmberOps sets Converted from Quotations and refuses it from anyone else: a won deal changes no status.
+	if rep.Failed() {
+		t.Errorf("a won deal failed: %+v", rep.Actions)
 	}
-	// The change from Open to Converted was reported rather than slipped in.
-	found := false
+	if o1["status"] == "Converted" {
+		t.Errorf("a won deal was sent Converted: %v", o1["status"])
+	}
 	for _, a := range rep.Actions {
 		if a.Verb == "overwrite" && a.What == "opportunity" && strings.Contains(a.Detail, "status") {
-			found = true
+			t.Errorf("a won deal tried to overwrite the status: %+v", a)
 		}
-	}
-	if !found {
-		t.Errorf("the status change was not in the overwrite report: %+v", rep.Actions)
 	}
 
 	// A deal removed in Hearth leaves its Opportunity alone and says so.
