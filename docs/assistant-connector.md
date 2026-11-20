@@ -46,5 +46,5 @@ principal and grants, and their writes may be suggestions. They are made on the 
 
 ## Tools
 
-Search, read, list, create and update for documents, plus the CRM tools in [crm-api.md](crm-api.md). Each call writes
+Search, read, list, create and update for documents, plus the CRM tools in [crm-api.md](crm-api.md) and the time off tools in [time-off-change.md](time-off-change.md) (list, read, change and cancel a request, for the people who may decide it). Each call writes
 one log line with who, which client, which tool and how it went.

@@ -1259,3 +1259,4 @@ form.quick.sending label{opacity:.6;pointer-events:none}
 .timeoff-change{margin-top:.5rem}
 .timeoff-change summary{cursor:pointer;display:inline-block}
 .timeoff-change form{margin-top:.75rem}
+.timeoff-change form + form{margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--line)}
