@@ -49,6 +49,12 @@ func (r *Report) Print(w io.Writer) {
 			fmt.Fprintf(w, "  %-12s %6d / %d\n", f, m[f].Fill, m[f].Replace)
 		}
 	}
+	if len(r.Replaced) > 0 {
+		fmt.Fprintf(w, "\nvalues that replaced another (first %d):\n", len(r.Replaced))
+		for _, c := range r.Replaced {
+			fmt.Fprintf(w, "  %s %s %s: %q -> %q\n", c.Object, c.HubSpotID, c.Field, shorten(c.From), shorten(c.To))
+		}
+	}
 	fmt.Fprintf(w, "\nowners: %s; %d HubSpot owners mapped to a Hearth account\n", r.OwnerSource, r.OwnersMapped)
 	if len(r.OwnersUnmapped) > 0 {
 		var ids []string

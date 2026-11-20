@@ -198,7 +198,7 @@ func (im *Importer) updateDeal(ctx context.Context, o Object, want map[string]st
 	mode, snap := im.modeFor("deals", o.ID, via, row.updated)
 	cur := row.fields()
 	p := plan(want, cur, snap, mode, nil)
-	im.countFields("deals", p, cur)
+	im.countFields("deals", o.ID, p, cur)
 	im.addConflicts("deals", o.ID, row.id, p, cur, mode)
 	if len(p.conflicts) > 0 {
 		cnt.Conflicts++

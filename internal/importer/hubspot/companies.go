@@ -245,7 +245,7 @@ func (im *Importer) updateCompany(ctx context.Context, o Object, want map[string
 		}
 	}
 	p := plan(want, cur, snap, mode, map[string]bool{"name": placeholderName(row)})
-	im.countFields("companies", p, cur)
+	im.countFields("companies", o.ID, p, cur)
 	for f, v := range rejected {
 		// A company with no web address of its own that wants one another company holds is the usual case of two sites of
 		// one firm; its website carries the address and there is nothing to decide, so it is not reported on every run.
@@ -307,7 +307,7 @@ func before(cur, set map[string]string) map[string]string {
 func (im *Importer) linkCompany(ctx context.Context, o Object, want map[string]string, row companyRow, cnt *Count) {
 	cur := row.fields()
 	p := plan(want, cur, nil, fillOnly, map[string]bool{"name": placeholderName(row)})
-	im.countFields("companies", p, cur)
+	im.countFields("companies", o.ID, p, cur)
 	delete(p.set, "domain") // it already matched on the web address
 	im.addConflicts("companies", o.ID, row.id, p, cur, fillOnly)
 	if len(p.conflicts) > 0 {

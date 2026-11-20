@@ -303,6 +303,9 @@ func (c *Client) Get(ctx context.Context, object string, props, ids []string) ([
 	return out, nil
 }
 
+// primaryAssociation is HubSpot's own association type for "the" company of a contact or deal and "the" contact of a deal.
+var primaryAssociation = map[string]int{"contacts>companies": 1, "deals>companies": 5, "deals>contacts": 3}
+
 // Associations fills Assoc on each object with the HubSpot ids of the records of kind `to` it points at.
 func (c *Client) Associations(ctx context.Context, from, to string, objs []Object) error {
 	idx := map[string]int{}
@@ -321,7 +324,10 @@ func (c *Client) Associations(ctx context.Context, from, to string, objs []Objec
 					ID string `json:"id"`
 				} `json:"from"`
 				To []struct {
-					ToObjectID json.Number `json:"toObjectId"`
+					ToObjectID   json.Number `json:"toObjectId"`
+					Associations []struct {
+						TypeID int `json:"typeId"`
+					} `json:"associationTypes"`
 				} `json:"to"`
 			} `json:"results"`
 		}
@@ -334,9 +340,21 @@ func (c *Client) Associations(ctx context.Context, from, to string, objs []Objec
 			if !ok {
 				continue
 			}
+			// The primary association goes first: where a record points at several companies, the first one is the one
+			// HubSpot calls its company.
+			var primary, rest []string
 			for _, t := range r.To {
-				objs[j].Assoc[to] = append(objs[j].Assoc[to], t.ToObjectID.String())
+				isPrimary := false
+				for _, a := range t.Associations {
+					isPrimary = isPrimary || a.TypeID == primaryAssociation[from+">"+to]
+				}
+				if isPrimary {
+					primary = append(primary, t.ToObjectID.String())
+				} else {
+					rest = append(rest, t.ToObjectID.String())
+				}
 			}
+			objs[j].Assoc[to] = append(objs[j].Assoc[to], append(primary, rest...)...)
 		}
 	}
 	return nil

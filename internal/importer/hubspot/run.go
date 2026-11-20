@@ -110,7 +110,12 @@ type Report struct {
 	// Fields counts, per object and field, the values written into an empty field (Fill) and the values that replaced
 	// another (Replace), so a run that is about to change thousands of records shows what kind of change it is.
 	Fields map[string]map[string]*FieldCount
+	// Replaced lists the first values that replaced another, for a person to read before saying go.
+	Replaced []Change
 }
+
+// Change is one value that replaced another.
+type Change struct{ Object, HubSpotID, Field, From, To string }
 
 // FieldCount is one field's writes.
 type FieldCount struct{ Fill, Replace int }
@@ -522,7 +527,7 @@ func (im *Importer) audit(ctx context.Context, action, etype, entity, object, hi
 }
 
 // countFields records what a plan will write, by field.
-func (im *Importer) countFields(object string, p fieldPlan, cur map[string]string) {
+func (im *Importer) countFields(object, hid string, p fieldPlan, cur map[string]string) {
 	for f := range p.set {
 		m := im.rep.Fields[object]
 		if m == nil {
@@ -538,6 +543,9 @@ func (im *Importer) countFields(object string, p fieldPlan, cur map[string]strin
 			c.Fill++
 		} else {
 			c.Replace++
+			if len(im.rep.Replaced) < 250 {
+				im.rep.Replaced = append(im.rep.Replaced, Change{object, hid, f, cur[f], p.set[f]})
+			}
 		}
 	}
 }
