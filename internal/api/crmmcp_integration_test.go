@@ -1,6 +1,6 @@
 package api_test
 
-// The CRM as MCP tools, against a real Postgres: each tool is a route run through
+// The CRM as connector tools, against a real Postgres: each tool is a route run through
 // its own handler, so it sees what the caller's subject set sees, is idempotent on
 // external_id, and is only offered to a caller whose writes land.
 

@@ -338,7 +338,7 @@ func (f *fx) before(t *testing.T, actor core.Subjects, c closeTree) map[string]s
 func TestClosingATaskClosesItsOpenSubtasks(t *testing.T) {
 	done := docs.StatusDone
 	paths := map[string]func(f *fx, ctx context.Context, actor core.Subjects, id string) error{
-		"update (the task page, the API, the MCP tool)": func(f *fx, ctx context.Context, a core.Subjects, id string) error {
+		"update (the task page, the API, the connector tool)": func(f *fx, ctx context.Context, a core.Subjects, id string) error {
 			_, err := f.svc.Update(ctx, f.org, a, id, docs.UpdateParams{Task: &docs.TaskPatch{Status: &done}})
 			return err
 		},

@@ -345,14 +345,14 @@ func run() error {
 	// person's request hits, which is what makes "an agent cannot read what it
 	// was not granted" true by construction.
 	agentsSvc := agents.New(pools.Web, azSvc)
-	mcpSrv := agents.NewMCP(agentsSvc, docsSvc, searchSvc, plantSvc, cfg.AgentsSuggestOnly)
+	mcpSrv := agents.NewConnector(agentsSvc, docsSvc, searchSvc, plantSvc, cfg.AgentsSuggestOnly)
 	canvasSvc := canvas.New(pools.Web, azSvc)
 
 	// The public API, and the webhooks that go out of it. Both hang off the
 	// same services the pages use, so neither can answer a question the
 	// interface would refuse.
 	apiSvc := api.New(pools.Web, azSvc, docsSvc).WithCRM(crmSvc, salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc))
-	// The CRM API's routes, as MCP tools, on the same condition.
+	// The CRM API's routes, as connector tools, on the same condition.
 	mcpSrv.Add(apiSvc.CRMTools())
 	api.NewDispatcher(pools.Jobs, queue, log).Register(worker)
 	relay.Route(api.Routes()...)
@@ -415,7 +415,7 @@ func run() error {
 	}
 	site, err := web.New(web.Deps{
 		Docs: set.Docs, Files: filesSvc, Auth: authSvc, Views: set.Views, Channels: channelsSvc, Notify: notifySvc, Rules: set.Rules, Engine: engine, Time: set.Time, Maint: set.Maint, PM: pm, Plant: set.Plant, CRM: set.CRM, Sales: salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc), CRMViews: crmviews.New(pools.Web), Mail: mailSvc, MailSettings: mailSettings, OrgMailer: orgMailer, Calls: callsSvc,
-		Agents: agentsSvc, MCP: mcpSrv, Canvas: set.Canvas, API: apiSvc,
+		Agents: agentsSvc, Connector: mcpSrv, Canvas: set.Canvas, API: apiSvc,
 		Offline: offlineSvc, Search: searchSvc,
 		Playground:   playground.New(pools.Web, azSvc, set.Plant, set.Docs, channelsSvc, set.Time, set.TimeOff),
 		TimeOff:      set.TimeOff,
@@ -525,7 +525,7 @@ func run() error {
 	mux.Handle("POST /login", httpx.Limited(signIn, proxies.ByIPAndPath,
 		guard.SameOrigin(authSvc.Middleware(siteHandler))))
 	mux.Handle("POST /inbound/mail", httpx.Limited(machines, proxies.ByIPAndPath, siteHandler))
-	// MCP on the official SDK (internal/mcpserver): the protocol endpoint for
+	// The connector on the official SDK (internal/mcpserver): the protocol endpoint for
 	// every method a client uses, and the discovery documents it reads first.
 	// People sign in with Vord when HEARTH_MCP_AUDIENCE is set; agent tokens
 	// work either way.

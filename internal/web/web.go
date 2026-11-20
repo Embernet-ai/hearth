@@ -98,7 +98,7 @@ type Server struct {
 	orgMail *mailsettings.Mailer
 	calls   *calls.Service
 	agents  *agents.Service
-	mcp     *agents.MCP
+	mcp     *agents.Connector
 	canvas  canvas.Store
 	api     *api.Service
 	// offline is the record of what phones did with no signal. The replay goes
@@ -183,7 +183,7 @@ type Deps struct {
 	OrgMailer    *mailsettings.Mailer
 	Calls        *calls.Service
 	Agents       *agents.Service
-	MCP          *agents.MCP
+	Connector    *agents.Connector
 	Canvas       canvas.Store
 	API          *api.Service
 	Offline      *offline.Service
@@ -228,7 +228,7 @@ func New(d Deps) (*Server, error) {
 		rules: d.Rules, engine: d.Engine, time: d.Time,
 		maint: d.Maint, pm: d.PM, plant: d.Plant, crm: d.CRM, sales: d.Sales, crmViews: d.CRMViews,
 		mail: d.Mail, mailset: d.MailSettings, orgMail: d.OrgMailer, calls: d.Calls,
-		agents: d.Agents, mcp: d.MCP, canvas: d.Canvas, api: d.API,
+		agents: d.Agents, mcp: d.Connector, canvas: d.Canvas, api: d.API,
 		offline:    d.Offline,
 		teams:      d.Teams,
 		audit:      d.Audit,
@@ -1060,7 +1060,7 @@ func (s *Server) Routes() http.Handler {
 	// because an MTA has no cookies, and authenticated by a shared secret
 	// compared in constant time.
 	mux.HandleFunc("POST /inbound/mail", s.postInbound)
-	// And the second: an agent speaking the Model Context Protocol. Same
+	// And the second: an agent using the assistant connector. Same
 	// shape, a bearer token instead of a shared secret, and every tool behind
 	// it goes through the grants a person's request hits.
 	// And the REST API, which is the third. It resolves a token to a person

@@ -23,9 +23,12 @@ RUN apk add --no-cache git ca-certificates
 
 WORKDIR /src
 
-# Dependencies are vendored (vendor/), so the build downloads nothing. Refresh with
-# `go mod vendor` whenever go.mod changes: the build refuses a vendor tree that
-# disagrees with go.mod ("inconsistent vendoring").
+# Modules come from the Go module proxy and are checked against go.sum, which pins every
+# one of them by hash. `go mod verify` fails the build if a downloaded module does not
+# match. They are fetched before the source is copied, so a source-only change reuses
+# this layer.
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
 COPY . .
 # The built interface goes where internal/web embeds it from. A checkout holds only a
 # placeholder there, so the Go tests and a plain `go build` need no Node.

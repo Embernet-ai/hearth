@@ -102,10 +102,17 @@ jobs:
           curl -sf http://127.0.0.1:9200/_cluster/health >/dev/null             || { echo "::error::OpenSearch never became healthy"; podman logs opensearch | tail -50; exit 1; }
           echo "ok: OpenSearch live"
 
+      # Modules are downloaded and checked against go.sum, which pins each by hash. A module
+      # that does not match fails here, and nothing of a dependency lives in this repository.
+      - name: modules match go.sum
+        run: |
+          go mod download
+          go mod verify
+          git diff --exit-code -- go.mod go.sum
+
       - name: gofmt
         run: |
-          # Our own files only: vendor/ holds other people's code as they wrote it.
-          out=$(git ls-files '*.go' | grep -v '^vendor/' | xargs gofmt -l)
+          out=$(git ls-files '*.go' | xargs gofmt -l)
           if [ -n "$out" ]; then
             echo "::error::these files are not gofmt'd:"
             echo "$out"

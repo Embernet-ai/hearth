@@ -1,10 +1,10 @@
 package api
 
-// The CRM through MCP. Every tool is one route of the CRM API run through its own
+// The CRM through the connector. Every tool is one route of the CRM API run through its own
 // handler, with the caller's own subject set on the request: the same validation,
 // the same visibility, the same idempotency key (external_id and source) and the
 // same Sales-team sharing as the REST call, because it is the REST call. Nothing
-// is copied into the MCP side, so nothing can drift from /api/v1, and nothing is
+// is copied into the connector side, so nothing can drift from /api/v1, and nothing is
 // left out of it.
 //
 // A write tool is offered only to a caller whose writes land directly, the test
@@ -117,7 +117,7 @@ type crmMCP struct {
 	byKey map[string]crmTool
 }
 
-// CRMTools is the CRM as an MCP tool set, or nil when this deployment has no CRM
+// CRMTools is the CRM as an connector tool set, or nil when this deployment has no CRM
 // side (its companies and contacts live in EmberOps).
 func (s *Service) CRMTools() agents.ToolSet {
 	if s.crmStore == nil || s.sales == nil {

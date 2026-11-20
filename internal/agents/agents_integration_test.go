@@ -30,7 +30,7 @@ import (
 
 type fx struct {
 	svc   *agents.Service
-	mcp   *agents.MCP
+	mcp   *agents.Connector
 	docs  *docs.Service
 	az    *authz.Service
 	chans *channels.Service
@@ -63,7 +63,7 @@ func setup(t *testing.T, suggestOnly bool) *fx {
 	ch := channels.New(pools.Web, az)
 	f := &fx{
 		svc: svc, docs: d, az: az, chans: ch, pools: pools,
-		mcp: agents.NewMCP(svc, d, search.New(nil, search.NewPostgres(pools.Web)), nil, suggestOnly),
+		mcp: agents.NewConnector(svc, d, search.New(nil, search.NewPostgres(pools.Web)), nil, suggestOnly),
 		org: uuid.NewString(), alice: uuid.NewString(),
 	}
 	exec := func(sql string, args ...any) {

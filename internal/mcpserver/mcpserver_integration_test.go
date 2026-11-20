@@ -1,6 +1,6 @@
 package mcpserver_test
 
-// The MCP door end to end: a real MCP client, real signed tokens from a stand-in
+// The connector door end to end: a real connector client, real signed tokens from a stand-in
 // Vord, a real Postgres. Every refusal is tested beside the permission it
 // guards, because a check that always says yes passes every happy-path test.
 
@@ -72,7 +72,7 @@ func setup(t *testing.T) *fx {
 			t.Fatalf("%s: %v", q, err)
 		}
 	}
-	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1, $2, 'MCP Co')`, f.org, "mcp-"+f.org[:8])
+	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1, $2, 'Connector Co')`, f.org, "mcp-"+f.org[:8])
 	exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1, $2, 'user', 'Ana')`, f.ana, f.org)
 	exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1, $2, 'user', 'Bob')`, f.bob, f.org)
 	// A super admin, so fixtures can seed the space tree: creating a top-level
@@ -99,7 +99,7 @@ func setup(t *testing.T) *fx {
 	f.hidden = task(f.bob, "Bob's private task")
 
 	authSvc := auth.New(db, az, false)
-	tools := agents.NewMCP(f.agents, f.docs, search.New(search.NewPostgres(db), nil), f.plant, false)
+	tools := agents.NewConnector(f.agents, f.docs, search.New(search.NewPostgres(db), nil), f.plant, false)
 	public, _ := url.Parse("https://hearth.example.com")
 	srv := mcpserver.New(mcpserver.Options{
 		Log: log, Verifier: f.idp.Verifier(t, audience), PublicURL: public, Issuer: f.idp.Issuer(),
@@ -117,7 +117,7 @@ func setup(t *testing.T) *fx {
 // staff is a good token for Ana.
 func (f *fx) staff(t *testing.T) string {
 	return f.idp.Mint(t, idptest.Token{Subject: "sub-ana", Audience: []string{audience},
-		ClientID: "claude", RealmRoles: []string{"fireball-staff"}})
+		ClientID: "connector-app", RealmRoles: []string{"fireball-staff"}})
 }
 
 type bearer struct {
@@ -174,12 +174,12 @@ func TestAPersonSignedInWithVordWorksAsThemselves(t *testing.T) {
 	}
 	hidden, err := s.CallTool(ctx, &sdk.CallToolParams{Name: "read", Arguments: map[string]any{"id": f.hidden}})
 	if err != nil || !hidden.IsError || strings.Contains(text(hidden), "Bob") {
-		t.Fatalf("Ana read Bob's private task through MCP: %v %q", err, text(hidden))
+		t.Fatalf("Ana read Bob's private task through the connector: %v %q", err, text(hidden))
 	}
 
 	// A person's write lands directly, as them -- no suggestion queue.
 	created, err := s.CallTool(ctx, &sdk.CallToolParams{Name: "create",
-		Arguments: map[string]any{"kind": "task", "title": "Made by Claude for Ana"}})
+		Arguments: map[string]any{"kind": "task", "title": "Made by the assistant for Ana"}})
 	if err != nil || created.IsError {
 		t.Fatalf("Ana could not create a task: %v %q", err, text(created))
 	}
@@ -190,12 +190,12 @@ func TestAPersonSignedInWithVordWorksAsThemselves(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, d := range mine {
-		if d.Title == "Made by Claude for Ana" {
+		if d.Title == "Made by the assistant for Ana" {
 			owner = d.OwnerID
 		}
 	}
 	if owner != f.ana {
-		t.Fatalf("the task Claude made is owned by %q, want Ana", owner)
+		t.Fatalf("the task the assistant made is owned by %q, want Ana", owner)
 	}
 }
 
@@ -312,7 +312,7 @@ func TestAnAgentTokenStillWorksAndStaysNarrow(t *testing.T) {
 	}
 }
 
-// The list filters, which exist because a super admin asking Claude for their
+// The list filters, which exist because a super admin asking an assistant for their
 // tasks got every task in the org. Each filter is checked for what it keeps
 // and what it drops, since a filter that drops nothing passes a keep-only test.
 func TestListNarrowsToWhatWasAskedFor(t *testing.T) {

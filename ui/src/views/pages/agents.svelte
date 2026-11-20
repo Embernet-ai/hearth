@@ -34,7 +34,7 @@
     <h2>Waiting for you</h2>
     <p  class="muted small">
       Nothing here has changed anything. An agent that writes directly is one
-      bad prompt away from reassigning every work order on site, and being
+      bad call away from reassigning every work order on site, and being
       able to see who did it afterwards does not help the shift that lost its
       morning.
     </p>

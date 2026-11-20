@@ -64,14 +64,14 @@ own token for a flow that runs unattended.
 
 A company has `types` (keys, any number) and `tags` (free text). Sending `types` or `tags` on a create or a PATCH replaces that half and leaves the other alone. A key that is not on the list answers 400 before anything is created, so a bad key cannot leave a half-made company behind. Admins edit the list in the web UI.
 
-## The same thing through MCP
+## The same thing through the assistant connector
 
-Hearth's MCP endpoint (`/mcp`, an agent token or a person signed in with Vord)
+Hearth's connector endpoint (`/mcp`, an agent token or a person signed in with Vord)
 offers the CRM as tools. Each tool is one route above run through its own
 handler with the caller's own subject set, so it sees what the API shows that
 caller, refuses what the API refuses, and keeps the same idempotency: a create
 that carries `external_id` and `source` twice answers "Already existed, nothing
-changed" with the record that exists. Nothing is copied into the MCP side.
+changed" with the record that exists. Nothing is copied into the connector side.
 
 | Tool | Route |
 |---|---|
