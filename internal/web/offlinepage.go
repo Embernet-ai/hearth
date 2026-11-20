@@ -568,6 +568,7 @@ func (s *Server) manifest(w http.ResponseWriter, r *http.Request) {
 		URL  string `json:"url"`
 	}
 	m := map[string]any{
+		"id":         "/",
 		"name":       "Hearth",
 		"short_name": "Hearth",
 		"description": "Work orders, assets, and preventive maintenance, " +

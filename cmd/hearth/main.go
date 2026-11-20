@@ -51,6 +51,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/platform/secret"
 	"github.com/Embernet-ai/hearth/internal/platform/tokens"
 	"github.com/Embernet-ai/hearth/internal/playground"
+	"github.com/Embernet-ai/hearth/internal/push"
 	"github.com/Embernet-ai/hearth/internal/realtime"
 	"github.com/Embernet-ai/hearth/internal/rules"
 	"github.com/Embernet-ai/hearth/internal/scim"
@@ -295,6 +296,22 @@ func run() error {
 	mailSettings := mailsettings.New(pools.Web, box)
 	orgMailer := mailsettings.NewMailer(mailSettings, relayMail)
 	notifySvc := notify.New(pools.Web)
+	// Web Push: the installed app rings when it is closed. It needs nothing beyond this process and an
+	// outbound connection to the browsers' push services. A key that cannot be read turns push off and
+	// says so; it never stops Hearth from starting.
+	var pushSvc *push.Service
+	if vk, err := push.LoadKeys(ctx0, pools.Web, cfg.VAPIDKeyFile, box); err != nil {
+		log.Error("web push is off", "error", err)
+	} else {
+		subject := cfg.PushSubject
+		if subject == "" {
+			subject = cfg.PublicBaseURL.String()
+		}
+		if pushSvc, err = push.New(pools.Web, push.Options{Keys: vk, Subject: subject, Log: log}); err != nil {
+			return err
+		}
+		notifySvc.SetPusher(pushSvc)
+	}
 	fanout := notify.NewFanout(pools.Jobs, notifySvc, queue, orgMailer,
 		cfg.PublicBaseURL.String(), log)
 	fanout.Register(worker)
@@ -414,7 +431,7 @@ func run() error {
 		engine.UseStore(set.Rules, rs)
 	}
 	site, err := web.New(web.Deps{
-		Docs: set.Docs, Files: filesSvc, Auth: authSvc, Views: set.Views, Channels: channelsSvc, Notify: notifySvc, Rules: set.Rules, Engine: engine, Time: set.Time, Maint: set.Maint, PM: pm, Plant: set.Plant, CRM: set.CRM, Sales: salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc), CRMViews: crmviews.New(pools.Web), Mail: mailSvc, MailSettings: mailSettings, OrgMailer: orgMailer, Calls: callsSvc,
+		Docs: set.Docs, Files: filesSvc, Auth: authSvc, Views: set.Views, Channels: channelsSvc, Notify: notifySvc, Push: pushSvc, Rules: set.Rules, Engine: engine, Time: set.Time, Maint: set.Maint, PM: pm, Plant: set.Plant, CRM: set.CRM, Sales: salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc), CRMViews: crmviews.New(pools.Web), Mail: mailSvc, MailSettings: mailSettings, OrgMailer: orgMailer, Calls: callsSvc,
 		Agents: agentsSvc, Connector: mcpSrv, Canvas: set.Canvas, API: apiSvc,
 		Offline: offlineSvc, Search: searchSvc,
 		Playground:   playground.New(pools.Web, azSvc, set.Plant, set.Docs, channelsSvc, set.Time, set.TimeOff),

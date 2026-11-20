@@ -101,6 +101,17 @@ spec:
                   name: {{ .Values.existingSecret }}
                   key: {{ .Values.secretKeys.encryptionKey }}
             {{- end }}
+            {{- if .Values.push.enabled }}
+            # Web Push: the installed app rings when it is closed. The VAPID key is a
+            # Secret made once and kept across upgrades (vapid.yaml), mounted as a
+            # file. Absent, Hearth keeps its own in the database instead.
+            - name: HEARTH_VAPID_KEY_FILE
+              value: /secrets/vapid/key.pem
+            {{- if .Values.push.subject }}
+            - name: HEARTH_PUSH_SUBJECT
+              value: {{ .Values.push.subject | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.google.enabled }}
             # Per person. The client id is not secret -- it travels in every
             # authorisation redirect -- but it is kept beside the secret so
@@ -225,8 +236,23 @@ spec:
           {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.push.enabled }}
+          volumeMounts:
+            - name: vapid
+              mountPath: /secrets/vapid
+              readOnly: true
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.push.enabled }}
+      volumes:
+        - name: vapid
+          secret:
+            secretName: {{ .Values.push.vapid.existingSecret | default (printf "%s-vapid" (include "hearth.fullname" .)) }}
+            items:
+              - key: key.pem
+                path: key.pem
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

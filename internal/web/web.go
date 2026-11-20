@@ -52,6 +52,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/plant"
 	"github.com/Embernet-ai/hearth/internal/platform/buildinfo"
 	"github.com/Embernet-ai/hearth/internal/playground"
+	"github.com/Embernet-ai/hearth/internal/push"
 	"github.com/Embernet-ai/hearth/internal/realtime"
 	"github.com/Embernet-ai/hearth/internal/rules"
 	"github.com/Embernet-ai/hearth/internal/scim"
@@ -76,6 +77,7 @@ type Server struct {
 	// for the realtime hub and two things called the same thing is how a
 	// refactor introduces a bug nobody can see.
 	inbox  *notify.Service
+	push   *push.Service
 	rules  rules.Store
 	engine *rules.Engine
 	time   timelog.Store
@@ -165,6 +167,7 @@ type Deps struct {
 	Views    views.Store
 	Channels *channels.Service
 	Notify   *notify.Service
+	Push     *push.Service
 	Rules    rules.Store
 	Engine   *rules.Engine
 	Time     timelog.Store
@@ -224,7 +227,7 @@ type Deps struct {
 func New(d Deps) (*Server, error) {
 	s := &Server{
 		docs: d.Docs, files: d.Files, auth: d.Auth, views: d.Views,
-		channels: d.Channels, inbox: d.Notify, search: d.Search, playground: d.Playground, timeoff: d.TimeOff, deptreq: d.DeptRequests,
+		channels: d.Channels, inbox: d.Notify, push: d.Push, search: d.Search, playground: d.Playground, timeoff: d.TimeOff, deptreq: d.DeptRequests,
 		rules: d.Rules, engine: d.Engine, time: d.Time,
 		maint: d.Maint, pm: d.PM, plant: d.Plant, crm: d.CRM, sales: d.Sales, crmViews: d.CRMViews,
 		mail: d.Mail, mailset: d.MailSettings, orgMail: d.OrgMailer, calls: d.Calls,
@@ -1232,6 +1235,12 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("GET /inbox", s.getInbox)
 	authed.HandleFunc("POST /inbox/read", s.markNotificationsRead)
 	authed.HandleFunc("POST /inbox/prefs", s.saveNotificationPrefs)
+	// Web Push for this person's own devices. JSON, called by the page that turns push on.
+	authed.HandleFunc("GET /push/state", s.getPushState)
+	authed.HandleFunc("POST /push/subscribe", s.postPushSubscribe)
+	authed.HandleFunc("POST /push/unsubscribe", s.postPushUnsubscribe)
+	authed.HandleFunc("POST /push/kinds", s.postPushKinds)
+	authed.HandleFunc("POST /push/test", s.postPushTest)
 	authed.HandleFunc("POST /documents/{id}/watch", s.toggleWatch)
 
 	authed.HandleFunc("GET /search", s.getSearch)
