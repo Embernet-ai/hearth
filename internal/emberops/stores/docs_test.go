@@ -585,3 +585,32 @@ func TestDocsAnyStatusOnAParentSendsItsOpenSubtasksToEmberOPS(t *testing.T) {
 		})
 	}
 }
+
+// A read made by a member of staff can come back without anyone's hearth_id (staff hold only Select on User). Copying such
+// a task into the spine cleared its assignees, so tasks vanished from "assigned to me". An edit that names someone this read
+// cannot identify is shown, and copied on a read that can.
+func TestDocsEditNamingSomeoneUnknownIsNotCopiedIntoTheSpine(t *testing.T) {
+	e := newEnv(t)
+	pg := newSpine()
+	s := &stores.Docs{Store: pg, Base: e.base, Dir: e.dir}
+	ctx := e.as("ann-tok")
+	a, _ := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindTask, Title: "a"})
+	for _, tk := range e.f.All("Task") {
+		if tk["hearth_id"] == a.ID {
+			tk["subject"] = "a, reworded"
+			tk["hearth_primary_assignee"], tk["_assign"] = "ghost@example.com", `["ghost@example.com"]`
+			tk["modified"] = "2030-01-01 00:00:00"
+		}
+	}
+	mark := pg.marks[a.ID]
+	rows, err := s.Search(ctx, org, actor(ann), docs.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pg.applied) != 0 || pg.marks[a.ID] != mark {
+		t.Fatalf("an edit naming an unknown person was copied (it would clear the assignees): %+v", pg.applied)
+	}
+	if len(rows) != 1 || rows[0].Title != "a, reworded" {
+		t.Fatalf("the page must still show EmberOps's state: %+v", rows)
+	}
+}
