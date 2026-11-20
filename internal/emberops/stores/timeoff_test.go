@@ -338,3 +338,27 @@ func TestApproversSeeUpcomingApprovedRequests(t *testing.T) {
 		t.Fatalf("%+v %v", list, err)
 	}
 }
+
+// A person with no department gets a Private Out, which only its owner may touch. Hearth's own account has to own it, or a
+// cancel or a change by anybody else leaves the old Out on the calendar for good (found on live 2026-11-20).
+func TestAPrivateOutComesOffWhenTheRequestIsChangedOrCancelled(t *testing.T) {
+	e := newEnv(t)
+	s := &stores.TimeOff{Base: e.base, Dir: e.dir, PG: structure{}}
+	r := approved(t, e, s)
+	if ev := e.f.All("Event"); len(ev) != 1 || ev[0]["event_type"] != "Private" {
+		t.Fatalf("setup: %v", ev)
+	}
+	tue := time.Date(2030, 1, 8, 0, 0, 0, 0, time.UTC)
+	if _, err := s.Change(e.as("bob-tok"), org, bob, r.ID, timeoff.Change{StartsOn: &tue, EndsOn: ptr(tue.AddDate(0, 0, 1))}); err != nil {
+		t.Fatal(err)
+	}
+	if ev := e.f.All("Event"); len(ev) != 1 || ev[0]["starts_on"] != "2030-01-08 00:00:00" {
+		t.Fatalf("the old Out stayed after a change: %v", ev)
+	}
+	if err := s.CancelFor(e.as("bob-tok"), org, bob, r.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if ev := e.f.All("Event"); len(ev) != 0 {
+		t.Fatalf("the Out stayed after a cancel: %v", ev)
+	}
+}
