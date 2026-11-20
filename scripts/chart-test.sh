@@ -19,8 +19,10 @@ expect "bundled postgres is the default" "$out" 'name: hearth-postgres|kind: Sta
 expect "the default database URL points at the bundled server" "$out" 'sslmode=disable'
 
 out=$(render --set postgresPasswordSecret=pg-only --set crmSync.enabled=true --set mauticSync.enabled=true --set groupsSync.enabled=true)
-expect "a separate password Secret is read by the app, the jobs and Postgres" "$out" 'name: pg-only'
-[ "$(grep -c 'name: pg-only' <<<"$out")" -ge 6 ] && echo "ok: every reader uses it" || { echo "FAIL: only some readers use the separate password Secret"; fail=1; }
+expect "a separate password Secret is read by the app and every job" "$out" 'name: pg-only'
+[ "$(grep -c 'name: pg-only' <<<"$out")" -ge 5 ] && echo "ok: every reader uses it" || { echo "FAIL: only some readers use the separate password Secret"; fail=1; }
+expect "a new install can point Postgres at it too" "$(render --set postgresPasswordSecret=pg-only --set postgresql.passwordSecret=pg-only)" 'name: pg-only'
+reject "an existing database's StatefulSet does not change when only the app's Secret does" "$(render --set postgresPasswordSecret=pg-only | awk 'BEGIN{RS="\n---\n"} /kind: StatefulSet/ && /component: postgres/')" 'pg-only'
 reject "the default reads no separate password Secret" "$(render)" 'pg-only'
 
 out=$(render --set postgresql.enabled=false --set externalDatabase.host=db.example.com --set externalDatabase.sslmode=verify-full)
