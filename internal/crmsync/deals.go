@@ -267,15 +267,16 @@ func (s *Syncer) lead(ctx context.Context, rep *Report, c company, write bool) (
 	if err != nil {
 		return "", err
 	}
-	who, email := c.Name, ""
+	who, email, optOut := c.Name, "", false
 	if cts, err := s.contacts(ctx, c.ID); err == nil && len(cts) > 0 {
-		who, email = cts[0].Name, cts[0].Email
+		who, email, optOut = cts[0].Name, cts[0].Email, cts[0].OptOut
 	}
 	doc := leadDoc(who, c, ok)
 	if strings.TrimSpace(email) != "" {
 		doc["email_id"] = strings.TrimSpace(email)
 	}
 	s.stamp(doc, "companies", c.ID, c.Owner)
+	unsubscribe(doc, optOut)
 	if w := strings.TrimSpace(c.Website); w != "" {
 		doc["website"] = w
 	}
