@@ -100,6 +100,8 @@ func main() {
 		err = runPersonSuspend(ctx, os.Args[2:])
 	case "channel-remove":
 		err = runChannelRemove(ctx, os.Args[2:])
+	case "groups-sync":
+		err = runGroupsSync(ctx, os.Args[2:])
 	case "emberops-migrate":
 		err = runEmberOPSMigrate(ctx, os.Args[2:])
 	case "-h", "--help", "help":
@@ -141,6 +143,7 @@ func usage() {
   time-approve -person EMAIL -reason WHY [-apply] [-limit N]  approve a salaried person's waiting time by their auto-approve, audited, dry run by default
   person-suspend -as ADMIN -email A,B -reason WHY [-apply]  suspend accounts (off their teams, sessions ended), audited, dry run by default
   channel-remove -as ADMIN -channel ID -reason WHY [-apply]  archive a channel so it is in no list, audited, dry run by default
+  groups-sync -config FILE [-apply]  make Google Workspace group members follow Hearth teams and departments (dry run by default)
   emberops-migrate [--dry-run]  copy Postgres data into EmberOps (see docs/emberops-backend.md)
 
 Configuration comes from the same environment the server reads:
