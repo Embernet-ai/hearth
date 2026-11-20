@@ -96,6 +96,10 @@ func main() {
 		err = runServiceToken(ctx, os.Args[2:])
 	case "person-time":
 		err = runPersonTime(ctx, os.Args[2:])
+	case "person-suspend":
+		err = runPersonSuspend(ctx, os.Args[2:])
+	case "channel-remove":
+		err = runChannelRemove(ctx, os.Args[2:])
 	case "emberops-migrate":
 		err = runEmberOPSMigrate(ctx, os.Args[2:])
 	case "-h", "--help", "help":
@@ -135,6 +139,8 @@ func usage() {
   person-time -as ADMIN -person EMAIL [-approver EMAIL|none] [-auto-approve on|off]  set who signs off a person's time, and whether it approves itself
   time-remove -as EMAIL -file IDS -reason WHY [-apply]  remove time entries as a super admin, audited, dry run by default
   time-approve -person EMAIL -reason WHY [-apply] [-limit N]  approve a salaried person's waiting time by their auto-approve, audited, dry run by default
+  person-suspend -as ADMIN -email A,B -reason WHY [-apply]  suspend accounts (off their teams, sessions ended), audited, dry run by default
+  channel-remove -as ADMIN -channel ID -reason WHY [-apply]  archive a channel so it is in no list, audited, dry run by default
   emberops-migrate [--dry-run]  copy Postgres data into EmberOps (see docs/emberops-backend.md)
 
 Configuration comes from the same environment the server reads:
