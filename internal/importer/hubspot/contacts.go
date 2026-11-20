@@ -216,6 +216,7 @@ func (im *Importer) updateContact(ctx context.Context, o Object, want map[string
 		}
 	}
 	p := plan(want, cur, snap, mode, map[string]bool{"name": row.email != "" && strings.EqualFold(row.name, row.email)})
+	im.countFields("contacts", p, cur)
 	for f, v := range rejected {
 		p.conflicts[f] = v
 	}
@@ -259,6 +260,7 @@ func (im *Importer) updateContact(ctx context.Context, o Object, want map[string
 func (im *Importer) linkContact(ctx context.Context, o Object, want map[string]string, row contactRow, cnt *Count) {
 	cur := row.fields()
 	p := plan(want, cur, nil, fillOnly, map[string]bool{"name": row.email != "" && strings.EqualFold(row.name, row.email)})
+	im.countFields("contacts", p, cur)
 	delete(p.set, "email")
 	im.addConflicts("contacts", o.ID, row.id, p, cur, fillOnly)
 	if len(p.conflicts) > 0 {

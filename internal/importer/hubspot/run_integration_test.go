@@ -273,6 +273,13 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 		t.Errorf("the update of the legacy company left %d audit rows", n)
 	}
 
+	if fc := applied.Fields[Companies]["name"]; fc == nil || fc.Replace != 1 || fc.Fill != 0 {
+		t.Errorf("name writes = %+v, want one replacement (the untouched legacy company)", fc)
+	}
+	if fc := applied.Fields[Companies]["city"]; fc == nil || fc.Fill != 3 || fc.Replace != 0 {
+		t.Errorf("city writes = %+v, want three fills (two companies and the linked one)", fc)
+	}
+
 	// Contacts: 1 updated (title), 2 created (one pulled company's), 1 linked by email.
 	k := applied.Objects[Contacts]
 	if k.Create != 2 || k.Link != 1 || k.Update != 1 {
@@ -392,6 +399,12 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 		t.Errorf("skips = %v", fourth.Objects[Companies].SkipWhy)
 	}
 	_ = oldNote
+
+	// -force-since reads from the date given even where a mark exists, and never moves the mark back.
+	f.run(false, Options{Baseline: baseline, Since: t0, ForceSince: true, Only: []string{Companies}})
+	if s := f.hub.searches(Companies); !s[len(s)-1].Equal(t0) {
+		t.Errorf("a forced run asked for changes since %s, want %s", s[len(s)-1], t0)
+	}
 }
 
 func TestFirstRunNeedsToKnowWhereToStart(t *testing.T) {

@@ -34,6 +34,21 @@ func (r *Report) Print(w io.Writer) {
 			fmt.Fprintf(w, "           skipped %d: %s\n", c.SkipWhy[why], why)
 		}
 	}
+	for _, o := range Order {
+		m := r.Fields[o]
+		if len(m) == 0 {
+			continue
+		}
+		var names []string
+		for f := range m {
+			names = append(names, f)
+		}
+		sort.Strings(names)
+		fmt.Fprintf(w, "\n%s fields written (into an empty field / replacing a value):\n", o)
+		for _, f := range names {
+			fmt.Fprintf(w, "  %-12s %6d / %d\n", f, m[f].Fill, m[f].Replace)
+		}
+	}
 	fmt.Fprintf(w, "\nowners: %s; %d HubSpot owners mapped to a Hearth account\n", r.OwnerSource, r.OwnersMapped)
 	if len(r.OwnersUnmapped) > 0 {
 		var ids []string

@@ -35,6 +35,7 @@ func runHubSpotImport(ctx context.Context, args []string) error {
 	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
 	apply := fs.Bool("apply", false, "write the changes. Without it nothing is written and no high-water mark moves")
 	sinceFlag := fs.String("since", "", "RFC 3339 time to read from for an object with no high-water mark yet (when the last import ran)")
+	force := fs.Bool("force-since", false, "read from -since even where an object has a high-water mark (the mark never moves back), to fill what could not be filled before, such as owners")
 	baselineFlag := fs.String("baseline", "", "RFC 3339 time the first import finished: a record it carried across, untouched in Hearth since, may be updated (default -since)")
 	only := fs.String("only", "", "comma separated objects: companies, contacts, deals, notes, calls (default all)")
 	ownerFile := fs.String("owner-file", "", "lines of HUBSPOT_OWNER_ID,email, for when the token cannot read owners")
@@ -63,6 +64,7 @@ func runHubSpotImport(ctx context.Context, args []string) error {
 			return fmt.Errorf("-baseline: %w", err)
 		}
 	}
+	opt.ForceSince = *force
 	for _, o := range strings.Split(*only, ",") {
 		if o = strings.TrimSpace(o); o != "" {
 			known := false
