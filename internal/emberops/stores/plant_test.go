@@ -268,3 +268,25 @@ func TestPlaygroundSpaceSyncLeavesEmberOPSAlone(t *testing.T) {
 		t.Fatalf("real org sync left %d spaces", n)
 	}
 }
+
+// A person's rate is an Activity Cost, and /plant prices the minutes booked on an asset's work by it, as the Postgres
+// query prices them by capacity.rate_cents. Without it the cost column stayed zero in this mode for anyone with a rate.
+func TestAssetTreeRollupsPriceLabourByActivityCost(t *testing.T) {
+	e, s, _ := newPlant(t)
+	e.f.Put("Task", map[string]any{"name": "TASK-1", "hearth_id": "11111111-1111-1111-1111-111111111111", "status": "Working"})
+	e.f.Put("Hearth Entity Link", map[string]any{"from_doctype": "Task", "from_name": "TASK-1", "to_doctype": "Asset", "to_name": "AST-1", "link_kind": "concerns"})
+	e.f.Put("Timesheet", map[string]any{"name": "TS-1", "employee": "HR-EMP-1"})
+	e.f.Put("Timesheet", map[string]any{"name": "TS-2", "employee": "HR-EMP-2"}) // no rate
+	e.f.Put("Timesheet Detail", map[string]any{"task": "TASK-1", "parent": "TS-1", "hours": 1.5})
+	e.f.Put("Timesheet Detail", map[string]any{"task": "TASK-1", "parent": "TS-2", "hours": 2})
+	e.f.Put("Activity Cost", map[string]any{"name": "AC-1", "employee": "HR-EMP-1", "activity_type": "Hearth", "costing_rate": 40.0})
+	tree, err := s.Tree(e.as("ann-tok"), org, actor(ann))
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, press := tree[0], tree[1]
+	// 90 minutes at 40.00 an hour is 60.00, so 6000 cents; the unrated two hours add nothing.
+	if press.OwnCostCents != 6000 || line.RolledCost != 6000 || line.OwnCostCents != 0 {
+		t.Fatalf("press own cost = %d, line rolled = %d, line own = %d", press.OwnCostCents, line.RolledCost, line.OwnCostCents)
+	}
+}
