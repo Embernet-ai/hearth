@@ -92,3 +92,24 @@ func TestWebsitesCompareAsAddressesNotText(t *testing.T) {
 		t.Error("different pages or hosts are different addresses")
 	}
 }
+
+func TestPhonesAreMadeAcceptableToEmberOps(t *testing.T) {
+	for in, want := range map[string]string{
+		"216-555-0142":             "+12165550142",
+		"(216) 555-0142":           "+12165550142",
+		"+1 858-558-6500 ext 224":  "+18585586500",
+		"610 524 7350 ext. 288":    "+16105247350",
+		"(440) 946-8171;1123":      "+14409468171",
+		"+52 55 3598 3172":         "+525535983172",
+		"n/a":                      "",
+		"555-1234":                 "",
+		"call after 5, ask for Bo": "",
+	} {
+		if got := phoneOf(in, ""); got != want {
+			t.Errorf("phoneOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := phoneOf("n/a", "216-555-0142"); got != "+12165550142" {
+		t.Errorf("a usable mobile number should stand in for an unusable phone: %q", got)
+	}
+}

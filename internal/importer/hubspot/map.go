@@ -128,13 +128,23 @@ func digits(s string) string {
 	return b.String()
 }
 
-// phoneOf keeps a number as it was written when it has enough digits to be one, and drops anything else (a note typed
-// into the phone box is not a number).
+var extMark = regexp.MustCompile(`(?i)\s*(ext\.?|extension|x|;|#|,).*$`)
+
+// phoneOf turns what was typed in HubSpot's phone boxes into a number EmberOps will accept, the way the first import did:
+// ten digits, or eleven starting with 1, are North American (+1), anything else of eight to fifteen digits is taken as
+// written with its country code, and what is left (a note, a partial number) is dropped. An extension ("ext 224", ";1123")
+// is cut off first, because EmberOps refuses a phone number that carries one and the contact then never reaches it.
 func phoneOf(p, mobile string) string {
 	for _, v := range []string{p, mobile} {
-		v = strings.TrimSpace(v)
-		if n := len(digits(v)); n >= 7 && n <= 15 {
-			return v
+		main := extMark.ReplaceAllString(strings.TrimSpace(v), "")
+		d := digits(main)
+		switch {
+		case len(d) == 10:
+			return "+1" + d
+		case len(d) == 11 && d[0] == '1':
+			return "+" + d
+		case len(d) >= 8 && len(d) <= 15:
+			return "+" + d
 		}
 	}
 	return ""

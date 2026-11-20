@@ -187,7 +187,7 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 	h.add(Contacts, "2001", later, map[string]string{"firstname": "Pat", "email": "pat@example.com", "jobtitle": "Engineer"})
 	h.add(Contacts, "2002", later, map[string]string{"firstname": "Newly", "lastname": "Made", "email": "new@example.com", "hubspot_owner_id": "77"})
 	h.add(Contacts, "2003", later, map[string]string{"firstname": "Loose", "email": "loose@example.com", "phone": "216-555-0142"})
-	h.add(Contacts, "2004", later, map[string]string{"firstname": "Quiet", "email": "quiet@example.com"})
+	h.add(Contacts, "2004", later, map[string]string{"firstname": "Quiet", "email": "quiet@example.com", "phone": "+1 949-421-0355 ext 128"})
 	h.linkPrimary(Contacts, Companies, "2002", "1003", "1099") // 1099 is also associated, but 1003 is its company
 	h.link(Contacts, Companies, "2004", "1099")
 	h.add(Deals, "3001", later, map[string]string{"dealname": "Old deal", "dealstage": "s1", "amount": "2500.5"})
@@ -288,8 +288,11 @@ func TestDeltaImportEndToEnd(t *testing.T) {
 	if got := f.str(`SELECT title FROM contacts WHERE id=$1`, pat.ID); got != "Engineer" {
 		t.Errorf("title = %q", got)
 	}
-	if got := f.str(`SELECT phone FROM contacts WHERE id=$1`, loose.ID); got != "216-555-0142" {
+	if got := f.str(`SELECT phone FROM contacts WHERE id=$1`, loose.ID); got != "+12165550142" {
 		t.Errorf("a linked contact's empty phone was not filled: %q", got)
+	}
+	if got := f.str(`SELECT phone FROM contacts WHERE org_id=$1 AND email='quiet@example.com'`, f.org); got != "+19494210355" {
+		t.Errorf("a phone with an extension must be cut to the number EmberOps accepts, got %q", got)
 	}
 	if n := f.count(`SELECT count(*) FROM contacts WHERE org_id=$1 AND lower(email)='loose@example.com'`, f.org); n != 1 {
 		t.Errorf("the contact with an existing email was duplicated")
