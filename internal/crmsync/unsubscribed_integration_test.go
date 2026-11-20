@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -103,5 +104,21 @@ func TestAnUnsubscribeReachesEmberOpsOnTheContactAndTheLead(t *testing.T) {
 	}
 	if !is(un("Contact", cOut)) || is(un("Contact", cIn)) {
 		t.Errorf("a second run changed the unsubscribed flags")
+	}
+
+	// -show reads unsubscribed back for the Contact and the Lead, and -remove takes the Lead away with the rest.
+	rep, _ = s.Run(ctx, crmsync.Options{Only: []string{prospect}, Show: true})
+	var shown string
+	for _, a := range rep.Actions {
+		shown += a.What + " " + a.Detail + "\n"
+	}
+	if strings.Count(shown, `"unsubscribed":1`) < 2 {
+		t.Errorf("-show did not read unsubscribed back on the Lead and its Contact:\n%s", shown)
+	}
+	if _, err := s.Run(ctx, crmsync.Options{Only: []string{prospect}, Remove: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ops.GetByHearthID(ctx, "Lead", prospect); err == nil {
+		t.Errorf("-remove left the proof company's Lead in EmberOps")
 	}
 }

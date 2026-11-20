@@ -115,6 +115,19 @@ func (f *fake) SegmentRemove(_ context.Context, s, c int64) error {
 	return nil
 }
 func (f *fake) EnsureField(context.Context, string, string, string) error { return nil }
+func (f *fake) FieldDefs(context.Context, string) (map[string]mautic.FieldDef, error) {
+	return nil, nil
+}
+func (f *fake) FindCompany(_ context.Context, name string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, c := range f.companies {
+		if n, _ := c["companyname"].(string); strings.EqualFold(n, name) {
+			return id, nil
+		}
+	}
+	return 0, nil
+}
 func (f *fake) Users(context.Context) (map[string]int64, error) {
 	return map[string]int64{"owner@example.test": 7}, nil
 }

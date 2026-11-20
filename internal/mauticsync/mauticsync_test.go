@@ -93,7 +93,7 @@ func TestARefusedStateOrCountryIsDroppedAndALongNameIsClipped(t *testing.T) {
 		t.Error("it claimed to drop what was not there, which would retry the same refused call forever")
 	}
 	long := strings.Repeat("Maripak ", 12)
-	if got := clip(long, mauticNameMax); len([]rune(got)) > 64 || !strings.HasPrefix(got, "Maripak") {
+	if got := clip(long, 64); len([]rune(got)) > 64 || !strings.HasPrefix(got, "Maripak") {
 		t.Errorf("clip = %q (%d characters)", got, len([]rune(got)))
 	}
 }
