@@ -80,6 +80,8 @@ func main() {
 		err = runDocDelete(ctx, os.Args[2:])
 	case "space-remove":
 		err = runSpaceRemove(ctx, os.Args[2:])
+	case "hubspot-import":
+		err = runHubSpotImport(ctx, os.Args[2:])
 	case "zoho-contacts-import":
 		err = runZohoContactsImport(ctx, os.Args[2:])
 	case "daily-report":
@@ -123,6 +125,7 @@ func usage() {
   doc-delete -source S -ids A,B [-go]  remove documents that carry a reference from S (checks first, nothing deleted without -go)
   space-remove -space ID [-go]         cancel the open tasks in a space, take every item out of it, remove the space (nothing changes without -go)
   zoho-contacts-import -file X.xlsx -url U -owner ID [-dry-run]  add a Zoho Contacts export to the CRM through the API
+  hubspot-import [-apply] [-since T]  bring what changed in HubSpot since the last import into the CRM (dry run by default)
   reassign -csv PLAN [-apply -reverse-out FILE]  put work on its assignees from a plan
   daily-report -as EMAIL (-date D [-file F] | -dir DIR) [-apply]  file a past day's report as that person (dry run by default)
   time-import -as EMAIL -file F.csv [-apply]  put a person's past time in as reconstructed entries, once (dry run by default)
