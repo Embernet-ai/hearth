@@ -425,6 +425,10 @@ func run() error {
 	}
 	// The admin time removal answers from whichever back end holds the time.
 	apiSvc.WithTime(set.Time)
+	// Time off for the people who decide it, over the API and as connector tools, through the
+	// same store as the page so it reaches EmberOps on that back end.
+	apiSvc.WithTimeOff(set.TimeOff)
+	mcpSrv.Add(apiSvc.TimeOffTools())
 	// The public API and the agent tools write documents through the same store
 	// as the pages, so on the EmberOps back end their writes reach EmberOps.
 	apiSvc.WithDocs(set.Docs)

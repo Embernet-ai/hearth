@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,5 +133,180 @@ func TestTimeOffIsAskedDecidedAndPrivate(t *testing.T) {
 	var n int
 	if err := db.QueryRow(ctx, `SELECT count(*) FROM calendar_events WHERE org_id = $1`, org).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("the calendar still shows the cancelled time off (%d, %v)", n, err)
+	}
+}
+
+type told struct {
+	changed []*timeoff.Request
+	notes   []string
+}
+
+func (told) TimeOffRequested(context.Context, string, *timeoff.Request, []string) {}
+func (told) TimeOffDecided(context.Context, string, string, *timeoff.Request)     {}
+func (t *told) TimeOffChanged(_ context.Context, _, _ string, r *timeoff.Request, note string) {
+	t.changed = append(t.changed, r)
+	t.notes = append(t.notes, note)
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// An approver or an admin changes or cancels somebody else's request, and the answer is the
+// same everywhere: only those who may decide, pending or approved only, audited, the person told,
+// and the calendar's "Out" kept in step.
+func TestApproversAndAdminsChangeAndCancelTimeOff(t *testing.T) {
+	dsn := pgtest.Database(t, "hearth_timeoff_change_test")
+	ctx := context.Background()
+	pools, err := pg.Open(ctx, pg.DefaultOptions(dsn))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pools.Close)
+	if err := pg.Migrate(ctx, pools, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))); err != nil {
+		t.Fatal(err)
+	}
+	db := pools.Web
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	org := uuid.NewString()
+	ana, boss, admin, colleague := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1, $2, 'Change Co')`, org, "tc-"+org[:8])
+	for id, name := range map[string]string{ana: "Ana", boss: "Boss", admin: "Ada Admin", colleague: "Colin"} {
+		exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1, $2, 'user', $3)`, id, org, name)
+	}
+	exec(`UPDATE principals SET approver_id = $2 WHERE id = $1`, ana, boss)
+	exec(`INSERT INTO capability_grants (org_id, principal_id, capability, granted_by) VALUES ($1, $2, 'super_admin', $2)`, org, admin)
+
+	notice := &told{}
+	svc := timeoff.New(db, notice)
+	day := func(s string) time.Time {
+		d, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	ask := func() *timeoff.Request {
+		r, err := svc.Ask(ctx, org, ana, timeoff.Params{StartsOn: day("2030-03-04"), EndsOn: day("2030-03-08"), Kind: "vacation",
+			Reason: "private reason", Acknowledged: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	audits := func(action string) int {
+		var n int
+		if err := db.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE org_id = $1 AND action = $2`, org, action).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// Pending: the person's approver changes it; dates, type, half day, note.
+	r := ask()
+	for name, who := range map[string]string{"the person": ana, "a colleague": colleague} {
+		if _, err := svc.Change(ctx, org, who, r.ID, timeoff.Change{Kind: ptr("sick")}); !errors.Is(err, timeoff.ErrDenied) {
+			t.Errorf("%s changed the request: %v", name, err)
+		}
+		if err := svc.CancelFor(ctx, org, who, r.ID, ""); !errors.Is(err, timeoff.ErrDenied) {
+			t.Errorf("%s cancelled the request: %v", name, err)
+		}
+	}
+	if audits("time_off.change")+audits("time_off.cancel") != 0 || len(notice.changed) != 0 {
+		t.Fatal("a refused change left an audit row or a notice")
+	}
+	if _, err := svc.Change(ctx, org, boss, r.ID, timeoff.Change{Kind: ptr("vacation")}); !errors.Is(err, timeoff.ErrInvalid) {
+		t.Fatalf("a change that changes nothing: %v", err)
+	}
+	if _, err := svc.Change(ctx, org, boss, r.ID, timeoff.Change{StartsOn: ptr(day("2030-03-09")), EndsOn: ptr(day("2030-03-10"))}); !errors.Is(err, timeoff.ErrInvalid) {
+		t.Fatalf("a weekend: %v", err)
+	}
+	got, err := svc.Change(ctx, org, boss, r.ID, timeoff.Change{StartsOn: ptr(day("2030-03-05")), EndsOn: ptr(day("2030-03-12")),
+		Kind: ptr("personal"), HalfDay: ptr(true), Comments: ptr("moved a day"), Note: "the team needs Monday"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "pending" || got.Days != 6 || got.Length() != 5.5 || !got.HalfDay || got.Kind != "personal" || got.Comments != "moved a day" {
+		t.Fatalf("changed = %+v", got)
+	}
+	mine, _ := svc.Mine(ctx, org, ana)
+	if len(mine) != 1 || mine[0].StartsOn != day("2030-03-05") || !mine[0].HalfDay || mine[0].Reason != "private reason" {
+		t.Fatalf("Ana's own view after the change: %+v", mine)
+	}
+	if len(notice.changed) != 1 || notice.changed[0].RequesterID != ana || notice.notes[0] != "the team needs Monday" {
+		t.Fatalf("Ana was told: %+v %v", notice.changed, notice.notes)
+	}
+	var before, after, actor, entity string
+	if err := db.QueryRow(ctx, `SELECT before::text, after::text, actor_id::text, entity_id::text FROM audit_log WHERE org_id = $1 AND action = 'time_off.change'`, org).
+		Scan(&before, &after, &actor, &entity); err != nil {
+		t.Fatalf("no audit row for the change: %v", err)
+	}
+	if actor != boss || entity != r.ID || !strings.Contains(before, `"2030-03-04"`) || !strings.Contains(after, `"2030-03-05"`) ||
+		!strings.Contains(after, "the team needs Monday") || strings.Contains(before+after, "private reason") {
+		t.Fatalf("audit row: actor %s entity %s\nbefore %s\nafter %s", actor, entity, before, after)
+	}
+
+	// Approved: an admin changes it, the calendar follows, and an admin cancels it off the calendar.
+	if err := svc.Decide(ctx, org, boss, r.ID, true, "approved"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = svc.Change(ctx, org, admin, r.ID, timeoff.Change{EndsOn: ptr(day("2030-03-14")), HalfDay: ptr(false), Note: "extended by HR"}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "approved" || got.Days != 8 || got.HalfDay || got.DeciderName != "Ada Admin" || got.DecisionNote != "extended by HR" {
+		t.Fatalf("approved, changed = %+v", got)
+	}
+	var starts, ends time.Time
+	if err := db.QueryRow(ctx, `SELECT starts_at, ends_at FROM calendar_events WHERE org_id = $1`, org).Scan(&starts, &ends); err != nil {
+		t.Fatal(err)
+	}
+	if !starts.Equal(day("2030-03-05")) || !ends.Equal(day("2030-03-15")) {
+		t.Fatalf("the Out says %v to %v, want 5 to 14 March", starts, ends)
+	}
+	if err := svc.CancelFor(ctx, org, admin, r.ID, "the project was cancelled"); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM calendar_events WHERE org_id = $1`, org).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("the Out stayed after the cancel (%d, %v)", n, err)
+	}
+	mine, _ = svc.Mine(ctx, org, ana)
+	if mine[0].Status != "cancelled" || mine[0].DecisionNote != "Cancelled by Ada Admin: the project was cancelled" {
+		t.Fatalf("after the cancel Ana sees %+v", mine[0])
+	}
+	if audits("time_off.change") != 2 || audits("time_off.cancel") != 1 || len(notice.changed) != 3 || notice.changed[2].Status != "cancelled" {
+		t.Fatalf("audit rows %d+%d, notices %d", audits("time_off.change"), audits("time_off.cancel"), len(notice.changed))
+	}
+	// Finished is finished, even for an admin.
+	if _, err := svc.Change(ctx, org, admin, r.ID, timeoff.Change{Kind: ptr("sick")}); !errors.Is(err, timeoff.ErrDenied) {
+		t.Fatalf("changed a cancelled request: %v", err)
+	}
+
+	// An approved one that started long ago is still the admin's to fix, and the list an approver
+	// opens carries approved requests still to come however long ago they were decided.
+	r2 := ask()
+	if err := svc.Decide(ctx, org, boss, r2.ID, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	exec(`UPDATE time_off_requests SET decided_at = now() - interval '90 days' WHERE id = $1`, r2.ID)
+	list, err := svc.ToDecide(ctx, org, boss)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, x := range list {
+		found = found || x.ID == r2.ID
+	}
+	if !found {
+		t.Fatalf("an approved request still to come is not on the approver's list: %+v", list)
+	}
+	if g, err := svc.Get(ctx, org, boss, r2.ID); err != nil || g.ID != r2.ID {
+		t.Fatalf("approver Get: %v", err)
+	}
+	if _, err := svc.Get(ctx, org, colleague, r2.ID); !errors.Is(err, timeoff.ErrNotFound) {
+		t.Fatalf("a colleague read the request: %v", err)
 	}
 }

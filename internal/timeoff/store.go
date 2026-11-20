@@ -18,6 +18,14 @@ type Store interface {
 	Mine(ctx context.Context, orgID, actorID string) ([]*Request, error)
 	PendingCount(ctx context.Context, orgID, actorID string) (int, error)
 	ToDecide(ctx context.Context, orgID, actorID string) ([]*Request, error)
+	// Get reads one request for its requester or anybody who may decide it.
+	Get(ctx context.Context, orgID, actorID, id string) (*Request, error)
+	// Change changes a pending or approved request of somebody else's, for the
+	// people who may decide it. Audited; the person is told.
+	Change(ctx context.Context, orgID, actorID, id string, c Change) (*Request, error)
+	// CancelFor cancels a pending or approved request of somebody else's, for the
+	// people who may decide it. Audited; the person is told.
+	CancelFor(ctx context.Context, orgID, actorID, id, note string) error
 }
 
 var _ Store = (*Service)(nil)
