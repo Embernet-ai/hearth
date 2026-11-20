@@ -1,0 +1,2 @@
+# String fields the interface shows as Markdown. Each is sent twice: as written, and rendered as Name_md.
+Body

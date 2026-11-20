@@ -1,0 +1,86 @@
+# One-off Job for hearthctl crm-sync: companies and contacts from Hearth into
+# EmberOps (Customer, Supplier, Contact), keyed on hearth_id. A person runs it,
+# see docs/crm-sync.md. It is a dry run unless ARGS carries "-write".
+#
+#   sed -e 's#__NAME__#crm-sync-dry-1#' -e 's#__TAG__#2.11.0#' \
+#       -e 's#__ARGS__#["crm-sync"]#' deploy/jobs/crm-sync.yaml | kubectl apply -f -
+#
+# EmberOps credentials come from the Secret named below by secretKeyRef and are
+# never printed. It does not turn on HEARTH_EMBEROPS_CRM_PARTIES: Hearth keeps
+# owning companies and contacts, EmberOps gets a copy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: __NAME__
+  namespace: hearth
+  labels:
+    app.kubernetes.io/name: hearth-crm-sync
+spec:
+  backoffLimit: 0
+  # Kept for a day so the report can still be read.
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: crm-sync
+          image: ghcr.io/embernet-ai/hearth:__TAG__
+          command: ["/usr/local/bin/hearthctl"]
+          args: __ARGS__
+          env:
+            - name: CRM_SYNC_EMBEROPS_URL
+              value: https://ops.example.com
+            - name: HEARTH_OIDC_ISSUER
+              value: https://vord.example.com/id/realms/fireball
+            - name: CRM_SYNC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hearth-emberops
+                  key: client-id
+            - name: CRM_SYNC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hearth-emberops
+                  key: client-secret
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hearth
+                  key: POSTGRES_PASSWORD
+            - name: HEARTH_DATABASE_URL
+              value: postgres://hearth:$(POSTGRES_PASSWORD)@postgres:5432/hearth?sslmode=disable
+            - name: HEARTH_ENV
+              value: production
+            - name: HEARTH_PUBLIC_BASE_URL
+              value: https://hearth.example.com
+            - name: HEARTH_S3_ENDPOINT
+              value: hearth-garage:3900
+            - name: HEARTH_S3_PUBLIC_ENDPOINT
+              value: files.example.com
+            - name: HEARTH_S3_BUCKET
+              value: hearth
+            - name: HEARTH_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hearth-garage-key-hearth
+                  key: S3_ACCESS_KEY_ID
+            - name: HEARTH_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hearth-garage-key-hearth
+                  key: S3_SECRET_ACCESS_KEY
+            - name: HEARTH_S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: hearth-garage-key-hearth
+                  key: S3_REGION
+            - name: HEARTH_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hearth
+                  key: ENCRYPTION_KEY
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}

@@ -1,0 +1,85 @@
+/* Copied from Embernet-ai/embernet-design (commit 6a0f44d) so a build needs no credential. Refresh by copying the file again. */
+/* EmberNET design tokens. Bright on purpose: white and light surfaces, ember red
+   for the brand and the one thing on a screen that matters, teal for the
+   platform, and data colors chosen so charts read on white.
+
+   Contrast ratios are against --en-bg (#FFFFFF). Anything that carries text is
+   4.5:1 or better; decorative lines and fills are marked as such. */
+
+:root {
+  /* brand */
+  --en-ember:        #D92D20;  /* the brand red, from the logo. 4.84:1, large text and fills */
+  --en-ember-ink:    #B42318;  /* ember for body-size text and links. 6.42:1 */
+  --en-ember-deep:   #912018;  /* hover. 8.6:1 */
+  --en-ember-tint:   #FEF3F2;  /* the palest ember, for fills behind text */
+  --en-ember-line:   rgba(217, 45, 32, 0.28);
+  --en-on-ember:     #FFFFFF;  /* text on an ember fill. 4.84:1 at bold/large sizes */
+  --en-teal:         #0B1E2D;  /* the brand's deep teal, for headings and ink accents. 16.9:1 */
+  --en-teal-600:     #0E7490;  /* data teal. 5.36:1 */
+  --en-teal-tint:    #ECFEFF;
+
+  /* surfaces and ink */
+  --en-bg:           #FFFFFF;
+  --en-surface:      #F7F8FA;  /* alternating sections, code, table heads */
+  --en-card:         #FFFFFF;
+  --en-ink:          #101828;  /* 17.7:1 */
+  --en-ink-soft:     #475467;  /* 7.6:1 */
+  --en-ink-faint:    #667085;  /* 4.83:1, small print only */
+  --en-border:       #EAECF0;  /* decorative hairline only */
+  --en-line-strong:  #98A2B3;  /* input borders, 2.6:1 is fine for non-text */
+  --en-focus:        #B42318;
+
+  /* data colors, for charts and diagrams */
+  --en-d1: #D92D20;   /* ember: the measured result */
+  --en-d2: #0E7490;   /* teal: the platform */
+  --en-d3: #D97706;   /* amber: targets, budgets, thresholds */
+  --en-d4: #2563EB;   /* blue: the network */
+  --en-d5: #7A5AF8;   /* violet: applications */
+  --en-d6: #039855;   /* green: healthy, passed */
+
+  /* state */
+  --en-ok:        #039855;  --en-ok-text:   #05603A;  --en-ok-tint:   #ECFDF3;
+  --en-warn:      #F79009;  --en-warn-text: #93370D;  --en-warn-tint: #FFFAEB;
+  --en-info:      #2E90FA;  --en-info-text: #175CD3;  --en-info-tint: #EFF8FF;
+
+  /* type. The metric-matched fallback is declared in global.css. */
+  --en-font:      'Inter Variable', 'Inter Fallback', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --en-font-mono: 'JetBrains Mono', 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --en-fs-2xs:  0.75rem;
+  --en-fs-xs:   0.8125rem;
+  --en-fs-sm:   0.9375rem;
+  --en-fs-base: 1.0625rem;
+  --en-fs-md:   1.1875rem;
+  --en-fs-lg:   clamp(1.2rem, 0.5vw + 1.1rem, 1.375rem);
+  --en-fs-xl:   clamp(1.375rem, 0.8vw + 1.2rem, 1.75rem);
+  --en-fs-2xl:  clamp(1.85rem, 2vw + 1.3rem, 2.75rem);
+  --en-fs-3xl:  clamp(2.4rem, 4vw + 1.2rem, 4rem);
+
+  --en-lh-tight: 1.08;
+  --en-lh-heading: 1.2;
+  --en-lh-body: 1.65;
+  --en-ls-tight: -0.035em;
+  --en-ls-heading: -0.02em;
+  --en-ls-label: 0.14em;
+
+  /* space */
+  --en-s1: 4px;  --en-s2: 8px;  --en-s3: 12px; --en-s4: 16px; --en-s5: 24px;
+  --en-s6: 32px; --en-s7: 48px; --en-s8: 72px; --en-s9: 112px;
+
+  --en-r-sm: 8px;
+  --en-r-card: 16px;
+  --en-r-lg: 24px;
+  --en-r-pill: 999px;
+
+  --en-sh-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --en-sh-2: 0 12px 32px -8px rgba(16, 24, 40, 0.14), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
+  --en-sh-ember: 0 18px 48px -16px rgba(217, 45, 32, 0.35);
+
+  --en-w-page: 1160px;
+  --en-w-wide: 1320px;
+  --en-w-prose: 70ch;
+
+  --en-fast: 0.15s ease;
+  --en-med: 0.3s ease;
+}

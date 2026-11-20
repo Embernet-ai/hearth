@@ -1,0 +1,1 @@
+placeholder so go build embeds an empty directory; the Containerfile replaces dist with the built interface (ui/)

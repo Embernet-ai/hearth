@@ -1,0 +1,31 @@
+# Derived from: pg_type join pg_enum
+# Captured: 2026-08-10, from the running Hearth (Rust) stack on WSL k3s, namespace hearth.
+# This is OBSERVED BEHAVIOUR of a running system, not source. See PROVENANCE.md.
+#
+AccessLevel = view | comment | edit | owner
+OrganizationItJobType = UPDATE | REMOVE
+OrganizationStatus = PILOT | ENTERPRISE
+SetAsDefault = ASK | FORCE | HIDE
+anchor_table_name = PdfPlaceableCommentAnchor | PdfHighlightAnchor
+comms_channel_type = public | private | direct_message | team
+comms_participant_role = owner | admin | member
+crm_cleanup_job_status = Init | InProgress | Complete | Failed
+document_sub_type_value = task | snippet
+email_backfill_job_status = Init | InProgress | Complete | Cancelled | Failed
+email_backfill_message_status = InProgress | Completed | Failed | Cancelled
+email_backfill_thread_status = InProgress | Skipped | Completed | Failed | Cancelled
+email_label_list_visibility_enum = LabelShow | LabelShowIfUnread | LabelHide
+email_label_type_enum = System | User
+email_message_list_visibility_enum = Show | Hide
+email_recipient_type = TO | CC | BCC
+email_user_provider_enum = GMAIL
+entity_access_source_type = channel | team | user
+github_app_installation_source_type = team | user
+import_run_status = running | ready | importing | completed | failed | dismissed
+insights_backfill_batch_status = Queued | InProgress | Complete | Failed
+insights_backfill_job_status = Init | InProgress | Complete | Cancelled | Failed
+notification_device_type_option = ios | android | iosvoip
+property_data_type = BOOLEAN | DATE | NUMBER | STRING | SELECT_NUMBER | SELECT_STRING | ENTITY | LINK | TAG
+property_entity_type = CHANNEL | CHAT | DOCUMENT | PROJECT | THREAD | USER | COMPANY | TASK | CALL_RECORD
+team_plan = idea | pre_seed | seed | series_a | growth
+team_role = member | admin | owner

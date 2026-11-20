@@ -1,0 +1,23 @@
+[Unit]
+Description=Hearth
+After=hearth-postgres.service hearth-garage.service
+Requires=hearth-postgres.service hearth-garage.service
+
+[Container]
+ContainerName=hearth
+Image=ghcr.io/embernet-ai/hearth:stable
+AutoUpdate=registry
+Network=hearth.network
+PublishPort=127.0.0.1:8080:8080
+EnvironmentFile=%h/.config/hearth/hearth.env
+Secret=hearth-database-url,type=env,target=HEARTH_DATABASE_URL
+Secret=hearth-s3-access-key,type=env,target=HEARTH_S3_ACCESS_KEY
+Secret=hearth-s3-secret-key,type=env,target=HEARTH_S3_SECRET_KEY
+Secret=hearth-encryption-key,type=env,target=HEARTH_ENCRYPTION_KEY
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

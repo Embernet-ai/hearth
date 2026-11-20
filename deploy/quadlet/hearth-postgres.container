@@ -1,0 +1,23 @@
+[Unit]
+Description=Hearth, Postgres 17
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=hearth-postgres
+Image=docker.io/library/postgres:17-alpine
+AutoUpdate=registry
+Network=hearth.network
+Volume=hearth-postgres.volume:/var/lib/postgresql/data
+Environment=POSTGRES_USER=hearth
+Environment=POSTGRES_DB=hearth
+Secret=hearth-postgres-password,type=env,target=POSTGRES_PASSWORD
+HealthCmd=pg_isready -U hearth -d hearth
+HealthInterval=10s
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

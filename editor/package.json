@@ -1,0 +1,20 @@
+{
+  "name": "hearth-editor",
+  "private": true,
+  "description": "Builds internal/web/static/editor.js, the rich-text editor for Hearth's writing boxes. See README.md.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/roundtrip.mjs"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-list": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/markdown": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

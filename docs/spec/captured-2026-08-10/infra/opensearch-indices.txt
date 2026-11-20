@@ -1,0 +1,13 @@
+# Derived from: GET http://localhost:9200/_cat/indices inside the OpenSearch pod
+# Captured: 2026-08-10, from the running Hearth (Rust) stack on WSL k3s, namespace hearth.
+# This is OBSERVED BEHAVIOUR of a running system, not source. See PROVENANCE.md.
+#
+health status index                        uuid                   pri rep docs.count docs.deleted store.size pri.store.size
+green  open   .plugins-ml-config           KZvgrR9cTT64BnA_NwN0uQ   1   0          1            0        4kb            4kb
+green  open   emails_v2                    MvEi6SudRzqEu27K95hTAw   3   0          0            0       624b           624b
+green  open   top_queries-2026.08.09-74275 brJsLdghToqPigh9t8AHoA   1   0          7            0       22kb           22kb
+green  open   projects_v1                  xKVdk2XgQM6-FEuNj3Li7w   3   0          0            0       624b           624b
+green  open   chats_v2                     jgb4szXHSlKIMIj_32f_1w   3   0          0            0       624b           624b
+green  open   documents_v2                 Rt_WLjL3Q-GNWnAVlJ3G0Q   3   0          0            0       624b           624b
+green  open   call_records_v2              yFoLrR6qTWWafIwVfgHkjg   3   0          0            0       624b           624b
+green  open   channels_v2                  kcra4UB4SS66tNalmrApoQ   3   0          0            0      7.7kb          7.7kb

@@ -1,0 +1,55 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "hearth.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+  annotations:
+    {{- if and .Values.ingress.tls.enabled .Values.ingress.tls.certResolver.enabled }}
+    traefik.ingress.kubernetes.io/router.tls.certresolver: {{ .Values.ingress.tls.certResolver.name | quote }}
+    {{- end }}
+    {{- if and .Values.ingress.tls.enabled .Values.ingress.tls.certManager.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.certManager.issuerName | quote }}
+    {{- end }}
+    {{- $ann := deepCopy (.Values.ingress.annotations | default dict) }}
+    {{- if include "hearth.httpsRedirect" . }}
+    {{- $mw := printf "%s-%s@kubernetescrd" .Release.Namespace (include "hearth.httpsRedirectName" .) }}
+    {{- $key := "traefik.ingress.kubernetes.io/router.middlewares" }}
+    {{- if hasKey $ann $key }}
+    {{- $_ := set $ann $key (printf "%s,%s" (get $ann $key) $mw) }}
+    {{- else }}
+    {{- $_ := set $ann $key $mw }}
+    {{- end }}
+    {{- end }}
+    {{- with $ann }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      {{- if .Values.ingress.tls.certManager.enabled }}
+      # Only ever set when cert-manager is the one issuing. Naming a secret makes
+      # Traefik serve that secret in preference to its own resolver, so on a
+      # cluster using certResolver this line is what breaks the host.
+      secretName: {{ .Values.ingress.tls.certManager.secretName }}
+      {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "hearth.fullname" . }}
+                port:
+                  number: {{ .Values.service.ports.http }}
+{{- end }}

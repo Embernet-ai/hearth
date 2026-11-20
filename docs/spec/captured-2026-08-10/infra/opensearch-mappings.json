@@ -1,0 +1,732 @@
+{
+  ".plugins-ml-config" : {
+    "mappings" : {
+      "_meta" : {
+        "schema_version" : 5
+      },
+      "properties" : {
+        "config_type" : {
+          "type" : "keyword"
+        },
+        "create_time" : {
+          "type" : "date",
+          "format" : "strict_date_time||epoch_millis"
+        },
+        "last_updated_time" : {
+          "type" : "date",
+          "format" : "strict_date_time||epoch_millis"
+        },
+        "master_key" : {
+          "type" : "keyword"
+        },
+        "ml_configuration" : {
+          "type" : "flat_object"
+        },
+        "tenant_id" : {
+          "type" : "keyword"
+        }
+      }
+    }
+  },
+  "emails_v2" : {
+    "mappings" : {
+      "dynamic" : "false",
+      "properties" : {
+        "bcc" : {
+          "type" : "keyword",
+          "fields" : {
+            "parts" : {
+              "type" : "text",
+              "analyzer" : "email_parts"
+            }
+          }
+        },
+        "bcc_names" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "cc" : {
+          "type" : "keyword",
+          "fields" : {
+            "parts" : {
+              "type" : "text",
+              "analyzer" : "email_parts"
+            }
+          }
+        },
+        "cc_names" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "content" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "entity_id" : {
+          "type" : "keyword"
+        },
+        "labels" : {
+          "type" : "keyword",
+          "index" : false
+        },
+        "link_id" : {
+          "type" : "keyword"
+        },
+        "message_id" : {
+          "type" : "keyword"
+        },
+        "properties" : {
+          "type" : "nested",
+          "properties" : {
+            "date_value" : {
+              "type" : "date"
+            },
+            "definition_id" : {
+              "type" : "keyword"
+            },
+            "number_value" : {
+              "type" : "double"
+            },
+            "values" : {
+              "type" : "keyword"
+            }
+          }
+        },
+        "recipient_names" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "recipients" : {
+          "type" : "keyword",
+          "fields" : {
+            "parts" : {
+              "type" : "text",
+              "analyzer" : "email_parts"
+            }
+          }
+        },
+        "reply_to" : {
+          "type" : "keyword",
+          "fields" : {
+            "parts" : {
+              "type" : "text",
+              "analyzer" : "email_parts"
+            }
+          }
+        },
+        "sender" : {
+          "type" : "keyword",
+          "fields" : {
+            "parts" : {
+              "type" : "text",
+              "analyzer" : "email_parts"
+            }
+          }
+        },
+        "sender_name" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "sent_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "sent_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "subject" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 50
+            }
+          }
+        },
+        "updated_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "updated_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "user_id" : {
+          "type" : "keyword"
+        }
+      }
+    }
+  },
+  "top_queries-2026.08.09-74275" : {
+    "mappings" : {
+      "dynamic" : "true",
+      "_meta" : {
+        "schema_version" : 1,
+        "query_insights_feature_space" : "top_n_queries"
+      },
+      "properties" : {
+        "group_by" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "id" : {
+          "type" : "keyword"
+        },
+        "indices" : {
+          "type" : "keyword"
+        },
+        "is_cancelled" : {
+          "type" : "boolean"
+        },
+        "labels" : {
+          "type" : "object"
+        },
+        "measurements" : {
+          "properties" : {
+            "cpu" : {
+              "properties" : {
+                "aggregationType" : {
+                  "type" : "keyword"
+                },
+                "count" : {
+                  "type" : "integer"
+                },
+                "number" : {
+                  "type" : "double"
+                }
+              }
+            },
+            "latency" : {
+              "properties" : {
+                "aggregationType" : {
+                  "type" : "keyword"
+                },
+                "count" : {
+                  "type" : "integer"
+                },
+                "number" : {
+                  "type" : "double"
+                }
+              }
+            },
+            "memory" : {
+              "properties" : {
+                "aggregationType" : {
+                  "type" : "keyword"
+                },
+                "count" : {
+                  "type" : "integer"
+                },
+                "number" : {
+                  "type" : "double"
+                }
+              }
+            }
+          }
+        },
+        "node_id" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "phase_latency_map" : {
+          "properties" : {
+            "can_match" : {
+              "type" : "long"
+            },
+            "dfs_pre_query" : {
+              "type" : "long"
+            },
+            "dfs_query" : {
+              "type" : "long"
+            },
+            "expand" : {
+              "type" : "long"
+            },
+            "fetch" : {
+              "type" : "long"
+            },
+            "query" : {
+              "type" : "long"
+            }
+          }
+        },
+        "query_group_hashcode" : {
+          "type" : "keyword"
+        },
+        "search_type" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "source" : {
+          "type" : "match_only_text",
+          "index" : false
+        },
+        "source_truncated" : {
+          "type" : "boolean"
+        },
+        "task_resource_usages" : {
+          "properties" : {
+            "action" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "nodeId" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "parentTaskId" : {
+              "type" : "long"
+            },
+            "taskId" : {
+              "type" : "long"
+            },
+            "taskResourceUsage" : {
+              "properties" : {
+                "cpu_time_in_nanos" : {
+                  "type" : "long"
+                },
+                "memory_in_bytes" : {
+                  "type" : "long"
+                }
+              }
+            }
+          }
+        },
+        "timestamp" : {
+          "type" : "date",
+          "format" : "epoch_millis"
+        },
+        "top_n_query" : {
+          "properties" : {
+            "cpu" : {
+              "type" : "boolean"
+            },
+            "latency" : {
+              "type" : "boolean"
+            },
+            "memory" : {
+              "type" : "boolean"
+            }
+          }
+        },
+        "total_shards" : {
+          "type" : "long"
+        },
+        "user_roles" : {
+          "type" : "keyword"
+        },
+        "username" : {
+          "type" : "keyword"
+        },
+        "wlm_group_id" : {
+          "type" : "keyword"
+        }
+      }
+    }
+  },
+  "projects_v1" : {
+    "mappings" : {
+      "dynamic" : "false",
+      "properties" : {
+        "created_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "created_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "entity_id" : {
+          "type" : "keyword"
+        },
+        "name" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 128
+            }
+          }
+        },
+        "owner_id" : {
+          "type" : "keyword"
+        },
+        "parent_project_id" : {
+          "type" : "keyword"
+        },
+        "properties" : {
+          "type" : "nested",
+          "properties" : {
+            "date_value" : {
+              "type" : "date"
+            },
+            "definition_id" : {
+              "type" : "keyword"
+            },
+            "number_value" : {
+              "type" : "double"
+            },
+            "values" : {
+              "type" : "keyword"
+            }
+          }
+        },
+        "updated_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "updated_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        }
+      }
+    }
+  },
+  "chats_v2" : {
+    "mappings" : {
+      "dynamic" : "false",
+      "properties" : {
+        "chat_message_id" : {
+          "type" : "keyword",
+          "index" : false
+        },
+        "chat_relation" : {
+          "type" : "join",
+          "eager_global_ordinals" : true,
+          "relations" : {
+            "chat" : "message"
+          }
+        },
+        "content" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "created_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "created_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "entity_id" : {
+          "type" : "keyword"
+        },
+        "properties" : {
+          "type" : "nested",
+          "properties" : {
+            "date_value" : {
+              "type" : "date"
+            },
+            "definition_id" : {
+              "type" : "keyword"
+            },
+            "number_value" : {
+              "type" : "double"
+            },
+            "values" : {
+              "type" : "keyword"
+            }
+          }
+        },
+        "role" : {
+          "type" : "keyword",
+          "index" : false
+        },
+        "title" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 50
+            }
+          }
+        },
+        "updated_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "updated_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "user_id" : {
+          "type" : "keyword"
+        }
+      }
+    }
+  },
+  "documents_v2" : {
+    "mappings" : {
+      "dynamic" : "false",
+      "properties" : {
+        "content" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "document_name" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 128
+            }
+          }
+        },
+        "document_relation" : {
+          "type" : "join",
+          "eager_global_ordinals" : true,
+          "relations" : {
+            "document" : "chunk"
+          }
+        },
+        "entity_id" : {
+          "type" : "keyword"
+        },
+        "file_type" : {
+          "type" : "keyword",
+          "index" : false
+        },
+        "node_id" : {
+          "type" : "keyword",
+          "index" : false
+        },
+        "owner_id" : {
+          "type" : "keyword"
+        },
+        "properties" : {
+          "type" : "nested",
+          "properties" : {
+            "date_value" : {
+              "type" : "date"
+            },
+            "definition_id" : {
+              "type" : "keyword"
+            },
+            "number_value" : {
+              "type" : "double"
+            },
+            "values" : {
+              "type" : "keyword"
+            }
+          }
+        },
+        "raw_content" : {
+          "type" : "text"
+        },
+        "sub_type" : {
+          "type" : "keyword"
+        },
+        "updated_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "updated_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        }
+      }
+    }
+  },
+  "call_records_v2" : {
+    "mappings" : {
+      "dynamic" : "false",
+      "properties" : {
+        "call_relation" : {
+          "type" : "join",
+          "eager_global_ordinals" : true,
+          "relations" : {
+            "call" : "segment"
+          }
+        },
+        "channel_id" : {
+          "type" : "keyword"
+        },
+        "channel_name" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 128
+            }
+          }
+        },
+        "content" : {
+          "type" : "text",
+          "analyzer" : "standard"
+        },
+        "created_at_millis" : {
+          "type" : "alias",
+          "path" : "started_at_millis"
+        },
+        "created_at_seconds" : {
+          "type" : "alias",
+          "path" : "started_at_seconds"
+        },
+        "ended_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "ended_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "entity_id" : {
+          "type" : "keyword"
+        },
+        "name" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 128
+            }
+          }
+        },
+        "participant_ids" : {
+          "type" : "keyword"
+        },
+        "properties" : {
+          "type" : "nested",
+          "properties" : {
+            "date_value" : {
+              "type" : "date"
+            },
+            "definition_id" : {
+              "type" : "keyword"
+            },
+            "number_value" : {
+              "type" : "double"
+            },
+            "values" : {
+              "type" : "keyword"
+            }
+          }
+        },
+        "sequence_num" : {
+          "type" : "integer",
+          "index" : false
+        },
+        "speaker_id" : {
+          "type" : "keyword"
+        },
+        "started_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "started_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "transcript_id" : {
+          "type" : "keyword",
+          "index" : false
+        },
+        "updated_at_millis" : {
+          "type" : "alias",
+          "path" : "started_at_millis"
+        },
+        "updated_at_seconds" : {
+          "type" : "alias",
+          "path" : "started_at_seconds"
+        }
+      }
+    }
+  },
+  "channels_v2" : {
+    "mappings" : {
+      "dynamic" : "false",
+      "properties" : {
+        "channel_type" : {
+          "type" : "keyword"
+        },
+        "content" : {
+          "type" : "text",
+          "analyzer" : "content_text"
+        },
+        "created_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "created_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        },
+        "entity_id" : {
+          "type" : "keyword"
+        },
+        "mentions" : {
+          "type" : "keyword"
+        },
+        "message_id" : {
+          "type" : "keyword"
+        },
+        "org_id" : {
+          "type" : "integer"
+        },
+        "sender_id" : {
+          "type" : "keyword"
+        },
+        "thread_id" : {
+          "type" : "keyword"
+        },
+        "updated_at_millis" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_millis"
+        },
+        "updated_at_seconds" : {
+          "type" : "date",
+          "index" : false,
+          "format" : "epoch_second"
+        }
+      }
+    }
+  }
+}

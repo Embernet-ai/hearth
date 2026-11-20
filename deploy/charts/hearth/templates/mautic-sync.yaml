@@ -1,0 +1,73 @@
+{{- if .Values.mauticSync.enabled }}
+# Hearth's contacts and companies, sent to Mautic for email marketing, with Mautic's activity and opt-outs brought back, on a
+# schedule. hearthctl mautic-sync, the same command a person runs by hand; docs/mautic-sync.md says what it does and what it
+# never does. Hearth stays the owner of the CRM and Mautic owns the sending.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "hearth.fullname" . }}-mautic-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mautic-sync
+spec:
+  schedule: {{ .Values.mauticSync.schedule | quote }}
+  # Forbid: two runs at once would race to create the same record.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "mautic-sync") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          {{- with .Values.image.pullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: mautic-sync
+              image: {{ include "hearth.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                - /usr/local/bin/hearthctl
+              args:
+                - mautic-sync
+                - -write
+              env:
+                - name: MAUTIC_URL
+                  value: {{ .Values.mauticSync.url | quote }}
+                - name: MAUTIC_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.mauticSync.secretName }}
+                      key: {{ .Values.mauticSync.clientIdKey }}
+                - name: MAUTIC_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.mauticSync.secretName }}
+                      key: {{ .Values.mauticSync.clientSecretKey }}
+                {{- include "hearth.database.env" . | nindent 16 }}
+                - name: HEARTH_PUBLIC_BASE_URL
+                  value: {{ .Values.hearth.publicBaseUrl | quote }}
+                - name: HEARTH_ENV
+                  value: {{ .Values.hearth.env | quote }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

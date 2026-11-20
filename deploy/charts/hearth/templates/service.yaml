@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hearth.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    {{- if .Values.dashboardIntegration.enabled }}
+    embernet.ai/store-app: {{ .Values.dashboardIntegration.storeApp | quote }}
+    embernet.ai/app-name: {{ .Values.dashboardIntegration.appName | quote }}
+    embernet.ai/gui-type: {{ .Values.dashboardIntegration.guiType | quote }}
+    embernet.ai/gui-port: {{ default .Values.service.ports.http .Values.dashboardIntegration.guiPort | quote }}
+    {{- end }}
+  {{- if .Values.dashboardIntegration.enabled }}
+  annotations:
+    embernet.ai/display-name: {{ .Values.dashboardIntegration.displayName | quote }}
+    embernet.ai/launch-url: {{ .Values.dashboardIntegration.launchUrl | quote }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.ports.http }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+  selector:
+    {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "app") | nindent 4 }}

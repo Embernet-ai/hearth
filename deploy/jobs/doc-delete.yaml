@@ -1,0 +1,39 @@
+# One-off Job for hearthctl doc-delete: removes a known list of documents that
+# carry an external reference from a named source, such as the copies an import
+# made twice, through the same service function the delete button calls. Nothing
+# is deleted without -go, so run it once without and read the log.
+#
+#   sed -e 's#__NAME__#doc-delete-1#' -e 's#__TAG__#2.12.1#' \
+#       -e 's#__ARGS__#["doc-delete", "-source", "twenty", "-kind", "task", "-ids", "ID,ID"]#' \
+#       deploy/jobs/doc-delete.yaml | kubectl apply -f -
+#
+# The rest of the environment is the running Deployment's. The deployed Hearth
+# has to be on the same version, because the Job does not migrate.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: __NAME__
+  namespace: hearth
+  labels:
+    app.kubernetes.io/name: hearth-doc-delete
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: doc-delete
+          image: ghcr.io/embernet-ai/hearth:__TAG__
+          command: ["/usr/local/bin/hearthctl"]
+          args: __ARGS__
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hearth
+                  key: POSTGRES_PASSWORD
+            - name: HEARTH_DATABASE_URL
+              value: postgres://hearth:$(POSTGRES_PASSWORD)@postgres:5432/hearth?sslmode=disable

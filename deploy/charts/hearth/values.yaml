@@ -1,0 +1,598 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# hearth: default values.
+#
+# These install a working Hearth on a bare cluster: the bundled Postgres and
+# object store, local accounts, and the host below. Point `ingress.host`,
+# `hearth.publicBaseUrl` and `s3.publicEndpoint` at your own name, and turn on
+# `oidc` if you have a sign-in provider.
+#
+# Hearth is a TOP-LEVEL subdomained app at https://hearth.example.com, not an
+# iframed store app. That is a requirement, not a preference: the OIDC redirect
+# has to happen in a top-level browsing context, because identity providers send
+# X-Frame-Options: DENY and will not render inside the dashboard iframe.
+#
+# Prereqs in the target namespace, none of which this chart creates:
+#   - Secret hearth: POSTGRES_PASSWORD, S3_ACCESS_KEY, S3_SECRET_KEY, and
+#     OIDC_CLIENT_SECRET. A chart that generates its own credentials either
+#     rotates them on every apply, breaking every session, or needs a guard that
+#     silently does nothing.
+#   - A ghcr pull secret, because the image is a private package. On this cluster
+#     kubernetes-replicator already copies ghcr-pat and ghcr-secret into every
+#     namespace, so usually there is nothing to do.
+# ──────────────────────────────────────────────────────────────────────────────
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ─── Container image ───────────────────────────────────────────────────────────
+# The tag is the git sha and never a moving name like :dev or :latest. A mutable
+# tag means the Deployment spec does not change between deploys, so Kubernetes
+# has no reason to do anything, and the pod keeps serving old code while every
+# probe reports healthy. That failure is completely silent and has happened once.
+image:
+  repository: ghcr.io/embernet-ai/hearth
+  tag: "2.22.0"
+  pullPolicy: Always
+  # Only needed for a private mirror of the image. The public one needs none.
+  pullSecrets: []
+
+replicaCount: 1
+
+# ─── The app ───────────────────────────────────────────────────────────────────
+hearth:
+  env: production
+  logFormat: json
+  # The scheme decides whether session cookies are Secure and __Host- prefixed.
+  # Claiming https without TLS means the browser never sends the cookie back, so
+  # every request after login arrives anonymous and the app looks broken while
+  # being entirely correct.
+  publicBaseUrl: https://hearth.example.com
+
+# ─── Single sign-on ────────────────────────────────────────────────────────────
+# Generic OIDC, so the issuer is whatever provider it points at and the rest
+# comes from discovery. Issuer, client id, and client secret are required
+# TOGETHER or the app refuses to start, so an empty clientId keeps SSO off rather
+# than half configured. Local accounts work either way.
+#
+# Any OpenID Connect provider works: Keycloak, Authentik, Authelia, Zitadel,
+# Google, Microsoft Entra. Off by default, because it needs a client you register
+# with the provider first.
+#
+# The issuer has NO trailing slash: go-oidc compares it against the discovery
+# document byte for byte, and a slash produces a mismatch that reads as a
+# provider outage rather than a typo.
+#
+# The matching client in Vord registers exactly one redirect URI,
+# https://hearth.example.com/auth/callback, built as publicBaseUrl +
+# /auth/callback. Changing publicBaseUrl without changing the Vord client
+# registration breaks sign-in at the redirect and nowhere earlier.
+oidc:
+  enabled: false
+  issuer: https://idp.example.com/realms/example
+  clientId: hearth
+  # Extra scopes to ask for, comma separated, when your provider needs more than openid, profile and email.
+  scopes: ""
+  # Without this, ANY identity the provider vouches for is accepted, including
+  # guests invited for unrelated reasons. That is the gap the predecessor had.
+  allowedDomains: example.com
+
+  # And a role on top of the domain, because they answer different questions.
+  # The domain says somebody is from this company. It cannot say they belong in
+  # this application, and on a shared identity provider every employee has an
+  # address at the domain while only some of them belong here.
+  #
+  # Matched against realm roles, client roles and groups together, so it does
+  # not matter which of those the provider files it under. A group path matches on its
+  # last segment too, so /Acme/staff satisfies staff.
+  #
+  # Empty disables the check and leaves the domain as the only gate. Setting it
+  # before the role exists in the provider locks everybody out, so create the role and
+  # assign it first, then set this.
+  #
+  requiredRoles: ""
+
+# The ingress or load balancer in front of Hearth, as a comma separated list of
+# addresses and ranges, such as "10.42.0.0/16". The rate limits key on the client
+# address in X-Forwarded-For only when the connection comes from one of these.
+# Empty, the default, keeps them keyed on the connection's own address, which
+# behind a proxy is the proxy.
+trustedProxies: ""
+
+# MCP: connecting an assistant (Claude) to Hearth at https://<publicBaseUrl>/mcp
+# and signing in with Vord (internal/mcpserver). Hearth agent tokens work
+# whether or not this is on.
+#
+# audience is the Vord client scope a person's token must carry. EMPTY = person
+# sign-in OFF. Turn it on only once Vord has the `hearth-mcp` client and the
+# `hearth-mcp` client scope with an audience mapper -- the scope must be a
+# realm client scope, not the client's dedicated one, or clients get
+# invalid_scope (the IRON lesson). Requires oidc.enabled (the issuer).
+mcp:
+  audience: hearth-mcp
+  # The realm role a person needs to reach MCP at all; never an authorisation
+  # input. Same gate as the browser login.
+  requiredRole: ""
+  # Where clients are told the resource lives. Empty means publicBaseUrl.
+  publicUrl: ""
+
+# ─── Secrets, referenced and never created ─────────────────────────────────────
+existingSecret: hearth
+secretKeys:
+  postgresPassword: POSTGRES_PASSWORD
+  s3AccessKey: S3_ACCESS_KEY
+  s3SecretKey: S3_SECRET_KEY
+  oidcClientSecret: OIDC_CLIENT_SECRET
+  inboundKey: INBOUND_KEY
+  encryptionKey: ENCRYPTION_KEY
+  smtpPassword: SMTP_PASSWORD
+  googleClientID: GOOGLE_CLIENT_ID
+  googleClientSecret: GOOGLE_CLIENT_SECRET
+
+# ─── Bring your own Postgres ───────────────────────────────────────────────────
+# Set postgresql.enabled to false and say where yours is. Either give the pieces
+# (the password comes from existingSecret, secretKeys.postgresPassword) or name a key
+# in existingSecret that holds a whole DSN, which is the way to go when the password
+# has characters a URL does not like. Postgres 17 is what Hearth is tested on.
+externalDatabase:
+  host: ""
+  port: 5432
+  user: hearth
+  database: hearth
+  # disable, allow, prefer, require, verify-ca or verify-full
+  sslmode: require
+  # A key in existingSecret holding postgres://user:pass@host:5432/db?sslmode=require
+  # When set, it replaces every other externalDatabase value.
+  dsnKey: ""
+
+# ─── Object storage ────────────────────────────────────────────────────────────
+s3:
+  bucket: hearth
+  # -- minio or garage: which object store the app AND the backup job use, so
+  # the two can never point at different stores.
+  #
+  #   minio   this chart's MinIO, its keys from existingSecret, signed for
+  #           us-east-1. What every release before 2.3.0 did.
+  #   garage  the Garage beside it (garage.enabled): its Service on :3900, and
+  #           its keys and region from the Secret the garage subchart writes,
+  #           <release>-garage-key-<s3.garage.key>.
+  #
+  # Switch only after the objects have been copied across and checked (rclone
+  # check --download, zero differences). Rolling back is setting minio again,
+  # after copying anything uploaded since the switch back into MinIO.
+  backend: garage
+  garage:
+    # -- The key under garage.keys whose Secret the app and backup job read.
+    key: hearth
+  # Any S3 API, in four settings. Leave `endpoint` empty to use the bundled store.
+  #   endpoint   host:port, no scheme (s3.eu-central-1.amazonaws.com, objects.example.com:443)
+  #   region     what requests are signed for; empty means us-east-1
+  #   useSSL     true for https to the endpoint
+  #   pathStyle  true to force /bucket/key addressing, which most self-hosted stores want
+  # The access and secret keys come from existingSecret (secretKeys.s3AccessKey, s3SecretKey).
+  region: ""
+  useSSL: false
+  pathStyle: false
+  # host:port of any other S3 API, no scheme. Wins over backend when set; its
+  # keys still come from existingSecret and it is signed for us-east-1, so the
+  # store's region must be us-east-1 too. Plain HTTP unless HEARTH_S3_USE_SSL.
+  endpoint: ""
+  # Public endpoint is how a BROWSER would reach object storage directly. Nothing
+  # uses it today: downloads stream through the app, which is also where access is
+  # enforced, so there is no second hostname to register, certificate to issue, or
+  # bucket policy to get wrong. It exists because presigned URLs become worth it
+  # for very large files, and that day this gets a real hostname.
+  publicEndpoint: files.example.com
+
+# ─── Inbound mail ──────────────────────────────────────────────────────────────
+# Mail arriving against work, for the record. Hearth does not answer it: replies
+# happen in the helpdesk, and this is the archive that keeps the conversation
+# attached to the task it is about.
+#
+# Off by default and that default is deliberate. The endpoint returns 404 while
+# the key is empty, because an inbound path that is open before anyone has
+# pointed a real address at it files spam as work orders on the first afternoon
+# it is reachable.
+#
+# # How mail actually gets here
+#
+# Not over SMTP, and not because SMTP would be worse. Inbound :80 does not reach
+# this cluster and neither does :25, for the same reason: the colo gateway
+# forwards them to a backend we do not control. There is no MX we can publish and
+# no listener we could run that anything would connect to. See the Ingress notes
+# below, which is the same constraint wearing a different hat.
+#
+# So delivery is inward-dialled instead. A reader inside the cluster makes an
+# outbound 443 connection to the mailbox, and POSTs each message to
+# /inbound/mail with this key in X-Hearth-Inbound-Key. Outbound 443 is the one
+# path off this estate that is reliably open.
+#
+# One mailbox, many addresses. Each space's address is an alias delivering into
+# the same mailbox, and Hearth routes on To and Cc against inbound_addresses,
+# which it already does. Adding a space costs an alias, not a deployment.
+#
+# Redelivery is safe. Message-ID is the idempotency key and carries a unique
+# index, so a message that arrives twice is filed once.
+# ─── Encryption ────────────────────────────────────────────────────────────────
+# Seals the few values that have to be read back rather than hashed: a Google
+# refresh token, which Google needs verbatim months after it was issued, and an
+# org's outbound mail relay password (Settings > Email). Off, neither can be
+# stored.
+#
+# Requires secretKeys.encryptionKey in existingSecret, holding 32 bytes of
+# base64. Generate one with: openssl rand -base64 32
+#
+# Rotating it makes every stored refresh token unreadable, and everybody has to
+# connect again. That is recoverable and worth knowing before it happens.
+encryption:
+  enabled: true
+
+# ─── Google, per person ────────────────────────────────────────────────────────
+# Each person connects their own account from /account. Never a service account
+# for the company: a domain-wide credential reads every mailbox, is invisible to
+# the people it reads, and outlives anybody leaving.
+#
+# Needs encryption.enabled as well, because there is nowhere safe to put a
+# refresh token without it. With Google on and encryption off the application
+# says so at boot and leaves the integration off rather than storing a long-lived
+# credential in the clear.
+#
+# The OAuth client must have this exact redirect URI registered:
+#   <HEARTH_PUBLIC_BASE_URL>/integrations/google/callback
+google:
+  enabled: false
+
+mail:
+  # Outbound mail relay, any SMTP server. Off until `host` is set. The password comes
+  # from existingSecret (secretKeys.smtpPassword). People can also set a relay for
+  # their organization under Settings, Email.
+  smtp:
+    host: ""        # host:port, for example smtp.example.com:587
+    from: ""        # the From address, for example hearth@example.com
+    username: ""
+    startTLS: true
+  inbound:
+    # Requires secretKeys.inboundKey to exist in existingSecret. Enabling this
+    # without it leaves the pod holding an empty key, which is the same as off,
+    # so the endpoint would 404 and look broken rather than fail loudly.
+    enabled: false
+
+# ─── Search ────────────────────────────────────────────────────────────────────
+# OFF by default, and that is a decision rather than an oversight.
+#
+# Postgres full text is the floor and is always maintained, as a generated
+# column that cannot fall behind. Search works with no cluster at all: results
+# are less forgiving of typos and there is no fuzzy matching, and the search
+# page says so rather than pretending otherwise.
+#
+# Turning this on adds a JVM wanting a gigabyte to a cluster that is also
+# already running other workloads. Do it deliberately, on a node with the headroom, and
+# rebuild the index from the operations page afterwards. Nothing is lost by
+# leaving it off and nothing breaks by turning it on later, because the index is
+# rebuildable from Postgres by design.
+opensearch:
+  enabled: false
+  # Bare "opensearch", because the StatefulSet name decides the PVC name. See
+  # the helper.
+  fullnameOverride: ""
+  image: opensearchproject/opensearch:2
+  # busybox has sysctl and is 4 MB. The init container exists because OpenSearch
+  # will not start with the default vm.max_map_count.
+  initImage: busybox:1.36
+  # Heap, and only heap. Lucene wants the rest of the memory for the page cache,
+  # so giving the JVM everything makes it slower rather than faster.
+  javaOpts: "-Xms512m -Xmx512m"
+  persistence:
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 1Gi }
+    limits: { memory: 2Gi }
+
+minio:
+  # The bundled object store is Garage (garage.enabled). MinIO is only for an install that already
+  # has data in it; leave it off otherwise.
+  enabled: false
+  # Bare "minio", because the StatefulSet name decides the PVC name and PVC names
+  # cannot be changed. See the helper for why this is not release-prefixed.
+  fullnameOverride: ""
+  # Chainguard's build of MinIO. MinIO removed its own images from its public registries
+  # and then from quay.io (both Sep 2026), so a pod rescheduled onto a node
+  # without the old image cached could not start at all.
+  image: cgr.dev/chainguard/minio:latest
+  persistence:
+    size: 10Gi
+    # Empty uses the cluster's default StorageClass. Pick a replicated one if a
+    # node going away must not lose the data.
+    storageClass: ""
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+# --- Garage --------------------------------------------------------------------
+# The object store that replaces MinIO, which is a dead project with no images we
+# control. The embernet-garage chart, vendored in charts/garage-0.1.3.tgz, the
+# same one Skald and the store run on. Everything under `garage:` is that chart's
+# values, and everything under `garage.garage:` is passed on to Garage's
+# official chart.
+#
+# Beside MinIO for this release, and nothing reads from it yet. The order is:
+# install it (this), copy the objects across with rclone and check them, then
+# point s3.endpoint and the keys at it. MinIO stays, idle, as the rollback until
+# a later release removes it. Never delete MinIO's PVC: its reclaim policy is
+# Delete, so the data would go with it.
+garage:
+  enabled: true
+
+  buckets:
+    - name: hearth
+
+  # The Secret is hearth-garage-key-hearth. Read and write on the one bucket,
+  # not owner: Hearth uploads and deletes objects and never manages buckets.
+  keys:
+    - name: hearth
+      buckets:
+        - name: hearth
+          read: true
+          write: true
+          owner: false
+
+  bootstrap:
+    # The Garage chart's own advice for a first install with a slow pull: raise
+    # this together with Helm's --timeout.
+    timeoutSeconds: 540
+
+  # S3 from the app and the backup job, the only two things that touch the
+  # object store, and nothing else. The chart's default with this off is every
+  # pod in every namespace.
+  networkPolicy:
+    enabled: true
+    s3From:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: hearth
+            app.kubernetes.io/component: app
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: hearth
+            app.kubernetes.io/component: backup
+
+  garage:
+    # The garage chart labels its pods and Services as an App Store app, and
+    # the dashboard lists store apps by embernet.ai/store-app=true. This Garage
+    # is Hearth's own storage, not an app anybody installed, so it says false.
+    # Not null: in a nested subchart that renders a null label rather than
+    # removing it.
+    commonLabels:
+      embernet.ai/store-app: "false"
+
+postgresql:
+  enabled: true
+  fullnameOverride: ""
+  image: postgres:17-alpine
+  user: hearth
+  database: hearth
+  persistence:
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+# --- EmberOps as the back end ------------------------------------------------------
+# Off: Hearth keeps everything in its own Postgres, as it always has. On: operational records (tasks, work orders, assets,
+# documents, time, time off, calendar, rules, views, parts, plans, downtime) live in EmberOps and Hearth is a front end for
+# them, so staff work from either app and see the same records. See docs/emberops-backend.md. Turning it on takes the
+# records across first (hearthctl emberops-migrate, deploy/jobs/emberops-migrate.yaml); never flip it on its own. The
+# server then asks Vord for the emberops audience at sign in by itself (HEARTH_EMBEROPS_AUDIENCE), so the sign in client
+# needs that scope as an optional scope, which the Vord chart declares.
+emberops:
+  enabled: false
+  url: https://ops.example.com
+  audience: emberops
+  # Vord's hearth-service client, the same secret the CRM sync reads.
+  secretName: hearth-emberops
+  clientIdKey: client-id
+  clientSecretKey: client-secret
+  # The EmberOps site's own time zone (System Settings). Frappe stores times with no zone, so Hearth converts.
+  timezone: America/New_York
+  # What one cent is worth in the site's currency (0.01 for dollars).
+  currencyPerCent: "0.01"
+  # Companies and contacts: postgres keeps the CRM in Hearth and crmSync projects the accounting roles into EmberOps,
+  # which is how Fireball runs. emberops moves the CRM into EmberOps and turns Hearth's sales side off.
+  crmParties: postgres
+
+# --- CRM sync to EmberOps ---------------------------------------------------------
+# Copies Hearth's companies and contacts into EmberOps (Customer, Supplier,
+# Contact) on a schedule. See docs/crm-sync.md. Off until a person has read a dry
+# run and checked a proof, which is why it defaults to false.
+crmSync:
+  enabled: false
+  # Also send deals as Opportunities (a Lead first for a prospect that has one).
+  # Off until EmberOps accepts Lead and Opportunity from this service; see
+  # docs/crm-sync.md.
+  deals: false
+  # Also send every company that has no accounting role as a Lead, and its people as Contacts, so the whole CRM
+  # is reachable from EmberOps (the maintainer, 2026-11-20). Customer and Supplier stay what accounting needs. A run
+  # is resumable and sends nothing it already sent.
+  prospects: true
+  # Also send Hearth's notes and calls as Comments on the matching EmberOps record, one way. Needs EmberOps with
+  # a hearth_id on Comment (EmberOPS 1.2.2).
+  timeline: true
+  schedule: "17 * * * *"
+  emberopsUrl: https://ops.example.com
+  oidcIssuer: https://vord.example.com/id/realms/fireball
+  secretName: hearth-emberops
+  clientIdKey: client-id
+  clientSecretKey: client-secret
+
+# --- Mautic (email marketing) ----------------------------------------------------
+# Hearth's contacts and companies sent to Mautic, and what Mautic records (sent, opened, clicked, form, unsubscribe) brought back
+# onto the contact's timeline, with opt-outs honoured both ways. See docs/mautic-sync.md. Off until a person has read a dry run
+# and checked a proof, which is why it defaults to false. The secret is the Mautic API client made by
+# secrets/access/mautic-api-client.sh in the codex (keys client-id and client-secret, in this namespace).
+mauticSync:
+  enabled: false
+  schedule: "*/10 * * * *"
+  url: http://mautic.marketing.svc.cluster.local
+  secretName: hearth-mautic
+  clientIdKey: client-id
+  clientSecretKey: client-secret
+
+# --- Backups -------------------------------------------------------------------
+# One archive with Postgres and the object store in it, taken on a schedule and
+# verified in the same run. Restoring one half without the other gives a
+# database full of rows pointing at files nobody has, which is why they are not
+# two jobs.
+#
+# A volume on the same cluster is the floor rather than the ceiling: it survives
+# a pod, a node, and a bad deploy, and it does not survive the cluster. Copying
+# the archives off this estate is a job for whatever already moves backups, and
+# the archive is a plain tar file so anything can.
+#
+# The whole drill, which restores into a spare and runs the acceptance suite
+# against the result, is scripts/restore-drill.sh. A backup that has never been
+# restored is not a backup.
+backup:
+  enabled: true
+  # Half past two, which is after the overnight preventive maintenance sweep and
+  # before anybody is on site.
+  schedule: "30 2 * * *"
+  # Fourteen nightly archives. The question a restore usually answers is what
+  # this looked like before last Tuesday.
+  keep: 14
+  historyLimit: 3
+  # Owns the backup volume, and the job cannot write without it.
+  #
+  # podSecurityContext runs as uid 65532 with runAsNonRoot, and a PVC arrives
+  # root:root unless fsGroup is set. Without this the very first write failed:
+  #
+  #   hearthctl: create an archive in /backups:
+  #   open /backups/.hearth-backup-3946516088: permission denied
+  #
+  # Match it to podSecurityContext.runAsUser. The deployment shares that context
+  # and never noticed, because it writes to MinIO over the network rather than to
+  # a volume.
+  fsGroup: 65532
+  persistence:
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+service:
+  type: ClusterIP
+  ports:
+    http: 80
+  targetPort: 8080
+
+# ─── Ingress ───────────────────────────────────────────────────────────────────
+# TLS has three modes, and which one is right depends on the cluster.
+#
+#   certResolver (the default here): Traefik orders the certificate itself over TLS-ALPN-01 on :443, with its resolver
+#   named below. Right for a cluster whose :80 does not reach it (HTTP-01 can never complete there) and that has no
+#   wildcard of its own.
+#
+#   neither: list the host under tls with no resolver and no secretName, and Traefik serves its default store certificate.
+#   Right where that store holds a wildcard covering the host. A cluster with a wildcard certificate does this
+#   for the host.
+#
+#   certManager: for clusters that can answer :80, such as the Azure-hosted node. Enabling it together with the
+#   resolver is a mistake: naming a tls.secretName makes Traefik serve that secret in preference to its own resolver, so a
+#   secret nothing can issue means the host serves nothing valid and 503s.
+ingress:
+  enabled: true
+  className: traefik
+  host: hearth.example.com
+  tls:
+    enabled: true
+    certResolver:
+      enabled: false
+      name: letsencrypt
+    certManager:
+      enabled: false
+      issuerName: letsencrypt-prod
+      secretName: hearth-tls
+  annotations: {}
+  # Plain http is sent to https with a permanent redirect whenever the ingress is
+  # Traefik's, terminates TLS, and hearth.publicBaseUrl is https. Without it a
+  # sign-in over http is refused (no Sec-Fetch-Site, so the same-origin check
+  # fails) and the visitor sees "this request did not come from here".
+  httpsRedirect:
+    enabled: true
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { memory: 256Mi }
+
+# ─── Probes ────────────────────────────────────────────────────────────────────
+# Liveness must NOT touch Postgres. A database blip should never cause Kubernetes
+# to kill an otherwise healthy pod, which turns a brief outage into a crash loop.
+# Readiness does check dependencies, because that is the question it answers.
+#
+# And liveness must not run at all until the process is up, which is what the
+# startup probe is for. Migrations run at boot, and twenty-two of them on
+# replicated storage take longer than three failures of a ten second liveness
+# probe. Without this the first boot of a new release is killed partway through
+# migrating and restarts, which self-heals only because goose records each
+# migration as it lands. It looked like a crash loop during the phase sixteen
+# deploy and it was one, on a deployment that was working perfectly.
+startupProbe:
+  enabled: true
+  path: /healthz
+  periodSeconds: 5
+  # Five minutes. A migration on a cold, replicated volume is slow exactly once,
+  # and a startup budget that is too small turns a slow install into a failed
+  # one.
+  failureThreshold: 60
+livenessProbe:
+  enabled: true
+  path: /healthz
+  initialDelaySeconds: 3
+  periodSeconds: 10
+readinessProbe:
+  enabled: true
+  path: /readyz
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+# ─── Startup ordering ──────────────────────────────────────────────────────────
+# The app exits when it cannot resolve Postgres, which on a cold namespace means
+# it crash loops a few times before the StatefulSet DNS exists. It self-heals, but
+# the restarts look like a fault during an install and cost someone a diagnosis.
+# This waits for the Service instead.
+waitForPostgres:
+  enabled: true
+  image: busybox:1.36
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ─── Dashboard discovery ───────────────────────────────────────────────────────
+# storeApp with a launchUrl is how a top-level app appears in the dashboard
+# without being iframed. guiType web and the launch URL are what stop the
+# dashboard trying to embed it.
+dashboardIntegration:
+  enabled: true
+  storeApp: "true"
+  appName: hearth
+  guiType: web
+  # The port the Service declares, which is what the dashboard's reconciler publishes over Flux (it dials the Service's ClusterIP on
+  # this port, not the pod's). Empty follows service.ports.http, so the two cannot disagree. It was "8080", the pod's targetPort, and the
+  # Flux service dialed a ClusterIP port nothing listens on (a customer, 2026-11-17).
+  guiPort: ""
+  displayName: Hearth
+  launchUrl: https://hearth.example.com

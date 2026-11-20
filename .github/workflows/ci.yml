@@ -1,0 +1,344 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # A real Postgres, never a mock. A mocked database tests that you wrote the
+    # SQL you wrote; it cannot tell you that an extension is missing, that a
+    # constraint name collides, or that a migration is not idempotent.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hearth
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: hearth_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hearth -d hearth_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://hearth:test@127.0.0.1:5432/hearth_test?sslmode=disable
+      TEST_MINIO_ENDPOINT: 127.0.0.1:9000
+      TEST_MINIO_ACCESS_KEY: hearth
+      TEST_MINIO_SECRET_KEY: hearthsecret
+      # The backup suite reads TEST_S3_ENDPOINT, not TEST_MINIO_ENDPOINT, and
+      # nothing here ever set it. So every test in internal/backup skipped, in
+      # CI, silently, on every run since it was written. `ok ... backup` meant
+      # "ran nothing".
+      #
+      # What that hid: TestTablesComeOutInAnOrderTheyCanGoBackIn calls
+      # Discover() against the real migrated schema and is exactly the test that
+      # catches a foreign key cycle. 00026 introduced one, the backup stopped
+      # being able to produce an archive at all, and this suite reported success
+      # through the whole thing. It was found by the post-release backup job in
+      # production instead.
+      #
+      # Same host and credentials as the MinIO the other suites use. The two
+      # names are a wart worth keeping for now: renaming the variable would be a
+      # change in the same commit that proves the variable matters.
+      TEST_S3_ENDPOINT: 127.0.0.1:9000
+      TEST_S3_ACCESS_KEY: hearth
+      TEST_S3_SECRET_KEY: hearthsecret
+      TEST_OPENSEARCH_URL: http://127.0.0.1:9200
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Real object storage. The file round trip is the test the predecessor
+      # never passed, and it cannot be faked: the bug it guards against is about
+      # how a URL is signed and whether the bytes actually come back.
+      #
+      # Started as a step rather than a service container because minio/minio
+      # needs a `server /data` command and service containers cannot set one.
+      #
+      # Chainguard's build: MinIO removed its own images from its public registries and
+      # then from quay.io (both Sep 2026). Same MinIO server, same arguments.
+      - name: start MinIO
+        run: |
+          podman run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=hearth -e MINIO_ROOT_PASSWORD=hearthsecret             cgr.dev/chainguard/minio:latest server /data
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null             || { echo "::error::MinIO never became healthy"; podman logs minio; exit 1; }
+          echo "ok: MinIO live"
+
+      # A real search cluster. The permission filter for the external engine
+      # lives INSIDE each indexed document, because a cluster cannot join
+      # against the grants table, and that is not something a fake can check.
+      #
+      # A step rather than a service container, for the same reason MinIO is:
+      # it needs environment a service container cannot set.
+      - name: start OpenSearch
+        run: |
+          podman run -d --name opensearch -p 9200:9200             -e discovery.type=single-node             -e DISABLE_SECURITY_PLUGIN=true             -e DISABLE_INSTALL_DEMO_CONFIG=true             -e "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"             opensearchproject/opensearch:2
+          for i in $(seq 1 120); do
+            curl -sf http://127.0.0.1:9200/_cluster/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9200/_cluster/health >/dev/null             || { echo "::error::OpenSearch never became healthy"; podman logs opensearch | tail -50; exit 1; }
+          echo "ok: OpenSearch live"
+
+      - name: gofmt
+        run: |
+          # Our own files only: vendor/ holds other people's code as they wrote it.
+          out=$(git ls-files '*.go' | grep -v '^vendor/' | xargs gofmt -l)
+          if [ -n "$out" ]; then
+            echo "::error::these files are not gofmt'd:"
+            echo "$out"
+            exit 1
+          fi
+          echo "ok: gofmt clean"
+
+      - name: go vet
+        run: go vet ./...
+
+      # The race detector is on by default and stays on. A server with a
+      # goroutine per connection will have races, and this is the only thing
+      # that reliably finds them.
+      #
+      # -p 1 because these are integration tests against ONE database and one
+      # search cluster. The job queue and the outbox are global by design: a
+      # relay drains every unpublished event and a worker claims any job it has
+      # a handler for. Two packages running at once therefore consume each
+      # other's work, and the failure looks like a flaky test rather than what
+      # it is, which is two processes correctly sharing one queue.
+      - name: go test -race
+        run: go test -race -p 1 ./...
+
+      # An applied migration is IMMUTABLE. goose records a hash per version, so
+      # editing a migration that already ran makes an existing database refuse
+      # to start while a fresh one silently gets different schema. Adding one is
+      # fine; changing one that shipped is not.
+      - name: applied migrations are never edited
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          [ -n "$base" ] || base=$(git rev-parse HEAD~1 2>/dev/null) || base=""
+          if [ -z "$base" ]; then echo "no base ref; skipping"; exit 0; fi
+          edited=$(git diff --name-status "$base"...HEAD -- 'migrations/*.sql' | awk '$1 ~ /^M/ {print $2}')
+          if [ -n "$edited" ]; then
+            echo "::error::an already-applied migration was modified:"
+            echo "$edited"
+            echo "Schema changes go in a NEW migration."
+            exit 1
+          fi
+          echo "ok: no applied migration was edited"
+
+      - name: build (release profile)
+        run: |
+          go build -o /tmp/hearth ./cmd/hearth
+          ls -lh /tmp/hearth
+
+      # A release binary must not carry development affordances. This checks the
+      # ARTIFACT rather than the source, because the source is not what ships.
+      - name: the shipped binary is a release build
+        run: |
+          export HEARTH_PUBLIC_BASE_URL=https://ci.invalid
+          export HEARTH_DATABASE_URL="$TEST_DATABASE_URL"
+          export HEARTH_S3_ENDPOINT="$TEST_MINIO_ENDPOINT"
+          export HEARTH_S3_PUBLIC_ENDPOINT=files.ci.invalid
+          export HEARTH_S3_ACCESS_KEY="$TEST_MINIO_ACCESS_KEY"
+          export HEARTH_S3_SECRET_KEY="$TEST_MINIO_SECRET_KEY"
+          export HEARTH_S3_BUCKET=hearth-test
+          /tmp/hearth & pid=$!
+          for i in $(seq 1 30); do
+            curl -sf localhost:8080/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+          profile=$(curl -sf localhost:8080/healthz | grep -o '"profile":"[^"]*"' | cut -d'"' -f4)
+
+          # An unauthenticated request must never reach the application, and a
+          # credential-free login must not exist. Asserted against the RUNNING
+          # BINARY rather than by grepping source, because the source is not
+          # what ships.
+          protected=$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/documents)
+
+          # Login must reject an empty credential rather than treating a blank
+          # password as a match, which is the classic way this goes wrong.
+          blank=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/login                   --data-urlencode 'email=nobody@example.com' --data-urlencode 'password=')
+
+          kill $pid 2>/dev/null || true
+          echo "profile=$profile protected=$protected blank_login=$blank"
+          [ "$profile" = "release" ] || { echo "::error::shipped binary reports profile=$profile"; exit 1; }
+          [ "$protected" = "303" ] || { echo "::error::an unauthenticated request was not redirected (HTTP $protected)"; exit 1; }
+          [ "$blank" = "401" ] || [ "$blank" = "303" ] || { echo "::error::a blank password did not fail (HTTP $blank)"; exit 1; }
+
+      # The full acceptance run, against a real server with real Postgres and
+      # real MinIO. This is the check the predecessor carried as a runbook
+      # checklist for months and never completed, because a checklist only runs
+      # when somebody remembers.
+      #
+      # The step that matters is upload a file AND DOWNLOAD IT AGAIN with a
+      # matching SHA-256. Verified to fail on a one-byte truncation.
+      # The suite reads what a person is shown, and what a person is shown is drawn in the browser from the page's data. So
+      # the interface is drawn here too: ui/src/ssr.ts, built to one file, hands the suite the markup those views produce.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: draw the interface for the acceptance run
+        working-directory: ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:ssr
+
+      - name: acceptance
+        run: |
+          go build -o /tmp/acceptance ./cmd/acceptance
+
+          # A DATABASE OF ITS OWN, and this is the whole reason the suite was
+          # failing. It used to run against $TEST_DATABASE_URL -- the same
+          # database the integration tests had just finished writing to -- so
+          # by the time it asked for first-run setup there were already users,
+          # and Setup refused with "this installation is already set up". The
+          # suite was right and the harness was wrong: first-run setup can only
+          # be tested on an installation that has never been run.
+          #
+          # Dropped and recreated rather than just created, so a re-run on a
+          # warm runner starts as empty as a cold one.
+          export PGPASSWORD=test
+          psql -h 127.0.0.1 -U hearth -d postgres -c 'DROP DATABASE IF EXISTS hearth_acceptance'
+          psql -h 127.0.0.1 -U hearth -d postgres -c 'CREATE DATABASE hearth_acceptance'
+
+          export HEARTH_ENV=development
+          export HEARTH_ADDR=:8097
+          export HEARTH_PUBLIC_BASE_URL=http://127.0.0.1:8097
+          export HEARTH_DATABASE_URL="postgres://hearth:test@127.0.0.1:5432/hearth_acceptance?sslmode=disable"
+          export HEARTH_S3_ENDPOINT="$TEST_MINIO_ENDPOINT"
+          export HEARTH_S3_PUBLIC_ENDPOINT="$TEST_MINIO_ENDPOINT"
+          export HEARTH_S3_ACCESS_KEY="$TEST_MINIO_ACCESS_KEY"
+          export HEARTH_S3_SECRET_KEY="$TEST_MINIO_SECRET_KEY"
+          export HEARTH_S3_BUCKET=hearth-acceptance
+          export HEARTH_OPENSEARCH_URL="$TEST_OPENSEARCH_URL"
+          /tmp/hearth & pid=$!
+          for i in $(seq 1 30); do
+            curl -sf localhost:8097/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+          /tmp/acceptance -render ui/dist-ssr/render.mjs -base http://127.0.0.1:8097             -email acceptance@ci.invalid -password 'a long enough password'             -org 'CI' -name 'CI Runner'
+          rc=$?
+          kill $pid 2>/dev/null || true
+          exit $rc
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # The interface (ui/). The Go job above builds without Node because internal/web/next/dist holds only a placeholder in a
+  # checkout (the acceptance run draws the interface with its own build of ui/); this job is what proves the interface
+  # itself builds, type checks with no warnings, that the views show each role what they should (ui/src/views/*.spec.ts, read
+  # from the page data the server sends), and that the ported template functions still answer what Go answered.
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: install
+        working-directory: ui
+        run: npm ci --no-audit --no-fund
+      - name: type check and build
+        working-directory: ui
+        run: npm run build
+      - name: views and ported template functions
+        working-directory: ui
+        run: npm test
+      # Draws every page fixture with the real views and stylesheets at 1440 and 390 and fails on sideways scrolling,
+      # overlapping boxes, and cards whose content fills under half their height (ui/layout/check.mjs).
+      - name: layout check
+        working-directory: ui
+        run: |
+          npx playwright install --with-deps chromium
+          npm run build:ssr
+          npm run layout
+          # and again with the text a size larger, so a layout that only just fits does not fit here and break on a phone with bigger type
+          FONT_STRESS=1 npm run layout
+          # and at 130 percent, the size where the approvals request page and the audit table used to spill
+          STRESS_SIZE=130% FONT_STRESS=1 npm run layout
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Nothing secret is ever committed. This is a gate rather than a
+      # convention, because a convention is what you have right up until the
+      # afternoon somebody is in a hurry.
+      - name: no secret-shaped files
+        run: |
+          bad=0
+          if git ls-files | grep -nE '\.(pem|p12|pfx|jks)$|(^|/)\.env($|\.)|(^|/)kubeconfig$|_rsa$|_ed25519$'; then
+            echo "::error::a secret-shaped file is tracked"
+            bad=1
+          fi
+          [ "$bad" -eq 0 ] && echo "ok: no secret-shaped files tracked"
+          exit $bad
+
+      - name: no secret-shaped content
+        run: |
+          bad=0
+          # Private key blocks, and long base64 assigned to something that
+          # calls itself a secret. Deliberately narrow: a noisy gate gets muted.
+          if git grep -nE 'BEGIN (RSA|EC|OPENSSH|PGP|PRIVATE) .*PRIVATE KEY' -- . ':(exclude)vendor/**' ; then
+            echo "::error::a private key block is committed"
+            bad=1
+          fi
+          if git grep -niE '(password|secret|api[_-]?key|token)[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9+/]{24,}={0,2}["'"'"']' \
+               -- . ':(exclude)*_test.go' ':(exclude)docs/spec/**' ':(exclude)vendor/**'; then
+            echo "::error::a hardcoded credential looks committed"
+            bad=1
+          fi
+          [ "$bad" -eq 0 ] && echo "ok: no secret-shaped content"
+          exit $bad
+
+      # The capture under docs/spec is a specification, not a config dump. The
+      # runtime/ subtree (ConfigMaps, secret key listings) stays local.
+      - name: captured runtime state is not committed
+        run: |
+          if git ls-files | grep -E '^docs/spec/.*/runtime/'; then
+            echo "::error::captured runtime state must not be committed (see .gitignore)"
+            exit 1
+          fi
+          echo "ok: no captured runtime state tracked"
+
+  # The chart, rendered the ways a person hosting Hearth themselves will use it:
+  # the bundled Postgres and object store, then their own, with their own sign-in.
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: helm lint
+        run: helm lint deploy/charts/hearth
+      - name: render every way
+        run: scripts/chart-test.sh

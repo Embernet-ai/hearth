@@ -1,0 +1,110 @@
+/* The last pass: what a person sees on every screen, at a desk and on a phone, with no text running together, no word broken
+   into letters, and no card taller or wider than what is in it. Loaded after system.css, so it wins by order. It changes size,
+   flow and wrapping only: no page loses anything and no behavior moves.
+
+   Found by crawling every screen as every role at 1440 and 390 pixels wide (evidence 2026-11-19, ui-finish). */
+
+/* ---- words stay whole ------------------------------------------------------------------------------------------- */
+/* A status, a state, a count, a date and a person's role are short. They never break inside a word, whatever the column. */
+table.list td[data-label='State'], table.list td[data-label='Role'], table.list td[data-label='Hours'], table.list td[data-label='Type'],
+table.list td[data-label='Rate'], table.list td[data-label='Day'], table.list td[data-label='Date'], table.list td[data-label='How long'],
+table.list td[data-label='Open work'], table.list td[data-label='Code'], table.list td[data-label='Qty'], table.list td[data-label='Stock'] { white-space: nowrap; }
+table.list td, table.list th { overflow-wrap: break-word; word-break: normal; hyphens: manual; }
+/* A cell that holds only a short word or a button group sizes to it. */
+table.list td:last-child:has(> form.inline) { min-width: 21rem; }
+/* A row's own edit controls wrap as a group instead of running into each other. */
+table.list td form.inline.row { display: inline-flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin: 0 var(--s-2) var(--s-2) 0; }
+table.list td form.inline.row > * { flex: 0 0 auto; }
+table.list td form.inline select { min-width: 6.5rem; width: auto; }
+table.list td:has(> form.inline) { white-space: normal; }
+table.list td input[type='number'] { width: 4.5rem; min-width: 0; }
+table.list td input[type='date'] { width: 9.5rem; }
+
+/* Long values in a cell (audit detail, ids) wrap inside the cell instead of past the screen. */
+table.list td code { white-space: normal; overflow-wrap: anywhere; }
+
+/* ---- a person's page: sections fill their row, and a table in a card keeps its last column whole ---------------------- */
+.personsections { grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }
+.personsections > .card:has(> table.list) { grid-column: span 2; }
+.personsections > .card:last-child, .personsections > .card:has(> table.list):last-child { grid-column: 1 / -1; }
+@media (max-width: 860px) { .personsections > .card:has(> table.list) { grid-column: auto; } }
+.personsections .card table.list td:last-child { white-space: nowrap; text-align: right; width: 1%; }
+.personsections .card table.list td:first-child { width: auto; }
+
+/* ---- record pages (a company, a person, a deal): a card as wide as its form --------------------------------------------- */
+article.card:has(> form.fields) { max-width: 64rem; }
+article.card:has(> form.fields) .row.spread { margin-bottom: var(--s-3); }
+/* A long form (the sales details) goes two fields across where there is room, so it is not a tall column with a blank side. */
+@media (min-width: 1100px) {
+  article.card:has(> form.fields) > form.fields:has(> label:nth-of-type(7)) {
+    max-width: none; grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr) minmax(6rem, 8rem) minmax(0, 1fr);
+  }
+  article.card:has(> form.fields) > form.fields:has(> label:nth-of-type(7)) > textarea,
+  article.card:has(> form.fields) > form.fields:has(> label:nth-of-type(7)) > div[data-company-types] { grid-column: span 3; }
+  article.card:has(> form.fields) > form.fields:has(> label:nth-of-type(7)) > label:has(+ textarea),
+  article.card:has(> form.fields) > form.fields:has(> label:nth-of-type(7)) > label:has(+ div[data-company-types]) { grid-column-start: 1; }
+  article.card:has(> form.fields) > form.fields:has(> label:nth-of-type(7)) > .row { grid-column: 2 / -1; }
+}
+/* The forms that add a note, a call, a deal or a person: a row of fields that wraps whole fields, with the button last. */
+article.card > form.row, article.card > form.row.wrap, article.card form[action$='/activities'], article.card form[action$='/people'] { flex-wrap: wrap; gap: var(--s-2); }
+article.card > form.row > input:not([type='hidden']), article.card > form.row > select { flex: 1 1 11rem; min-width: 0; }
+article.card > form.row > button { flex: 0 0 auto; }
+/* A destructive button never sits against the line above it. */
+article.card > form:last-child, article.card > .row:last-child { margin-top: var(--s-4); }
+
+/* ---- the dashboard: what you follow runs full width beneath, in columns, so neither side is a tall strip --------------- */
+.dashfollow { grid-column: 1 / -1; }
+.dashfollow .watchlist { columns: 2 22rem; column-gap: var(--s-6); }
+.dashfollow .watchlist li { break-inside: avoid; }
+@media (max-width: 860px) { .dashfollow .watchlist { columns: 1; } }
+
+/* ---- a channel: the composer is as wide as the messages ---------------------------------------------------------------- */
+form[action$='/messages'] { max-width: none; }
+form[action$='/messages'] textarea { width: 100%; max-width: 100%; }
+
+/* ---- phone: nothing is wider than the screen, controls are a thumb's size, and a row of controls wraps whole ---------------- */
+@media (max-width: 600px) {
+  article.card:has(> form.fields) { max-width: none; }
+  main .card { padding: var(--s-3); }
+  main .row.spread, main form .row { flex-wrap: wrap; gap: var(--s-2); }
+  main .row.spread > h1, main .row.spread > h2 { flex: 1 1 100%; }
+  button, .button, .chip { min-height: 2.5rem; }
+  button.small, .button.small { min-height: 2.25rem; }
+  input, select, textarea { font-size: 16px; }
+  table.list td input[type='number'] { width: 4rem; }
+}
+
+/* ---- phone cards: the name of a value sits beside it, not a screen away --------------------------------------------------- */
+@media (max-width: 40rem) {
+  table.list > tbody > tr > td { justify-content: flex-start; text-align: left; align-items: baseline; gap: var(--s-3); overflow-wrap: break-word; }
+  table.list > tbody > tr > td[data-label]::before { flex: 0 0 6.5rem; }
+  table.list > tbody > tr > td:has(> form.inline) { flex-wrap: wrap; min-width: 0; }
+  table.list > tbody > tr > td:has(> form.inline)::before { flex-basis: 100%; }
+  table.list > tbody > tr > td:last-child:has(> form.inline) { min-width: 0; }
+}
+
+/* ---- a form's Save sits right under its last field, with room above it ----------------------------------------------------- */
+.savebar { margin-top: var(--s-3); display: flex; gap: var(--s-2); }
+
+/* ---- the Departments tree in the side panel: one line a name, a fixed chevron column, a smaller and lighter step down for each level ---- */
+.sidenav .orgrow { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr) auto; align-items: center; column-gap: 0; padding-left: calc(var(--lvl, 0) * 0.5rem); margin: 0; list-style: none; }
+.sidenav .orgrow:has(.addfolder) { grid-template-columns: 1.1rem minmax(0, 1fr) auto auto; }
+.sidenav details.orgnode > summary.orgrow { cursor: pointer; }
+.sidenav details.orgnode details.orgnode, .sidenav .orgnode .orgnode { margin-left: 0; padding-left: 0; }
+.sidenav details.orgnode .navrow.orgrow { margin-left: 0; }
+.sidenav .orgrow .chev { width: 1.1rem; height: 1.1rem; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.7rem; }
+.sidenav summary.orgrow .chev::before { content: "\25B8"; transition: transform .12s ease; }
+.sidenav details[open] > summary.orgrow .chev::before { transform: rotate(90deg); }
+.sidenav .orgrow .navitem.dept { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; min-width: 0; padding: 0.3rem 0.5rem 0.3rem 0.25rem; min-height: 1.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 450; line-height: 1.25; overflow-wrap: normal; }
+.sidenav .orgrow .dname { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidenav .orgrow .navitem.dept:focus-visible .dname { white-space: normal; overflow: visible; }
+.sidenav .orgrow.lvl0 .navitem.dept, .sidenav .lvl0 > summary .navitem.dept { font-size: 0.92rem; font-weight: 700; }
+.sidenav .lvl1 > summary .navitem.dept, .sidenav .orgrow.lvl1 .navitem.dept { font-size: 0.84rem; font-weight: 550; }
+.sidenav .lvl2 > summary .navitem.dept, .sidenav .orgrow.lvl2 .navitem.dept, .sidenav .lvl3 > summary .navitem.dept, .sidenav .orgrow.lvl3 .navitem.dept { font-size: 0.78rem; font-weight: 450; color: var(--muted); }
+.sidenav .orgrow .navitem.dept.on { color: var(--fg); font-weight: 650; }
+.sidenav .orgrow .ncount { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 1.5em; padding: 0 0.45em; font-size: 0.68rem; line-height: 1.5; }
+.sidenav .orgrow .addfolder { padding: 0 0.4rem; }
+@media (max-width: 860px) { .sidenav .orgrow .navitem.dept { min-height: 2.4rem; } .sidenav .orgrow .addfolder { min-height: 2.4rem; display: none; } .can-manage .orgrow .addfolder { display: inline-flex; align-items: center; } }
+/* hearth.css draws a chevron before every summary; the tree has its own fixed chevron column, so that one is off here */
+.sidenav summary.orgrow { list-style: none; }
+.sidenav .orgnode > summary.orgrow::before { content: none; display: none; }

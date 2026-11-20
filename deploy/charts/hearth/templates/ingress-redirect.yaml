@@ -1,0 +1,16 @@
+{{- if include "hearth.httpsRedirect" . }}
+# http to https for the whole host. cert-manager's HTTP-01 solver brings its own
+# Ingress for /.well-known/acme-challenge/<token>, which has no middleware and a
+# longer path, so Traefik routes it first and renewal still answers over http.
+apiVersion: {{ if .Capabilities.APIVersions.Has "traefik.io/v1alpha1" }}traefik.io/v1alpha1{{ else if .Capabilities.APIVersions.Has "traefik.containo.us/v1alpha1" }}traefik.containo.us/v1alpha1{{ else }}traefik.io/v1alpha1{{ end }}
+kind: Middleware
+metadata:
+  name: {{ include "hearth.httpsRedirectName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+{{- end }}

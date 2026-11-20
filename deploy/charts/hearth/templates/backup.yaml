@@ -1,0 +1,152 @@
+{{- if .Values.backup.enabled }}
+# Taking Hearth away, on a schedule, into a volume of its own.
+#
+# One archive containing Postgres and the object store together, because
+# restoring one without the other gives a database full of rows pointing at
+# files nobody has. Two separate jobs on two separate schedules are two things
+# that can drift apart, and they will.
+#
+# hearthctl rather than the app: a restore that runs inside the server competes
+# with live traffic for the pool it is emptying, and a backup that runs there
+# holds a repeatable read snapshot open in the same process that is serving.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "hearth.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  # Forbid, because two backups at once would write two archives and race for
+  # the same volume, and the second one is not more recent in any useful way.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.historyLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.historyLimit }}
+  # A backup that starts eight hours late is still a backup. A backup that is
+  # skipped because the node was busy at the appointed minute is not.
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "backup") | nindent 12 }}
+        spec:
+          restartPolicy: OnFailure
+          {{- with .Values.image.pullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{/*
+            fsGroup on top of podSecurityContext, and this job does not work
+            without it.
+
+            podSecurityContext runs as uid 65532 with runAsNonRoot. A PVC is
+            mounted root:root unless fsGroup is set, so the backup could create
+            nothing and died on its first write:
+
+              hearthctl: create an archive in /backups:
+              open /backups/.hearth-backup-3946516088: permission denied
+
+            The deployment shares the same podSecurityContext and never hits
+            this, because it writes to MinIO over the network rather than to a
+            volume. This CronJob is the only thing in the chart that writes to a
+            PVC as a non-root user. postgres.yaml already does the same thing for
+            the same reason, with fsGroup: 999.
+
+            Consequence of it being missing: this job had NEVER succeeded. Not
+            once, since it was created. `lastSuccessfulTime` was empty and a
+            wedged pod plus concurrencyPolicy Forbid meant every run behind it was
+            suppressed too.
+          */}}
+          securityContext:
+            {{- toYaml (merge (dict "fsGroup" .Values.backup.fsGroup) .Values.podSecurityContext) | nindent 12 }}
+          containers:
+            - name: backup
+              image: {{ include "hearth.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              # One command, and no shell.
+              #
+              # The runtime image is distroless: no sh, no date, no ls. Stamping
+              # a filename, verifying the result, and pruning the old ones all
+              # live in hearthctl, where a failure to prune is an error rather
+              # than a line of output nobody reads.
+              # The image's entrypoint is the server, so this names the binary
+              # rather than only its arguments.
+              command:
+                - /usr/local/bin/hearthctl
+              args:
+                - nightly
+                - -dir
+                - /backups
+                - -keep
+                - {{ .Values.backup.keep | quote }}
+              env:
+                {{- include "hearth.database.env" . | nindent 16 }}
+                - name: HEARTH_S3_ENDPOINT
+                  value: {{ include "hearth.s3.endpoint" . | quote }}
+                - name: HEARTH_S3_PUBLIC_ENDPOINT
+                  value: {{ .Values.s3.publicEndpoint | quote }}
+                - name: HEARTH_S3_BUCKET
+                  value: {{ .Values.s3.bucket | quote }}
+                {{- include "hearth.s3.credentialEnv" . | nindent 16 }}
+                # The public base URL is required configuration for the server
+                # and means nothing to a backup. Set so hearthctl loads the same
+                # configuration without a special case in the code.
+                - name: HEARTH_PUBLIC_BASE_URL
+                  value: {{ .Values.hearth.publicBaseUrl | quote }}
+                - name: HEARTH_ENV
+                  value: {{ .Values.hearth.env | quote }}
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                {{/*
+                  Writable scratch, required because securityContext sets
+                  readOnlyRootFilesystem: true and hearthctl stages each table
+                  through a temp file before it goes into the archive:
+
+                    hearthctl: backup: temporary file:
+                    open /tmp/hearth-backup-2338110032.csv: read-only file system
+
+                  readOnlyRootFilesystem is right and stays. The job needs one
+                  writable path and this is it, thrown away with the pod.
+                */}}
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ include "hearth.fullname" . }}-backups
+            # See the /tmp mount above. Scratch only, never the archive itself.
+            - name: tmp
+              emptyDir: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hearth.fullname" . }}-backups
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  # Kept when the release goes, because the one moment somebody uninstalls by
+  # mistake is the one moment the backups matter.
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.backup.persistence.storageClass }}
+  storageClassName: {{ .Values.backup.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.persistence.size }}
+{{- end }}

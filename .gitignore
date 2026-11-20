@@ -1,0 +1,74 @@
+# Build output. Nothing compiled ever gets committed.
+#
+# These are ANCHORED with a leading slash on purpose. A bare `hearth` pattern
+# matches at any depth, so it silently swallowed cmd/hearth/ and the main package
+# never got committed. CI caught it on the first run, which is the argument for
+# building in CI before there is anything to build.
+/bin/
+/dist/
+/build/
+/hearth
+/hearth.exe
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Secrets. Nothing in here is ever committed, and the CI gate enforces it.
+*.env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/testdata/**/*.key
+*.p12
+*.pfx
+*.jks
+*_rsa
+*_ed25519
+kubeconfig
+*.kubeconfig
+secrets.yaml
+secrets.yml
+*-secret.yaml
+*.secret
+
+# Captured runtime state. Kept locally as spec, never pushed: configmaps carry
+# internal wiring and the secret-key listing names every key in the cluster.
+# docs/spec/*/schema and docs/spec/*/infra ARE committed, deliberately.
+docs/spec/**/runtime/
+
+# Local tooling
+.direnv/
+.envrc
+node_modules/
+__debug_bin*
+coverage.out
+coverage.html
+*.prof
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# templ generates _templ.go which IS committed, so `go build` works on a clean
+# checkout without templ installed. But not its transient artifacts.
+*_templ.txt
+
+# The editor build's dependencies. Only editor/package-lock.json is committed;
+# the built editor.js lives in internal/web/static/.
+/editor/node_modules/
+
+# The rebuilt interface: built by the Containerfile, never committed.
+/ui/node_modules/
+/ui/dist/
+/ui/dist-ssr/
+/ui/.astro/
+/internal/web/next/dist/*
+!/internal/web/next/dist/.placeholder

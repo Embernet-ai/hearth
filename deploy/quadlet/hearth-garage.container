@@ -1,0 +1,19 @@
+[Unit]
+Description=Hearth, Garage object storage
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=hearth-garage
+Image=docker.io/dxflrs/garage:v2.4.1
+Network=hearth.network
+Volume=hearth-garage-data.volume:/var/lib/garage/data
+Volume=hearth-garage-meta.volume:/var/lib/garage/meta
+Volume=%h/.config/hearth/garage.toml:/etc/garage.toml:ro,Z
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

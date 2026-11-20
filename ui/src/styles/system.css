@@ -1,0 +1,277 @@
+/* The system under every screen: one type scale, one spacing scale, one card, one row.
+
+   Hearth's look came from three layers (hearth.css, the house palette, the shell's own rules) that each set their own
+   sizes, padding and radii, so a page was the sum of three opinions: a label at 12px next to a value at 17px next to a
+   hint at 11px, cards with their own padding, chips that wrapped. This file is loaded last and is the only place a size,
+   a gap or a card is decided. Pages use these and add nothing of their own.
+
+   Type: one family for reading, mono only for what is a code or a quantity. Seven sizes, never a size in between.
+   Space: a 4px base. Every gap, padding and margin below is one of --s-1 to --s-7.
+   Card: one padding, one radius, one rhythm between cards. A card is as tall as what is in it.
+   Row: one height for a control, one for a table row. */
+
+:root {
+  /* type */
+  --t-2xs: 0.6875rem;  /* 11  caps labels, counts */
+  --t-xs: 0.75rem;     /* 12  hints, periods, breadcrumbs */
+  --t-sm: 0.8125rem;   /* 13  secondary text, table cells */
+  --t-base: 0.9375rem; /* 15  reading */
+  --t-md: 1.0625rem;   /* 17  card and section titles */
+  --t-lg: 1.375rem;    /* 22  page heading */
+  --t-xl: 1.75rem;     /* 28  a number that is the point of a tile */
+  --lh-tight: 1.25;
+  --lh-body: 1.5;
+
+  /* space */
+  --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; --s-4: 1rem; --s-5: 1.5rem; --s-6: 2rem; --s-7: 3rem;
+
+  /* card, control, row */
+  --card-pad: var(--s-4);
+  --card-pad-x: var(--s-5);
+  --card-gap: var(--s-4);
+  --radius: 12px;
+  --control-h: 2.25rem;
+  --control-h-sm: 1.75rem;
+  --row-pad: 0.625rem;
+}
+
+body { font-size: var(--t-base); line-height: var(--lh-body); }
+
+/* ---- type ------------------------------------------------------------------------------------------------------ */
+main h1, .pagehead h1 { font-size: var(--t-lg); font-weight: 650; line-height: var(--lh-tight); margin: 0 0 var(--s-3); letter-spacing: -0.015em; }
+main h2 { font-size: var(--t-md); font-weight: 650; line-height: var(--lh-tight); margin: var(--s-5) 0 var(--s-2); letter-spacing: -0.01em; }
+main h3 { font-size: var(--t-base); font-weight: 650; line-height: var(--lh-tight); margin: var(--s-4) 0 var(--s-2); }
+main h1:first-child, main h2:first-child, main h3:first-child, .card > h2:first-child, .card > h3:first-child { margin-top: 0; }
+p { margin: 0 0 var(--s-2); }
+.small, small { font-size: var(--t-xs); }
+.muted { color: var(--muted); }
+/* A caps label: a section name, a column head. One size, one tracking, everywhere. */
+.grouptitle, .cap, main section > h2.cap, table.list thead th, .stat dt, .navgroup { font-size: var(--t-2xs); font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; }
+.grouptitle, .cap { color: var(--muted); margin: var(--s-5) 0 var(--s-2); }
+label { font-size: var(--t-xs); font-weight: 600; color: var(--muted); }
+/* A number beside its unit reads as one figure, not as two sizes. */
+.elapsed, .stat dd, .of { font-variant-numeric: tabular-nums; }
+
+/* ---- controls -------------------------------------------------------------------------------------------------- */
+button, .button, .chip, a.chip { white-space: nowrap; line-height: 1.2; }
+button, .button { min-height: var(--control-h); padding: 0 var(--s-4); font-size: var(--t-sm); }
+button.small, .button.small, .chip { min-height: var(--control-h-sm); font-size: var(--t-xs); padding: 0 var(--s-3); }
+.chip { display: inline-flex; align-items: center; gap: var(--s-2); }
+input, select, textarea { min-height: var(--control-h); padding: 0 var(--s-3); font-size: var(--t-sm); line-height: 1.3; }
+textarea { padding: var(--s-2) var(--s-3); min-height: 4.5rem; }
+select { padding-right: var(--s-6); }
+/* A tick box is a tick box: the field rule above must not stretch it into a block. */
+input[type='checkbox'], input[type='radio'] { width: 1.05rem; height: 1.05rem; min-height: 0; padding: 0; margin: 0; flex: none; accent-color: var(--accent-dim); }
+label.chip input[type='checkbox'], .chip input[type='checkbox'] { margin: 0; }
+input[type='date'], input[type='datetime-local'], input[type='time'] { min-width: 9.5rem; }
+
+/* ---- cards ----------------------------------------------------------------------------------------------------- */
+.card { padding: var(--card-pad) var(--card-pad-x); margin: 0 0 var(--card-gap); border-radius: var(--radius); }
+.card > :last-child { margin-bottom: 0; }
+.card.small { font-size: var(--t-sm); }
+/* An empty state is a sentence, not a room: no taller than its words. */
+.empty, .card.empty, p.empty { padding: var(--s-3) var(--s-4); text-align: left; min-height: 0; }
+.empty h3, .empty p { margin: 0; }
+.empty > * + * { margin-top: var(--s-1); }
+
+/* A grid of cards or tiles: one gap, tiles as tall as their row and no taller. */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: var(--s-3); margin: 0 0 var(--s-4); align-items: stretch; }
+.stat { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-3) var(--s-4); margin: 0; border-radius: var(--radius); min-height: 0; }
+.stat dt { color: var(--muted); margin: 0; }
+.stat dd { margin: 0; font-size: var(--t-xl); font-weight: 650; line-height: 1.1; letter-spacing: -0.02em; display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+.stat dd .of { font-size: var(--t-sm); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.stat .period { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+
+/* ---- tables ---------------------------------------------------------------------------------------------------- */
+table.list { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+table.list th, table.list td { padding: var(--row-pad) var(--s-3); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); }
+table.list thead th { padding-top: var(--s-2); padding-bottom: var(--s-2); color: var(--muted); }
+table.list td { line-height: 1.35; }
+/* Dates, counts and states are short and stay on one line; a title may wrap. */
+table.list td[data-label='Due'], table.list td[data-label='Updated'], table.list td[data-label='Status'], table.list td[data-label='Priority'], table.list td[data-label='Kind'], table.list td[data-label='Last seen'], table.list td[data-label='When'] { white-space: nowrap; }
+table.list tbody tr:last-child td { border-bottom: 0; }
+
+/* ---- the page -------------------------------------------------------------------------------------------------- */
+main { padding: var(--s-5) var(--s-5) var(--s-6); }
+.notice { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; padding: var(--s-2) var(--s-3); margin: 0 0 var(--s-4); border: 1px solid var(--line); border-left: 3px solid var(--accent-dim); border-radius: var(--s-2); background: var(--surface); font-size: var(--t-sm); }
+.notice p { margin: 0; }
+.topbar { padding: var(--s-2) var(--s-5); min-height: 3.25rem; }
+.pagetitle { font-size: var(--t-md); font-weight: 650; }
+.topsearch input { min-height: var(--control-h-sm); font-size: var(--t-sm); }
+.row.spread { justify-content: space-between; }
+footer { font-size: var(--t-xs); padding: var(--s-4) var(--s-5); }
+
+@media (max-width: 860px) {
+  main { padding: var(--s-4) var(--s-4) var(--s-5); }
+  .topbar { padding: var(--s-2) var(--s-3); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+  .stat { padding: var(--s-3); }
+  .stat dd { font-size: var(--t-lg); }
+}
+
+/* ---- tiles in a chosen number of columns, numbers in the reading face ------------------------------------------ */
+.stats { grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); }
+.stat dd { font-family: var(--en-font); }
+.stat dd .of { white-space: nowrap; }
+@media (max-width: 860px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---- chips and links that read as sentence case, not Title Case By Accident -------------------------------------- */
+.chip, button, .button { text-transform: none; }
+.dailycard { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); }
+.dailycard h3 { margin: 0; flex: 0 0 auto; }
+.dailycard p { margin: 0; flex: 1 1 14rem; }
+.dashgrid h2 { margin: var(--s-5) 0 var(--s-2); }
+.dashgrid > div > h2:first-child { margin-top: 0; }
+
+/* ---- boards: columns fit their cards, no stretched dead space ---------------------------------------------------- */
+.board { align-items: flex-start; gap: var(--s-3); margin-top: var(--s-3); padding-bottom: var(--s-2); }
+.boardcol { flex: 0 0 14.5rem; padding: var(--s-2) var(--s-3) var(--s-3); }
+.boardcol h3 { margin: 0 0 var(--s-2); font-size: var(--t-xs); }
+.cards { gap: var(--s-2); min-height: 3rem; flex: 0 1 auto; }
+.card2 { padding: var(--s-2) var(--s-3); font-size: var(--t-sm); }
+.card2 select { width: 100%; min-height: var(--control-h-sm); font-size: var(--t-xs); }
+
+/* ---- toolbars and secondary forms sit on the page rhythm ------------------------------------------------------- */
+main section > p.muted.small { max-width: 60rem; margin: 0 0 var(--s-3); }
+main section > .row.spread { margin: 0 0 var(--s-3); align-items: center; gap: var(--s-3); }
+main section > form.row { margin: 0 0 var(--s-3); gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+main section > form.row > select, main section > form.row > input:not([type=hidden]) { flex: 1 1 12rem; min-width: 0; }
+main section > form.row > .muted.small { flex: 0 0 auto; white-space: nowrap; }
+.card .row, form.card .row { gap: var(--s-2) var(--s-3); align-items: center; }
+form.card > .row > input:not([type=checkbox]):not([type=hidden]):not([style]),
+form.card > .row > select { flex: 1 1 14rem; min-width: 0; }
+
+/* ---- settings tiles fit their links; code blocks scroll inside themselves instead of widening the page -------------------- */
+.settingsgrid { gap: var(--s-3); align-items: start; }
+.settingsgrid .card { margin: 0; }
+.settingsgrid .card h3 { margin: 0 0 var(--s-2); }
+.settingsgrid .card a { padding: var(--s-1) 0; }
+pre { max-width: 100%; overflow-x: auto; }
+main section > .table-wrap, main section table.list { max-width: 100%; }
+
+/* ---- inline fields: a label with its control, controls in a row share the row rather than each taking all of it ----------- */
+label.muted.small, .row > label { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
+label > select, label > input:not([type=checkbox]):not([type=radio]) { width: auto; min-width: 0; }
+.row > input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]), .row > select { width: auto; flex: 1 1 10rem; min-width: 0; }
+.row > input[type=file] { flex: 1 1 14rem; width: auto; min-width: 0; min-height: var(--control-h); padding: var(--s-1) var(--s-2); }
+button.big, .button.big { min-height: var(--control-h); font-size: var(--t-base); padding: var(--s-2) var(--s-4); }
+
+/* ---- the side panel's department tree: shallow steps so a deep folder keeps its room ------------------------------------- */
+details.orgnode details.orgnode, details.orgnode .navrow { margin-left: 0; }
+.orgnode .orgnode { padding-left: var(--s-3); }
+.navitem { overflow-wrap: anywhere; }
+
+/* a tile that is stretched to its row's height spreads its lines: label on top, period at the bottom, no hollow under them */
+.stat { justify-content: space-between; }
+.stat .period { margin-top: auto; }
+a.stat { display: flex; flex-direction: column; }
+
+/* ---- record forms: a label column and a field column of a readable width, not one box across the whole card ------------------ */
+.fields { grid-template-columns: minmax(6rem, 9rem) minmax(0, 1fr); max-width: 44rem; gap: var(--s-2) var(--s-4); align-items: center; }
+.fields > label { margin: 0; align-self: center; }
+.fields > label:has(+ textarea) { align-self: start; padding-top: var(--s-2); }
+.fields > .row { grid-column: 2; margin-top: var(--s-2); }
+.fields input:not([type=checkbox]):not([type=radio]), .fields select, .fields textarea { width: 100%; max-width: 100%; }
+
+/* ---- phone: a label and its field are a pair on one line, pairs stack ------------------------------------------------------- */
+@media (max-width: 860px) {
+  .fields { grid-template-columns: 1fr; gap: var(--s-1); max-width: none; }
+  .fields > label { margin-top: var(--s-2); }
+  .fields > .row { grid-column: 1; }
+  form.card > .row:has(> label + input[style]) { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-2) var(--s-3); align-items: center; }
+  form.card > .row:has(> label + input[style]) > input { width: 100% !important; }
+}
+
+/* ---- CRM list grouping and saved views ------------------------------------------------------------------------------- */
+tr.grouprow th { text-align: left; background: var(--surface); color: var(--fg); font-size: var(--t-sm); letter-spacing: 0; text-transform: capitalize; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--line-strong); }
+.viewsbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.viewsbar .viewchip { display: inline-flex; align-items: center; gap: var(--s-1); }
+.viewsbar .viewchip form { display: inline-flex; margin: 0; }
+.viewsbar .viewchip button { min-height: 0; height: 1.5rem; padding: 0 var(--s-2); }
+.viewsbar details.saveview { position: relative; }
+.viewsbar details.saveview > summary { cursor: pointer; list-style: none; }
+.viewsbar details.saveview[open] > form { margin-top: var(--s-2); }
+
+/* ---- the side panel's background runs the whole height of the page ---------------------------------------------------------
+   The panel itself is pinned to the window (sticky, one screen high), which is right for scrolling, but anything that draws the
+   page whole (a full-page capture, a print preview, a tall window) showed its background stopping at the first screen.
+   The column behind it carries the same background, so the panel is the same colour from the top of the page to the bottom. */
+.app { background-image: linear-gradient(to right, var(--rail) 0, var(--rail) 15rem, var(--line) 15rem, var(--line) calc(15rem + 1px), transparent calc(15rem + 1px)); background-repeat: no-repeat; }
+@media (max-width: 860px) { .app { background-image: none; } }
+
+/* ---- toolbars, entry forms and group headings: sized to their content, not to the window ---------------------------------------- */
+table.list thead th a { color: inherit; text-decoration: none; }
+table.list thead th a:hover { text-decoration: underline; color: var(--fg); }
+main form.row.wrap > input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]), main form.row.wrap > select { max-width: 22rem; }
+main form.stack, main form.card.stack { max-width: 44rem; }
+main .card > form.stack, main section.card > form:not(.inline):not(.row):not(.fields) { max-width: 44rem; }
+details.tablegroup:not(:has(tbody tr)) table.list { display: none; }
+details.tablegroup:not(:has(tbody tr)) { margin-bottom: var(--s-1); }
+
+/* the access tree on a person's page: the arrow sits beside its checkbox, on one line */
+.accesstree details > summary { display: flex; align-items: center; gap: var(--s-2); list-style: none; cursor: pointer; padding: var(--s-1) 0; }
+.accesstree details > summary::-webkit-details-marker { display: none; }
+.accesstree details > summary::before { content: "\25B8"; color: var(--muted); font-size: var(--t-xs); transition: transform .12s ease; }
+.accesstree details[open] > summary::before { transform: rotate(90deg); }
+.accesstree .accessnode { display: inline-flex; align-items: center; gap: var(--s-2); white-space: normal; }
+
+/* ---- phone: a row of fields wraps, and nothing is wider than the screen ---------------------------------------------------------- */
+@media (max-width: 860px) {
+  main form.row, main .row.wrap { flex-wrap: wrap; }
+  main form.row > label, main .row.wrap > label { flex: 1 1 100%; max-width: 100%; white-space: normal; }
+  main form.row > label > select, main form.row > label > input:not([type=checkbox]):not([type=radio]) { flex: 1 1 8rem; min-width: 0; max-width: 100%; }
+  main input:not([type=checkbox]):not([type=radio]), main select, main textarea { max-width: 100%; min-width: 0; }
+}
+@media (max-width: 860px) {
+  main form.row > label:not(:has(select, input, textarea)), main .row > label:not(:has(select, input, textarea)) { flex: 1 1 100%; margin: var(--s-1) 0 calc(-1 * var(--s-1)); }
+  main form.row > label:not(:has(select, input, textarea)) + :is(input, select), main .row > label:not(:has(select, input, textarea)) + :is(input, select) { flex: 1 1 100%; width: 100%; }
+}
+input, select, textarea { box-sizing: border-box; }
+form.viewbar > *, form.row > div { min-width: 0; }
+form.viewbar input:not([type=checkbox]):not([type=radio]) { width: 100%; }
+
+/* ---- how long: hours and minutes, two number fields side by side ---------------------------------------------------------------------- */
+.hm { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: var(--s-3); }
+.hmfield { display: inline-flex; align-items: center; gap: var(--s-2); font-weight: 400; color: var(--fg); white-space: nowrap; }
+.hmfield input { width: 4.5rem; text-align: right; }
+.hmfield span { font-size: var(--t-sm); color: var(--muted); }
+.row:has(> .hm), .row:has(> .hm) { flex-wrap: wrap; }
+.hm { max-width: 100%; }
+.hmfield input { width: 4rem; }
+main .row:has(> .hm), main form .row:has(> .hm) { flex-wrap: wrap; row-gap: var(--s-2); }
+.hmfield input { width: 3.5rem; }
+@media (max-width: 860px) { .hm { gap: var(--s-2); } .hmfield { gap: var(--s-1); } }
+.hm { flex-wrap: wrap; row-gap: var(--s-2); min-width: 0; }
+@media (max-width: 860px) { .hmfield input { width: 3.25rem; } .hmfield span { font-size: var(--t-xs); } }
+
+/* ---- a control inside a table cell never makes the cell wider than the screen (the claim and hand-off selects on the unassigned list) -- */
+table.list td { min-width: 0; }
+table.list td form.row { min-width: 0; max-width: 100%; }
+table.list td select, table.list td input:not([type=checkbox]):not([type=radio]) { max-width: 100%; min-width: 0; }
+
+/* ---- an entry's correction form: its fields wrap, and it never runs into the form beside it or off the card -------------- */
+form.inline.row { flex-wrap: wrap; row-gap: var(--s-2); max-width: 100%; min-width: 0; }
+li[data-entry] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-width: 0; }
+li[data-entry] > * { min-width: 0; max-width: 100%; }
+td:has(> form.inline.row) { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
+
+/* ---- rows of buttons and file pickers wrap instead of running off a narrow card at larger text ------------------------------------- */
+.mdbar, .uploadrow, .uploadrow form.row { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.uploadrow input[type=file], .row input[type=file] { min-width: 0; max-width: 100%; }
+.card .row.spread { flex-wrap: wrap; row-gap: var(--s-2); }
+
+/* a caption or a sentence beside a field wraps; only a label that holds its own control stays on one line */
+label.muted.small, .row > label { white-space: normal; }
+main section > form.row > .muted.small, main form.row.wrap > .muted.small { flex: 0 1 auto; white-space: normal; max-width: 100%; }
+.avatarset, .avatarset form.row { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+main .card { overflow-wrap: anywhere; }
+
+/* ---- larger text: a row inside a card wraps rather than running off it, a fixed-width field never outgrows its container, and a long token in a table cell breaks ---- */
+.card .row, .card form.row { flex-wrap: wrap; }
+main input:not([type=checkbox]):not([type=radio]):not([type=file]), main select, main textarea { max-width: 100%; }
+table.list td, table.list th { overflow-wrap: anywhere; }
+main label[style*="white-space:nowrap"] { white-space: normal !important; }
+.stack > * { min-width: 0; }
+/* ---- the wordmark in the side panel: the mark, then Hearth ---------------------------------------------------------------------- */
+.brand { display: inline-flex; align-items: center; gap: var(--s-2); }
+.brand .mark { flex: none; display: block; }

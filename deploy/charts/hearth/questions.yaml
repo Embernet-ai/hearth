@@ -1,0 +1,93 @@
+questions:
+  - variable: ingress.host
+    label: Hostname
+    description: The public hostname this is served on. It must already resolve to the cluster edge.
+    type: hostname
+    required: true
+    default: hearth.example.com
+    group: Networking
+
+  - variable: ingress.tls.certResolver.enabled
+    label: Issue TLS with the Traefik resolver
+    description: >-
+      Traefik orders the certificate itself over TLS-ALPN-01 on :443, which works where
+      inbound :80 does not reach the cluster. Turn it and cert-manager both off to serve
+      the Traefik default store certificate (a wildcard that covers the host).
+    type: boolean
+    default: true
+    group: Networking
+
+  - variable: ingress.tls.certManager.enabled
+    label: Issue TLS with cert-manager instead
+    description: >-
+      Only for a cluster that can genuinely answer :80. Never enable this together
+      with the Traefik resolver: naming a secret makes Traefik serve that secret in
+      preference to its own resolver, and a secret nothing can issue means the host
+      serves nothing valid.
+    type: boolean
+    default: false
+    show_subquestion_if: true
+    group: Networking
+    subquestions:
+      - variable: ingress.tls.certManager.issuerName
+        label: ClusterIssuer
+        type: string
+        default: letsencrypt-prod
+      - variable: ingress.tls.certManager.secretName
+        label: TLS secret name
+        type: string
+        default: hearth-tls
+
+  - variable: image.tag
+    label: Image tag
+    description: Always an immutable git sha. A moving tag makes a redeploy a silent no-op.
+    type: string
+    required: true
+    default: sha-7951fbb
+    group: Application
+
+  - variable: existingSecret
+    label: Existing secret
+    description: >-
+      Holds POSTGRES_PASSWORD, S3_ACCESS_KEY, S3_SECRET_KEY, and OIDC_CLIENT_SECRET.
+      Create it before installing. The chart never creates credentials.
+    type: string
+    required: true
+    default: hearth
+    group: Application
+
+  - variable: oidc.enabled
+    label: Single sign-on
+    description: Generic OIDC. Local accounts keep working either way.
+    type: boolean
+    default: true
+    show_subquestion_if: true
+    group: Single sign-on
+    subquestions:
+      - variable: oidc.issuer
+        label: Issuer
+        type: string
+        default: https://login.microsoftonline.com/d66d4170-ca2a-4a49-87f2-219e633b19d4/v2.0
+      - variable: oidc.clientId
+        label: Client ID
+        type: string
+        default: a58e222f-9e5e-4f90-a057-4dd82e022b05
+      - variable: oidc.allowedDomains
+        label: Allowed email domains
+        description: >-
+          Without this, any identity the provider vouches for is accepted, including
+          guests invited for unrelated reasons.
+        type: string
+        default: example.com
+
+  - variable: postgresql.persistence.size
+    label: Database volume size
+    type: string
+    default: 5Gi
+    group: Storage
+
+  - variable: minio.persistence.size
+    label: Object storage volume size
+    type: string
+    default: 10Gi
+    group: Storage

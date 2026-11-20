@@ -1,0 +1,241 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hearth.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "app") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "app") | nindent 8 }}
+        {{- if .Values.dashboardIntegration.enabled }}
+        embernet.ai/store-app: {{ .Values.dashboardIntegration.storeApp | quote }}
+        embernet.ai/app-name: {{ .Values.dashboardIntegration.appName | quote }}
+        embernet.ai/gui-type: {{ .Values.dashboardIntegration.guiType | quote }}
+        embernet.ai/gui-port: {{ default .Values.service.ports.http .Values.dashboardIntegration.guiPort | quote }}
+        {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- $wait := include "hearth.database.waitTarget" . }}
+      {{- if and .Values.waitForPostgres.enabled $wait }}
+      # The app exits when Postgres DNS does not resolve, so on a cold namespace
+      # it crash loops until the StatefulSet exists. It self-heals, but the
+      # restarts read as a fault during an install.
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.waitForPostgres.image }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ $wait }}; do
+                echo "waiting for postgres"
+                sleep 2
+              done
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: hearth
+          image: {{ include "hearth.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: HEARTH_ENV
+              value: {{ .Values.hearth.env | quote }}
+            - name: HEARTH_PUBLIC_BASE_URL
+              value: {{ .Values.hearth.publicBaseUrl | quote }}
+            - name: HEARTH_LOG_FORMAT
+              value: {{ .Values.hearth.logFormat | quote }}
+            {{- include "hearth.database.env" . | nindent 12 }}
+            # The release name, taken from the tag that pulled this image, so the
+            # footer cannot name a version other than the one running.
+            - name: HEARTH_VERSION
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+            - name: HEARTH_S3_ENDPOINT
+              value: {{ include "hearth.s3.endpoint" . | quote }}
+            - name: HEARTH_S3_PUBLIC_ENDPOINT
+              value: {{ .Values.s3.publicEndpoint | quote }}
+            - name: HEARTH_S3_BUCKET
+              value: {{ .Values.s3.bucket | quote }}
+            {{- include "hearth.s3.credentialEnv" . | nindent 12 }}
+            {{- if .Values.mail.smtp.host }}
+            - name: HEARTH_SMTP_HOST
+              value: {{ .Values.mail.smtp.host | quote }}
+            - name: HEARTH_SMTP_FROM
+              value: {{ required "mail.smtp.from is required when mail.smtp.host is set" .Values.mail.smtp.from | quote }}
+            - name: HEARTH_SMTP_STARTTLS
+              value: {{ .Values.mail.smtp.startTLS | quote }}
+            {{- if .Values.mail.smtp.username }}
+            - name: HEARTH_SMTP_USERNAME
+              value: {{ .Values.mail.smtp.username | quote }}
+            - name: HEARTH_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.smtpPassword }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.encryption.enabled }}
+            # Seals values that must be read back rather than hashed. Absent, the
+            # features that need one stay off rather than storing a long-lived
+            # third-party credential in the clear.
+            - name: HEARTH_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.encryptionKey }}
+            {{- end }}
+            {{- if .Values.google.enabled }}
+            # Per person. The client id is not secret -- it travels in every
+            # authorisation redirect -- but it is kept beside the secret so
+            # there is one place to rotate the pair.
+            - name: HEARTH_GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.googleClientID }}
+            - name: HEARTH_GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.googleClientSecret }}
+            {{- end }}
+            {{- if .Values.mail.inbound.enabled }}
+            # The shared secret the mailbox reader presents on /inbound/mail,
+            # which is the one endpoint here that a machine talks to rather than
+            # a person. An empty key disables that endpoint outright, so this is
+            # rendered only when inbound mail is switched on: setting it empty
+            # would read as configured and answer 404 to every delivery.
+            #
+            # Not optional, on purpose. Turning inbound mail on without the key
+            # in the secret should stop the rollout rather than produce a pod
+            # that quietly refuses every message the reader sends it.
+            - name: HEARTH_INBOUND_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.inboundKey }}
+            {{- end }}
+            {{- if .Values.oidc.enabled }}
+            {{- if .Values.opensearch.enabled }}
+            - name: HEARTH_OPENSEARCH_URL
+              value: http://{{ include "hearth.opensearch.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:9200
+            {{- end }}
+            - name: HEARTH_OIDC_ISSUER
+              value: {{ .Values.oidc.issuer | quote }}
+            - name: HEARTH_OIDC_CLIENT_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: HEARTH_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.oidcClientSecret }}
+                  optional: true
+            {{- if .Values.oidc.scopes }}
+            - name: HEARTH_OIDC_SCOPES
+              value: {{ .Values.oidc.scopes | quote }}
+            {{- end }}
+            - name: HEARTH_OIDC_ALLOWED_DOMAINS
+              value: {{ .Values.oidc.allowedDomains | quote }}
+            - name: HEARTH_OIDC_REQUIRED_ROLES
+              value: {{ .Values.oidc.requiredRoles | default "" | quote }}
+            {{- if .Values.emberops.enabled }}
+            - name: HEARTH_BACKEND
+              value: emberops
+            - name: HEARTH_EMBEROPS_URL
+              value: {{ .Values.emberops.url | quote }}
+            - name: HEARTH_EMBEROPS_AUDIENCE
+              value: {{ .Values.emberops.audience | quote }}
+            - name: HEARTH_EMBEROPS_TIMEZONE
+              value: {{ .Values.emberops.timezone | quote }}
+            - name: HEARTH_EMBEROPS_CURRENCY_PER_CENT
+              value: {{ .Values.emberops.currencyPerCent | quote }}
+            - name: HEARTH_EMBEROPS_CRM_PARTIES
+              value: {{ .Values.emberops.crmParties | quote }}
+            - name: HEARTH_EMBEROPS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.emberops.secretName }}
+                  key: {{ .Values.emberops.clientIdKey }}
+            - name: HEARTH_EMBEROPS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.emberops.secretName }}
+                  key: {{ .Values.emberops.clientSecretKey }}
+            {{- end }}
+            {{- if .Values.trustedProxies }}
+            - name: HEARTH_TRUSTED_PROXIES
+              value: {{ .Values.trustedProxies | quote }}
+            {{- end }}
+            {{- with .Values.mcp }}
+            {{- if .audience }}
+            - name: HEARTH_MCP_AUDIENCE
+              value: {{ .audience | quote }}
+            - name: HEARTH_MCP_REQUIRED_ROLE
+              value: {{ .requiredRole | default "" | quote }}
+            {{- if .publicUrl }}
+            - name: HEARTH_MCP_PUBLIC_URL
+              value: {{ .publicUrl | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          # Kubernetes suspends liveness and readiness until this succeeds, so
+          # a boot that spends four minutes migrating is a slow start rather
+          # than a failed one.
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.path }}
+              port: http
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

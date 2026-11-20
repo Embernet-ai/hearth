@@ -1,0 +1,33 @@
+apiVersion: v2
+name: hearth
+description: Hearth, a self-hosted all-in-one workspace. Work orders, assets, tasks, and documents on one entity spine.
+type: application
+# One number, and both fields carry it. These used to move independently, which is
+# defensible and which produced three chart versions stranded on appVersion 0.3.1
+# with no tag and no published image between them. A chart-only change now
+# republishes an identical image, and that is cheaper than the ambiguity was.
+# RELEASING.md has the rest.
+version: 2.22.0
+appVersion: "2.22.0"
+home: https://embernet.ai/hearth.html
+icon: https://embernet-ai.github.io/hearth/icon.png
+sources:
+  - https://github.com/Embernet-ai/hearth
+maintainers:
+  - name: Patrick Ryan
+    email: patrick@fireballz.ai
+annotations:
+  # Rancher catalogue metadata, matching the other subdomained apps.
+  catalog.cattle.io/display-name: Hearth
+  catalog.cattle.io/type: cluster-template
+
+# Garage, beside MinIO for this release. Nothing reads from it yet: the app and
+# the backup job stay on MinIO until the files have been copied across and
+# s3.endpoint is switched. The packaged chart is vendored in charts/ so an
+# upgrade from a copied chart directory needs no repo access, and Chart.lock
+# pins its digest.
+dependencies:
+  - name: garage
+    version: 0.1.3
+    repository: https://embernet-ai.github.io/garage/
+    condition: garage.enabled

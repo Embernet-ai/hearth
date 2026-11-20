@@ -1,0 +1,800 @@
+// Command hearth is the whole product: one binary, serving HTTP, running its
+// own background jobs, backed by Postgres.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/Embernet-ai/hearth/internal/agents"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Embernet-ai/hearth/internal/api"
+	"github.com/Embernet-ai/hearth/internal/audit"
+	"github.com/Embernet-ai/hearth/internal/auth"
+	"github.com/Embernet-ai/hearth/internal/authz"
+	"github.com/Embernet-ai/hearth/internal/calendar"
+	"github.com/Embernet-ai/hearth/internal/calls"
+	"github.com/Embernet-ai/hearth/internal/canvas"
+	"github.com/Embernet-ai/hearth/internal/channels"
+	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
+	"github.com/Embernet-ai/hearth/internal/deptreq"
+	"github.com/Embernet-ai/hearth/internal/docs"
+	"github.com/Embernet-ai/hearth/internal/emberops"
+	"github.com/Embernet-ai/hearth/internal/emberops/stores"
+	"github.com/Embernet-ai/hearth/internal/files"
+	"github.com/Embernet-ai/hearth/internal/google"
+	"github.com/Embernet-ai/hearth/internal/jobs"
+	"github.com/Embernet-ai/hearth/internal/mailint"
+	"github.com/Embernet-ai/hearth/internal/mailsettings"
+	"github.com/Embernet-ai/hearth/internal/maint"
+	"github.com/Embernet-ai/hearth/internal/mcpserver"
+	"github.com/Embernet-ai/hearth/internal/notify"
+	"github.com/Embernet-ai/hearth/internal/offline"
+	"github.com/Embernet-ai/hearth/internal/plant"
+	"github.com/Embernet-ai/hearth/internal/platform/blob"
+	"github.com/Embernet-ai/hearth/internal/platform/buildinfo"
+	"github.com/Embernet-ai/hearth/internal/platform/config"
+	"github.com/Embernet-ai/hearth/internal/platform/httpx"
+	"github.com/Embernet-ai/hearth/internal/platform/mail"
+	"github.com/Embernet-ai/hearth/internal/platform/metrics"
+	"github.com/Embernet-ai/hearth/internal/platform/pg"
+	"github.com/Embernet-ai/hearth/internal/platform/secret"
+	"github.com/Embernet-ai/hearth/internal/platform/tokens"
+	"github.com/Embernet-ai/hearth/internal/playground"
+	"github.com/Embernet-ai/hearth/internal/realtime"
+	"github.com/Embernet-ai/hearth/internal/rules"
+	"github.com/Embernet-ai/hearth/internal/scim"
+	"github.com/Embernet-ai/hearth/internal/search"
+	"github.com/Embernet-ai/hearth/internal/teams"
+	"github.com/Embernet-ai/hearth/internal/timelog"
+	"github.com/Embernet-ai/hearth/internal/timeoff"
+	"github.com/Embernet-ai/hearth/internal/views"
+	"github.com/Embernet-ai/hearth/internal/web"
+)
+
+func main() {
+	if err := run(); err != nil {
+		// Config errors are joined, so print them one per line. An operator
+		// fixing a deployment wants the whole list, not one per restart.
+		fmt.Fprintf(os.Stderr, "hearth: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("configuration:\n%w", err)
+	}
+
+	log := newLogger(cfg)
+	b := buildinfo.Get()
+	log.Info("starting",
+		"env", cfg.Env,
+		"addr", cfg.Addr,
+		"public_base_url", cfg.PublicBaseURL.String(),
+		"revision", b.Revision,
+		"profile", b.Profile,
+		"dirty", b.Dirty,
+	)
+
+	// A development build must never reach production. The predecessor relied
+	// on CI grepping pushed images for a feature flag; this refuses to start.
+	if cfg.IsProduction() && buildinfo.DevBuild() {
+		return errors.New("refusing to start: this is a dev build (-tags dev) and HEARTH_ENV=production")
+	}
+
+	// Startup work gets its own bounded context. Without it, an unreachable
+	// database makes the process hang at boot rather than fail, and a pod that
+	// hangs is harder to diagnose than one that exits with a reason.
+	ctx0, cancelStartup := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelStartup()
+
+	pools, err := pg.Open(ctx0, pg.DefaultOptions(cfg.DatabaseURL))
+	if err != nil {
+		return err
+	}
+	defer pools.Close()
+	log.Info("database connected")
+
+	if err := pg.Migrate(ctx0, pools, log); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
+	store, err := blob.Open(ctx0, blob.Config{
+		Endpoint:       cfg.S3Endpoint,
+		PublicEndpoint: cfg.S3PublicEndpoint,
+		AccessKey:      cfg.S3AccessKey,
+		SecretKey:      cfg.S3SecretKey,
+		Bucket:         cfg.S3Bucket,
+		Region:         cfg.S3Region,
+		UseSSL:         cfg.S3UseSSL,
+		PublicUseSSL:   cfg.S3PublicUseSSL,
+		PathStyle:      cfg.S3PathStyle,
+	})
+	if err != nil {
+		return err
+	}
+	log.Info("object storage connected",
+		"bucket", cfg.S3Bucket,
+		"internal", cfg.S3Endpoint,
+		"public", cfg.S3PublicEndpoint)
+
+	azSvc := authz.New(pools.Web)
+	calendarSvc := calendar.New(pools.Web)
+
+	// Encryption, for the few values that must be read back rather than hashed.
+	// Absent is supported and disables what depends on it, rather than storing a
+	// long-lived third-party credential in the clear.
+	var box *secret.Box
+	if cfg.EncryptionKey != "" {
+		key, err := secret.ParseKey(cfg.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("HEARTH_ENCRYPTION_KEY: %w", err)
+		}
+		if box, err = secret.New(key); err != nil {
+			return err
+		}
+	}
+
+	// Google, per person. Needs both the client credentials and somewhere safe
+	// to put a refresh token, so it stays off unless both are present.
+	var googleSvc *google.Service
+	googleCfg := google.Config{
+		ClientID:     cfg.GoogleClientID,
+		ClientSecret: cfg.GoogleClientSecret,
+		RedirectURL:  cfg.PublicBaseURL.String() + "/integrations/google/callback",
+	}
+	switch {
+	case !googleCfg.Enabled():
+		log.Info("google is not configured; the integration is off")
+	case box == nil:
+		log.Warn("google is configured but HEARTH_ENCRYPTION_KEY is not, so a " +
+			"refresh token could not be stored safely. The integration stays off")
+	default:
+		googleSvc = google.New(pools.Web, googleCfg, box)
+		log.Info("google enabled", "redirect", googleCfg.RedirectURL)
+	}
+	docsSvc := docs.New(pools.Web, azSvc)
+	authSvc := auth.New(pools.Web, azSvc, cfg.PublicBaseURL.Scheme == "https")
+
+	filesSvc := files.New(pools.Web, store)
+	viewsSvc := views.New(pools.Web)
+	channelsSvc := channels.New(pools.Web, azSvc)
+	timeSvc := timelog.New(pools.Web, azSvc)
+
+	hub := realtime.NewHub(log)
+
+	// Single sign-on is optional. Discovery happens HERE, at startup, so a
+	// wrong issuer fails loudly now rather than on somebody's first login.
+	var oidcRP *auth.OIDC
+	if cfg.SSOEnabled() {
+		oidcRP, err = auth.NewOIDC(ctx0, authSvc, auth.OIDCConfig{
+			Issuer:         cfg.OIDCIssuer,
+			ClientID:       cfg.OIDCClientID,
+			ClientSecret:   cfg.OIDCClientSecret,
+			RedirectURL:    cfg.PublicBaseURL.String() + "/auth/callback",
+			Scopes:         oidcScopes(cfg),
+			AllowedDomains: cfg.OIDCAllowedDomains,
+			RequiredRoles:  cfg.OIDCRequiredRoles,
+		}, cfg.PublicBaseURL.Scheme == "https")
+		if err != nil {
+			return fmt.Errorf("single sign-on: %w", err)
+		}
+		log.Info("single sign-on enabled",
+			"issuer", cfg.OIDCIssuer,
+			"redirect", cfg.PublicBaseURL.String()+"/auth/callback",
+			"allowed_domains", cfg.OIDCAllowedDomains)
+		if len(cfg.OIDCAllowedDomains) == 0 {
+			// Loud, because the default accepts anyone the provider vouches
+			// for, including guests invited for unrelated reasons.
+			log.Warn("single sign-on accepts ANY identity the provider vouches for; " +
+				"set HEARTH_OIDC_ALLOWED_DOMAINS to restrict it")
+		}
+	}
+
+	// EmberOPS back end: keep each person's Vord tokens in their session, so
+	// EmberOPS can be called as them, and build the client. Config validation
+	// has already required SSO, the encryption key and the service client.
+	var ops *emberops.Client
+	if cfg.EmberOPSBackend() {
+		authSvc.EnableVordTokens(box, oidcRP.OAuth())
+		ops = emberops.New(emberops.Config{
+			BaseURL:  cfg.EmberOPSURL,
+			CacheTTL: cfg.EmberOPSCacheTTL,
+			Service: &emberops.ClientCredentials{
+				TokenURL: oidcRP.OAuth().Endpoint.TokenURL, ClientID: cfg.EmberOPSClientID,
+				ClientSecret: cfg.EmberOPSClientSecret, Scope: cfg.EmberOPSAudience,
+			},
+		})
+		log.Info("storage back end: emberops", "url", cfg.EmberOPSURL, "audience", cfg.EmberOPSAudience)
+	} else {
+		log.Info("storage back end: postgres")
+	}
+
+	// The queue runs on the jobs pool, which has no statement timeout: a claim
+	// under contention can legitimately wait, and a reindex legitimately takes
+	// minutes. Putting it on the web pool would make both look like failures.
+	queue := jobs.NewQueue(pools.Jobs, cfg.WorkerLease)
+	relay := jobs.NewRelay(pools.Jobs, log)
+
+	worker := jobs.NewWorker(queue, relay, log, jobs.WorkerOptions{
+		Concurrency: cfg.WorkerConcurrency,
+		Lease:       cfg.WorkerLease,
+		ID:          workerID(),
+	})
+	worker.Handle(web.SelfTestKind, web.SelfTestHandler())
+
+	// Search. Postgres is the floor and is always present; OpenSearch is an
+	// enhancement, and its absence is a supported configuration rather than a
+	// degraded one. Postgres full text cannot be down while the application is
+	// up, which is the property that makes a search box worth typing into.
+	pgSearch := search.NewPostgres(pools.Web)
+	var cluster *search.OpenSearch
+	if cfg.SearchClusterEnabled() {
+		cluster = search.NewOpenSearch(search.OpenSearchConfig{
+			URL:      cfg.OpenSearchURL,
+			Index:    cfg.OpenSearchIndex,
+			Username: cfg.OpenSearchUsername,
+			Password: cfg.OpenSearchPassword,
+		})
+		// Created at boot rather than on the first index job. An index that
+		// autocreates from a document gets a guessed mapping, and then the
+		// subject list is analysed as text and the permission filter matches
+		// everything.
+		if err := cluster.EnsureIndex(ctx0); err != nil {
+			// Not fatal. The whole point of the fallback is that the product
+			// works without this, and refusing to start would turn a cluster
+			// restart into an outage of everything.
+			log.Warn("search cluster is not reachable at startup; "+
+				"searching will use Postgres until it returns", "error", err)
+		} else {
+			log.Info("search cluster ready", "url", cfg.OpenSearchURL, "index", cfg.OpenSearchIndex)
+		}
+	} else {
+		log.Info("no search cluster configured; searching uses Postgres full text")
+	}
+
+	var target search.Indexer
+	if cluster != nil {
+		target = cluster
+	}
+	var primary search.Engine
+	if cluster != nil {
+		primary = cluster
+	}
+	searchSvc := search.New(primary, pgSearch)
+
+	// Notifications. The relay is optional and its absence is silent by
+	// design: an inbox that works with no mail server is the normal state of a
+	// fresh install, and filling the dead letter table with mail that was
+	// never going to be sent helps nobody.
+	relayMail := mail.New(mail.Config{
+		Host: cfg.SMTPHost, From: cfg.SMTPFrom,
+		Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+		StartTLS: cfg.SMTPStartTLS,
+	})
+	if relayMail.Configured() {
+		log.Info("email enabled", "relay", cfg.SMTPHost, "from", cfg.SMTPFrom)
+	} else {
+		log.Info("no mail relay configured; notifications stay in the inbox")
+	}
+	// Each org can configure its own relay (Settings > Email); the org-aware
+	// mailer reads those at send time and falls back to the env relay above
+	// for an org that has set up none of its own.
+	mailSettings := mailsettings.New(pools.Web, box)
+	orgMailer := mailsettings.NewMailer(mailSettings, relayMail)
+	notifySvc := notify.New(pools.Web)
+	fanout := notify.NewFanout(pools.Jobs, notifySvc, queue, orgMailer,
+		cfg.PublicBaseURL.String(), log)
+	fanout.Register(worker)
+	relay.Route(notify.Routes()...)
+	search.NewPipeline(pools.Jobs, target, store, queue, log).Register(worker)
+	relay.Route(search.Routes()...)
+
+	// Automations. After notifications, because a rule can notify and the
+	// service it calls has to exist first.
+	rulesSvc := rules.New(pools.Web)
+	engine := rules.NewEngine(pools.Jobs, rulesSvc, docsSvc, channelsSvc, notifySvc, queue, log)
+	engine.Register(worker)
+	relay.Route(rules.Routes()...)
+
+	// Preventive maintenance. After rules, because a generated work order is an
+	// ordinary work order and the rules that apply to one apply to it.
+	maintSvc := maint.New(pools.Web, azSvc, docsSvc)
+	//
+	// With the EmberOPS back end the CMMS addon generates the work orders from
+	// its Maintenance Plans, so Hearth's generator is not registered at all:
+	// running both would raise every occurrence twice. The page's "raise now"
+	// button is refused in that mode (a nil generator).
+	var pm *maint.Generator
+	if ops == nil {
+		pm = maint.NewGenerator(maintSvc, queue, log)
+		pm.Register(worker)
+		relay.Route(maint.Routes()...)
+	}
+
+	// The plant tree. It needs nothing from the queue: a rollup is a query, not
+	// a maintained total, so there is no counter to drift out of step with the
+	// rows it summarises.
+	plantSvc := plant.New(pools.Web, azSvc)
+
+	// Contacts, companies, and parts. Ordinary entities on the same grants and
+	// the same search, which is why this line is the whole wiring.
+	crmSvc := crm.New(pools.Web, azSvc)
+
+	// Email in and out, and the phone log. The domain on a generated
+	// Message-ID has to resolve or half the world files the reply as spam, so
+	// it comes from the public base URL rather than from a guess.
+	mailSvc := mailint.New(pools.Web, docsSvc, channelsSvc, crmSvc,
+		cfg.PublicBaseURL.Hostname())
+	callsSvc := calls.New(pools.Web, azSvc, filesSvc)
+
+	// Agents, which are principals, and the protocol endpoint they reach the
+	// product through. Every tool behind it goes through the same authz call a
+	// person's request hits, which is what makes "an agent cannot read what it
+	// was not granted" true by construction.
+	agentsSvc := agents.New(pools.Web, azSvc)
+	mcpSrv := agents.NewMCP(agentsSvc, docsSvc, searchSvc, plantSvc, cfg.AgentsSuggestOnly)
+	canvasSvc := canvas.New(pools.Web, azSvc)
+
+	// The public API, and the webhooks that go out of it. Both hang off the
+	// same services the pages use, so neither can answer a question the
+	// interface would refuse.
+	apiSvc := api.New(pools.Web, azSvc, docsSvc).WithCRM(crmSvc, salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc))
+	// The CRM API's routes, as MCP tools, on the same condition.
+	mcpSrv.Add(apiSvc.CRMTools())
+	api.NewDispatcher(pools.Jobs, queue, log).Register(worker)
+	relay.Route(api.Routes()...)
+	worker.Handle(mailint.SendKind, web.SendHandler(relayMail))
+
+	// Work done at the machine with no signal. This service stores nothing but
+	// the record of what a phone sent and how it went; the actions themselves
+	// are replayed through the site's own handlers, so there is no second write
+	// path here to keep in step with the first.
+	offlineSvc := offline.New(pools.Web)
+	housekeeping := offline.NewHousekeeper(offlineSvc, queue, log)
+	housekeeping.Register(worker)
+
+	// Teams, the audit log, and the directory that pushes people at us.
+	//
+	// Teams needs nothing from anywhere: a team is a grant subject, and the
+	// authz service has resolved team subjects since the substrate. The audit
+	// service here only reads; every write goes in beside the change it
+	// describes, in that change's own transaction.
+	teamsSvc := teams.New(pools.Web)
+	auditSvc := audit.New(pools.Web)
+	scimSvc := scim.New(pools.Web, teamsSvc, authSvc, log)
+
+	timeOffSvc := timeoff.New(pools.Web, web.NewTimeOffNotifier(notifySvc))
+	deptReqSvc := deptreq.New(pools.Web, web.NewDeptRequestNotifier(notifySvc))
+
+	// One place decides where each domain's data lives. Postgres is the
+	// default; EmberOPS swaps in the domains the emberops_hearth addon models.
+	set := stores.Postgres(stores.PG{
+		Docs: docsSvc, Views: viewsSvc, Rules: rulesSvc, Teams: teamsSvc, Time: timeSvc, TimeOff: timeOffSvc,
+		Maint: maintSvc, Plant: plantSvc, CRM: crmSvc, DeptReqs: deptReqSvc, Calendar: calendarSvc, Canvas: canvasSvc,
+	})
+	var spaceSync *stores.SpaceSync
+	if ops != nil {
+		spaceSync = &stores.SpaceSync{C: ops, Source: plantSvc, Dir: stores.Directory{C: ops}, Loc: cfg.EmberOPSTimezone, Log: log}
+		set = stores.EmberOPS(ops, stores.PG{
+			Docs: docsSvc, Views: viewsSvc, Rules: rulesSvc, Teams: teamsSvc, Time: timeSvc, TimeOff: timeOffSvc,
+			Maint: maintSvc, Plant: plantSvc, CRM: crmSvc, DeptReqs: deptReqSvc, Calendar: calendarSvc, Canvas: canvasSvc,
+		}, stores.Options{
+			Loc:                  cfg.EmberOPSTimezone,
+			Authz:                azSvc,
+			Spaces:               spaceSync,
+			CurrencyPerCent:      cfg.EmberOPSCurrencyPerCent,
+			CRMPartiesInEmberOPS: cfg.EmberOPSCRMParties == "emberops",
+			TimeOffNotify:        web.NewTimeOffNotifier(notifySvc),
+			DeptReqNotify:        web.NewDeptRequestNotifier(notifySvc),
+		})
+	}
+	// The admin time removal answers from whichever back end holds the time.
+	apiSvc.WithTime(set.Time)
+	if rs, ok := set.Rules.(rules.RunStore); ok && ops != nil {
+		// Rules and what they decided live in EmberOPS; the engine, which runs
+		// here on Hearth's events, reads and writes them there.
+		engine.UseStore(set.Rules, rs)
+	}
+	site, err := web.New(web.Deps{
+		Docs: set.Docs, Files: filesSvc, Auth: authSvc, Views: set.Views, Channels: channelsSvc, Notify: notifySvc, Rules: set.Rules, Engine: engine, Time: set.Time, Maint: set.Maint, PM: pm, Plant: set.Plant, CRM: set.CRM, Sales: salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc), CRMViews: crmviews.New(pools.Web), Mail: mailSvc, MailSettings: mailSettings, OrgMailer: orgMailer, Calls: callsSvc,
+		Agents: agentsSvc, MCP: mcpSrv, Canvas: set.Canvas, API: apiSvc,
+		Offline: offlineSvc, Search: searchSvc,
+		Playground:   playground.New(pools.Web, azSvc, set.Plant, set.Docs, channelsSvc, set.Time, set.TimeOff),
+		TimeOff:      set.TimeOff,
+		DeptRequests: set.DeptReqs,
+		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
+		Calendar: set.Calendar, Google: googleSvc,
+		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
+		NotifyDB: pools.Web, WorkerOn: cfg.WorkerEnabled,
+		Version:    cfg.Version,
+		InboundKey: cfg.InboundKey, MailReady: relayMail.Configured(),
+		BaseURL: strings.TrimSuffix(cfg.PublicBaseURL.String(), "/"), Log: log,
+	})
+	if err != nil {
+		return fmt.Errorf("web: %w", err)
+	}
+
+	health := httpx.Health(
+		httpx.Check{
+			Name:  "postgres",
+			Probe: func(r *http.Request) error { return pools.Probe(r.Context()) },
+		},
+		httpx.Check{
+			Name:  "object-store",
+			Probe: func(r *http.Request) error { return store.Probe(r.Context()) },
+		},
+	)
+
+	// Metrics. A registry made here and handed to what needs it, rather than a
+	// package level default: a global registry is what makes two things in one
+	// binary see each other's numbers.
+	reg := metrics.New()
+	reg.Gauge("hearth_jobs_ready", "Jobs waiting to be claimed.", func() float64 {
+		return gaugeQuery(pools.Web,
+			`SELECT count(*) FROM jobs WHERE claimed_at IS NULL AND run_after <= now()`)
+	})
+	reg.Gauge("hearth_jobs_claimed", "Jobs a worker is holding right now.", func() float64 {
+		return gaugeQuery(pools.Web, `SELECT count(*) FROM jobs WHERE claimed_at IS NOT NULL`)
+	})
+	reg.Gauge("hearth_jobs_dead", "Jobs that gave up and are waiting for a person.", func() float64 {
+		return gaugeQuery(pools.Web, `SELECT count(*) FROM jobs_dead`)
+	})
+	reg.Gauge("hearth_outbox_unpublished",
+		"Events written and not yet handed to the queue. A number that climbs is a relay that has stopped.",
+		func() float64 {
+			return gaugeQuery(pools.Web, `SELECT count(*) FROM outbox WHERE published_at IS NULL`)
+		})
+	reg.Gauge("hearth_offline_undecided",
+		"Queued actions from a phone waiting for somebody to answer a conflict.",
+		func() float64 {
+			return gaugeQuery(pools.Web,
+				`SELECT count(*) FROM offline_ops WHERE status IN ('conflict','unknown')`)
+		})
+	reg.Gauge("hearth_sessions_active", "Sessions that have not expired.", func() float64 {
+		return gaugeQuery(pools.Web, `SELECT count(*) FROM sessions WHERE expires_at > now()`)
+	})
+
+	// Rate limits, per replica and in memory. Generous for a person and tight
+	// for the endpoints where one address making many attempts is the whole
+	// attack. See internal/platform/httpx/ratelimit.go for what this is and is
+	// not.
+	signIn := httpx.NewLimiter(httpx.Limit{PerMinute: 10, Burst: 12})
+	machines := httpx.NewLimiter(httpx.Limit{PerMinute: 600, Burst: 120})
+	browsing := httpx.NewLimiter(httpx.Limit{PerMinute: 1200, Burst: 240})
+	// Which address a limit is per. Empty HEARTH_TRUSTED_PROXIES, the default,
+	// is the socket address, as it always was.
+	proxies, err := httpx.ParseProxies(cfg.TrustedProxies)
+	if err != nil {
+		return fmt.Errorf("HEARTH_TRUSTED_PROXIES: %w", err)
+	}
+	if len(cfg.TrustedProxies) > 0 {
+		log.Info("rate limits read X-Forwarded-For from these proxies", "proxies", cfg.TrustedProxies)
+	}
+
+	// The response headers, and the origin check that goes with them. Both are
+	// built from the addresses this deployment already knows about: the site's
+	// own origin, and the object store's, because files are handed to browsers
+	// as presigned URLs pointing straight at it rather than proxied through
+	// here, and a policy that does not name it blocks every attachment.
+	guard := httpx.Security{
+		HTTPS:      cfg.PublicBaseURL.Scheme == "https",
+		Origin:     cfg.PublicBaseURL.Scheme + "://" + cfg.PublicBaseURL.Host,
+		BlobOrigin: blobOrigin(cfg.S3PublicEndpoint, cfg.S3PublicUseSSL),
+	}
+
+	siteHandler := site.Routes()
+	if spaceSync != nil {
+		siteHandler = kickSpaceSync(siteHandler, spaceSync)
+		go keepSpacesInSync(ctx0, pools.Web, spaceSync, log)
+	}
+
+	mux := http.NewServeMux()
+	// Explicit paths, so health does not shadow the site at "/".
+	mux.Handle("GET /healthz", health)
+	mux.Handle("GET /readyz", health)
+	// Not behind the browsing limit: a scrape every fifteen seconds from a
+	// monitoring system must never be the thing that gets throttled, and this
+	// endpoint reads counters rather than the database.
+	mux.Handle("GET /metrics", reg.Handler())
+	// The endpoints a machine talks to, each with its own budget so a runaway
+	// integration cannot spend the sign-in budget.
+	//
+	// The origin check goes on the two routes a BROWSER posts to, and on
+	// neither of the others. /inbound/mail, /mcp, /api/ and /scim/v2/ are
+	// talked to by machines carrying a key or a token rather than by a page
+	// carrying an ambient cookie, so there is no forgery to prevent and an
+	// origin they have no reason to send would only refuse them.
+	mux.Handle("POST /login", httpx.Limited(signIn, proxies.ByIPAndPath,
+		guard.SameOrigin(authSvc.Middleware(siteHandler))))
+	mux.Handle("POST /inbound/mail", httpx.Limited(machines, proxies.ByIPAndPath, siteHandler))
+	// MCP on the official SDK (internal/mcpserver): the protocol endpoint for
+	// every method a client uses, and the discovery documents it reads first.
+	// People sign in with Vord when HEARTH_MCP_AUDIENCE is set; agent tokens
+	// work either way.
+	var mcpVerifier *tokens.Verifier
+	if cfg.MCPAudience != "" {
+		v, err := tokens.New(ctx0, tokens.Config{Issuer: cfg.OIDCIssuer, Audience: cfg.MCPAudience})
+		if err != nil {
+			return fmt.Errorf("mcp: %w", err)
+		}
+		mcpVerifier = v
+	}
+	mcpHandlers := mcpserver.New(mcpserver.Options{
+		Log: log.With("surface", "mcp"), Verifier: mcpVerifier, PublicURL: cfg.MCPPublicURL,
+		Issuer: strings.TrimSuffix(cfg.OIDCIssuer, "/"), RequiredRole: cfg.MCPRequiredRole,
+		Agents: agentsSvc, Tools: mcpSrv, People: authSvc, Subjects: azSvc,
+	}).Handlers()
+	for pattern, h := range mcpHandlers {
+		mux.Handle(pattern, httpx.Limited(machines, proxies.ByIPAndPath, h))
+	}
+	mux.Handle("/api/", httpx.Limited(machines, proxies.ByIP,
+		authSvc.Middleware(siteHandler)))
+	mux.Handle("/scim/v2/", httpx.Limited(machines, proxies.ByIP,
+		http.StripPrefix("/scim/v2", scimSvc.Routes())))
+	mux.Handle("/", httpx.Limited(browsing, proxies.ByIP,
+		guard.SameOrigin(authSvc.Middleware(siteHandler))))
+
+	srv := &http.Server{
+		Addr: cfg.Addr,
+		// Outside in: a trace id first so every line below can carry it, then
+		// the access log and panic recovery, then the security headers, then
+		// the metrics counter, then the site. The order is the contract and it
+		// is why this is one expression rather than five assignments.
+		//
+		// The headers sit INSIDE recovery on purpose. A panic that the recovery
+		// middleware turns into a 500 is still a response rendered in somebody's
+		// browser, and it should carry the same policy every other page does.
+		Handler:           httpx.Trace(httpx.MiddlewareFrom(log, proxies)(guard.Headers(reg.Middleware(mux)))),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+	}
+
+	// Shut down on SIGINT/SIGTERM. Kubernetes sends SIGTERM and then waits;
+	// draining in-flight requests here is what makes a rollout not drop them.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Background work runs in this process, under the same shutdown signal, so
+	// a rolling deploy drains jobs instead of abandoning them mid-flight.
+	var workerDone chan struct{}
+	if cfg.WorkerEnabled {
+		workerDone = make(chan struct{})
+		go func() {
+			defer close(workerDone)
+			if err := worker.Run(ctx, pools.Listen); err != nil {
+				log.Error("worker stopped with an error", "error", err)
+			}
+		}()
+	} else {
+		// Loud, because a deployment where nothing runs jobs looks completely
+		// healthy from the outside while every notification and every index
+		// update silently piles up.
+		log.Warn("background work is DISABLED on this replica; " +
+			"jobs will queue and nothing here will run them")
+	}
+
+	// Schedule the recurring work: the due-soon sweep and everybody's digest.
+	// After the worker is running, so the first sweep is picked up straight
+	// away, and non-fatal because a deployment that refuses to boot over
+	// tomorrow's digest is worse than one with no digest tomorrow.
+	if cfg.WorkerEnabled {
+		if err := fanout.StartAll(ctx); err != nil {
+			log.Error("could not schedule recurring notifications", "error", err)
+		}
+		// And the maintenance sweep. Keyed, so restarting a replica does not
+		// multiply it, and non-fatal for the same reason.
+		if pm == nil {
+			// EmberOPS generates the preventive work orders.
+		} else if err := pm.StartAll(ctx); err != nil {
+			log.Error("could not schedule the maintenance sweep", "error", err)
+		}
+		// And the tidy-up of settled offline operations. Unsettled ones are
+		// never pruned, so a conflict nobody answered survives this entirely.
+		if err := housekeeping.StartAll(ctx); err != nil {
+			log.Error("could not schedule the offline tidy-up", "error", err)
+		}
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Info("listening", "addr", cfg.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("listen: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		log.Info("shutdown signal received", "timeout", cfg.ShutdownTimeout)
+	}
+
+	// Deregister from the Hub first so it stops routing here, then drain.
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	// Wait for the worker to finish what it had claimed. Bounded by the same
+	// timeout, because a job that will not stop must not hold the pod open
+	// past the grace period and be killed anyway.
+	if workerDone != nil {
+		select {
+		case <-workerDone:
+		case <-shutdownCtx.Done():
+			log.Warn("worker did not drain within the shutdown timeout; " +
+				"its in-flight jobs will be retried after their lease lapses")
+		}
+	}
+	log.Info("stopped cleanly")
+	return nil
+}
+
+// gaugeQuery answers one number for the metrics endpoint.
+//
+// A short deadline of its own, and zero when it cannot answer. A scrape that
+// hangs takes the monitoring down with the thing it is monitoring, and a gauge
+// that is briefly wrong is a much smaller problem than a /metrics that times
+// out and makes every alert fire at once.
+func gaugeQuery(db *pgxpool.Pool, sql string) float64 {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var n float64
+	if err := db.QueryRow(ctx, sql).Scan(&n); err != nil {
+		return 0
+	}
+	return n
+}
+
+// workerID names this replica in claimed_by, so an operator looking at a stuck
+// job can tell which pod is holding it. The hostname is the pod name in
+// Kubernetes, which is exactly the identifier they would go on to use.
+func workerID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		return "worker"
+	}
+	return host
+}
+
+// blobOrigin turns the browser-facing object store address into an origin the
+// content policy can name.
+//
+// The configured value is a host and optional port with no scheme, because that
+// is the shape the S3 client wants. A policy needs the scheme, and it has to be
+// the same scheme the presigned URL will carry or the browser treats it as a
+// different origin and blocks the fetch.
+func blobOrigin(endpoint string, useSSL bool) string {
+	if endpoint == "" {
+		return ""
+	}
+	if useSSL {
+		return "https://" + endpoint
+	}
+	return "http://" + endpoint
+}
+
+func newLogger(cfg *config.Config) *slog.Logger {
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		level = slog.LevelInfo
+	}
+	opts := &slog.HandlerOptions{Level: level}
+
+	var h slog.Handler
+	if cfg.LogFormat == "text" {
+		h = slog.NewTextHandler(os.Stdout, opts)
+	} else {
+		h = slog.NewJSONHandler(os.Stdout, opts)
+	}
+	return slog.New(h).With("service", "hearth")
+}
+
+// oidcScopes is the sign-in's scope list. With the EmberOPS back end it adds
+// the Vord client scope that puts the EmberOPS audience on the person's access
+// token, so EmberOPS's emberops_vord addon accepts it as theirs.
+func oidcScopes(cfg *config.Config) []string {
+	scopes := cfg.OIDCScopes
+	if !cfg.EmberOPSBackend() {
+		return scopes
+	}
+	if len(scopes) == 0 {
+		scopes = []string{"openid", "profile", "email"}
+	}
+	for _, sc := range scopes {
+		if sc == cfg.EmberOPSAudience {
+			return scopes
+		}
+	}
+	return append(append([]string(nil), scopes...), cfg.EmberOPSAudience)
+}
+
+// kickSpaceSync asks for a copy of Hearth's space structure into EmberOPS after
+// any write by a signed-in person. Departments, grants, managers and members
+// are changed from many pages, and a copy that waited for each of them to say so
+// would miss one; the sync itself is debounced and does nothing when nothing
+// changed.
+func kickSpaceSync(next http.Handler, sync *stores.SpaceSync) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			return
+		}
+		if id := auth.From(r.Context()); id != nil {
+			sync.Kick(id.OrgID)
+		}
+	})
+}
+
+// keepSpacesInSync copies the space structure at startup and every few minutes,
+// which catches whatever a write path did not announce.
+func keepSpacesInSync(ctx context.Context, db *pgxpool.Pool, sync *stores.SpaceSync, log *slog.Logger) {
+	run := func() {
+		// A playground is somebody's sandbox, not a company: EmberOps has one org per site and no counterpart for it, and its
+		// spaces carry the names of the real org's ("A space called 'Engineering' already exists"), so every sync of one failed.
+		rows, err := db.Query(ctx, `SELECT id::text FROM orgs WHERE playground_of IS NULL`)
+		if err != nil {
+			log.Warn("emberops: space sync could not list orgs", "error", err)
+			return
+		}
+		var orgs []string
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil {
+				orgs = append(orgs, id)
+			}
+		}
+		rows.Close()
+		for _, o := range orgs {
+			cctx, cancel := context.WithTimeout(ctx, time.Minute)
+			if err := sync.Sync(cctx, o); err != nil {
+				log.Warn("emberops: space sync failed", "org", o, "error", err)
+			}
+			cancel()
+		}
+	}
+	run()
+	t := time.NewTicker(5 * time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			run()
+		}
+	}
+}
+
+// salesFor is the sales side of the CRM, which only exists on Postgres: a deal
+// is a row pointing at a company row, so a deployment that keeps its data in
+// EmberOps has no sales pages rather than half of them.
+func salesFor(postgres bool, svc *crm.Service) crm.Sales {
+	if !postgres {
+		return nil
+	}
+	return svc
+}

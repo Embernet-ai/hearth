@@ -1,0 +1,6338 @@
+[
+ {
+  "fn": "hours",
+  "args": [
+   -5
+  ],
+  "want": "none"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   -5
+  ],
+  "want": "00:-5"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   0
+  ],
+  "want": "none"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   0
+  ],
+  "want": "00:00"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   1
+  ],
+  "want": "1m"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   1
+  ],
+  "want": "00:01"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   45
+  ],
+  "want": "45m"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   45
+  ],
+  "want": "00:45"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   60
+  ],
+  "want": "1h"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   60
+  ],
+  "want": "01:00"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   90
+  ],
+  "want": "1h 30m"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   90
+  ],
+  "want": "01:30"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   120
+  ],
+  "want": "2h"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   120
+  ],
+  "want": "02:00"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   135
+  ],
+  "want": "2h 15m"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   135
+  ],
+  "want": "02:15"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   600
+  ],
+  "want": "10h"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   600
+  ],
+  "want": "10:00"
+ },
+ {
+  "fn": "hours",
+  "args": [
+   1441
+  ],
+  "want": "24h 1m"
+ },
+ {
+  "fn": "clock",
+  "args": [
+   1441
+  ],
+  "want": "24:01"
+ },
+ {
+  "fn": "hhmm",
+  "args": [
+   0
+  ],
+  "want": "0:00"
+ },
+ {
+  "fn": "clockp",
+  "args": [
+   0
+  ],
+  "want": "00:00"
+ },
+ {
+  "fn": "hhmm",
+  "args": [
+   59
+  ],
+  "want": "0:59"
+ },
+ {
+  "fn": "clockp",
+  "args": [
+   59
+  ],
+  "want": "00:59"
+ },
+ {
+  "fn": "hhmm",
+  "args": [
+   60
+  ],
+  "want": "1:00"
+ },
+ {
+  "fn": "clockp",
+  "args": [
+   60
+  ],
+  "want": "01:00"
+ },
+ {
+  "fn": "hhmm",
+  "args": [
+   485
+  ],
+  "want": "8:05"
+ },
+ {
+  "fn": "clockp",
+  "args": [
+   485
+  ],
+  "want": "08:05"
+ },
+ {
+  "fn": "hhmm",
+  "args": [
+   1439
+  ],
+  "want": "23:59"
+ },
+ {
+  "fn": "clockp",
+  "args": [
+   1439
+  ],
+  "want": "23:59"
+ },
+ {
+  "fn": "hhmm",
+  "args": [
+   null
+  ],
+  "want": ""
+ },
+ {
+  "fn": "clockp",
+  "args": [
+   null
+  ],
+  "want": ""
+ },
+ {
+  "fn": "duration",
+  "args": [
+   0
+  ],
+  "want": "under a second"
+ },
+ {
+  "fn": "duration",
+  "args": [
+   500000000
+  ],
+  "want": "under a second"
+ },
+ {
+  "fn": "duration",
+  "args": [
+   7000000000
+  ],
+  "want": "7s"
+ },
+ {
+  "fn": "duration",
+  "args": [
+   90000000000
+  ],
+  "want": "1m 30s"
+ },
+ {
+  "fn": "duration",
+  "args": [
+   3601000000000
+  ],
+  "want": "1h 0m"
+ },
+ {
+  "fn": "duration",
+  "args": [
+   93600000000000
+  ],
+  "want": "26h 0m"
+ },
+ {
+  "fn": "dur",
+  "args": [
+   0
+  ],
+  "want": ""
+ },
+ {
+  "fn": "dur",
+  "args": [
+   -1
+  ],
+  "want": ""
+ },
+ {
+  "fn": "dur",
+  "args": [
+   999
+  ],
+  "want": "0s"
+ },
+ {
+  "fn": "dur",
+  "args": [
+   59999
+  ],
+  "want": "59s"
+ },
+ {
+  "fn": "dur",
+  "args": [
+   61000
+  ],
+  "want": "1m 01s"
+ },
+ {
+  "fn": "dur",
+  "args": [
+   3725000
+  ],
+  "want": "62m 05s"
+ },
+ {
+  "fn": "dur",
+  "args": [
+   null
+  ],
+  "want": ""
+ },
+ {
+  "fn": "cost",
+  "args": [
+   0
+  ],
+  "want": "0.00"
+ },
+ {
+  "fn": "money",
+  "args": [
+   0
+  ],
+  "want": "0.00"
+ },
+ {
+  "fn": "cost",
+  "args": [
+   1
+  ],
+  "want": "0.01"
+ },
+ {
+  "fn": "money",
+  "args": [
+   1
+  ],
+  "want": "0.01"
+ },
+ {
+  "fn": "cost",
+  "args": [
+   99
+  ],
+  "want": "0.99"
+ },
+ {
+  "fn": "money",
+  "args": [
+   99
+  ],
+  "want": "0.99"
+ },
+ {
+  "fn": "cost",
+  "args": [
+   100
+  ],
+  "want": "1.00"
+ },
+ {
+  "fn": "money",
+  "args": [
+   100
+  ],
+  "want": "1.00"
+ },
+ {
+  "fn": "cost",
+  "args": [
+   12345
+  ],
+  "want": "123.45"
+ },
+ {
+  "fn": "money",
+  "args": [
+   12345
+  ],
+  "want": "123.45"
+ },
+ {
+  "fn": "cost",
+  "args": [
+   1250000
+  ],
+  "want": "12500.00"
+ },
+ {
+  "fn": "money",
+  "args": [
+   1250000
+  ],
+  "want": "12500.00"
+ },
+ {
+  "fn": "cost",
+  "args": [
+   123456789
+  ],
+  "want": "1234567.89"
+ },
+ {
+  "fn": "money",
+  "args": [
+   123456789
+  ],
+  "want": "1234567.89"
+ },
+ {
+  "fn": "money",
+  "args": [
+   null
+  ],
+  "want": ""
+ },
+ {
+  "fn": "usd",
+  "args": [
+   0,
+   ""
+  ],
+  "want": "$0"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   0,
+   "USD"
+  ],
+  "want": "$0"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   0,
+   "EUR"
+  ],
+  "want": "EUR 0"
+ },
+ {
+  "fn": "dollars",
+  "args": [
+   0
+  ],
+  "want": "0.00"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   5,
+   ""
+  ],
+  "want": "$0.05"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   5,
+   "USD"
+  ],
+  "want": "$0.05"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   5,
+   "EUR"
+  ],
+  "want": "EUR 0.05"
+ },
+ {
+  "fn": "dollars",
+  "args": [
+   5
+  ],
+  "want": "0.05"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   100,
+   ""
+  ],
+  "want": "$1"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   100,
+   "USD"
+  ],
+  "want": "$1"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   100,
+   "EUR"
+  ],
+  "want": "EUR 1"
+ },
+ {
+  "fn": "dollars",
+  "args": [
+   100
+  ],
+  "want": "1.00"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   12345,
+   ""
+  ],
+  "want": "$123.45"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   12345,
+   "USD"
+  ],
+  "want": "$123.45"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   12345,
+   "EUR"
+  ],
+  "want": "EUR 123.45"
+ },
+ {
+  "fn": "dollars",
+  "args": [
+   12345
+  ],
+  "want": "123.45"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   1250000,
+   ""
+  ],
+  "want": "$12,500"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   1250000,
+   "USD"
+  ],
+  "want": "$12,500"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   1250000,
+   "EUR"
+  ],
+  "want": "EUR 12,500"
+ },
+ {
+  "fn": "dollars",
+  "args": [
+   1250000
+  ],
+  "want": "12500.00"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   99999999,
+   ""
+  ],
+  "want": "$999,999.99"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   99999999,
+   "USD"
+  ],
+  "want": "$999,999.99"
+ },
+ {
+  "fn": "usd",
+  "args": [
+   99999999,
+   "EUR"
+  ],
+  "want": "EUR 999,999.99"
+ },
+ {
+  "fn": "dollars",
+  "args": [
+   99999999
+  ],
+  "want": "999999.99"
+ },
+ {
+  "fn": "pct",
+  "args": [
+   0
+  ],
+  "want": "0.0000%"
+ },
+ {
+  "fn": "qty",
+  "args": [
+   0
+  ],
+  "want": "0"
+ },
+ {
+  "fn": "meter",
+  "args": [
+   0
+  ],
+  "want": "0"
+ },
+ {
+  "fn": "pct",
+  "args": [
+   0.5
+  ],
+  "want": "0.5000%"
+ },
+ {
+  "fn": "qty",
+  "args": [
+   0.5
+  ],
+  "want": "0.5"
+ },
+ {
+  "fn": "meter",
+  "args": [
+   0.5
+  ],
+  "want": "0.5"
+ },
+ {
+  "fn": "pct",
+  "args": [
+   33.3333333
+  ],
+  "want": "33.3333%"
+ },
+ {
+  "fn": "qty",
+  "args": [
+   33.3333333
+  ],
+  "want": "33.3333333"
+ },
+ {
+  "fn": "meter",
+  "args": [
+   33.3333333
+  ],
+  "want": "33.3333333"
+ },
+ {
+  "fn": "pct",
+  "args": [
+   100
+  ],
+  "want": "100.0000%"
+ },
+ {
+  "fn": "qty",
+  "args": [
+   100
+  ],
+  "want": "100"
+ },
+ {
+  "fn": "meter",
+  "args": [
+   100
+  ],
+  "want": "100"
+ },
+ {
+  "fn": "indent",
+  "args": [
+   -3
+  ],
+  "want": "0.0rem"
+ },
+ {
+  "fn": "indent",
+  "args": [
+   0
+  ],
+  "want": "0.0rem"
+ },
+ {
+  "fn": "indent",
+  "args": [
+   1
+  ],
+  "want": "1.1rem"
+ },
+ {
+  "fn": "indent",
+  "args": [
+   2
+  ],
+  "want": "2.2rem"
+ },
+ {
+  "fn": "indent",
+  "args": [
+   12
+  ],
+  "want": "13.2rem"
+ },
+ {
+  "fn": "indent",
+  "args": [
+   20
+  ],
+  "want": "13.2rem"
+ },
+ {
+  "fn": "capped",
+  "args": [
+   -5
+  ],
+  "want": 0
+ },
+ {
+  "fn": "capped",
+  "args": [
+   0
+  ],
+  "want": 0
+ },
+ {
+  "fn": "capped",
+  "args": [
+   50
+  ],
+  "want": 50
+ },
+ {
+  "fn": "capped",
+  "args": [
+   100
+  ],
+  "want": 100
+ },
+ {
+  "fn": "capped",
+  "args": [
+   250
+  ],
+  "want": 100
+ },
+ {
+  "fn": "priority",
+  "args": [
+   0
+  ],
+  "want": "low"
+ },
+ {
+  "fn": "priority",
+  "args": [
+   1
+  ],
+  "want": "normal"
+ },
+ {
+  "fn": "priority",
+  "args": [
+   2
+  ],
+  "want": "high"
+ },
+ {
+  "fn": "priority",
+  "args": [
+   3
+  ],
+  "want": "urgent"
+ },
+ {
+  "fn": "priority",
+  "args": [
+   9
+  ],
+  "want": "urgent"
+ },
+ {
+  "fn": "fileKind",
+  "args": [
+   "video/mp4"
+  ],
+  "want": "video"
+ },
+ {
+  "fn": "fileKind",
+  "args": [
+   "image/png"
+  ],
+  "want": "image"
+ },
+ {
+  "fn": "fileKind",
+  "args": [
+   "application/pdf"
+  ],
+  "want": "doc"
+ },
+ {
+  "fn": "fileKind",
+  "args": [
+   ""
+  ],
+  "want": "doc"
+ },
+ {
+  "fn": "statusLabel",
+  "args": [
+   "todo"
+  ],
+  "want": "To do"
+ },
+ {
+  "fn": "statusLabel",
+  "args": [
+   "in_progress"
+  ],
+  "want": "In progress"
+ },
+ {
+  "fn": "statusLabel",
+  "args": [
+   "blocked"
+  ],
+  "want": "Blocked"
+ },
+ {
+  "fn": "statusLabel",
+  "args": [
+   "done"
+  ],
+  "want": "Done"
+ },
+ {
+  "fn": "statusLabel",
+  "args": [
+   "cancelled"
+  ],
+  "want": "Cancelled"
+ },
+ {
+  "fn": "statusLabel",
+  "args": [
+   "weird"
+  ],
+  "want": "weird"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "new"
+  ],
+  "want": "New"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "screening"
+  ],
+  "want": "Screening"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "meeting"
+  ],
+  "want": "Meeting"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "proposal"
+  ],
+  "want": "Proposal"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "customer"
+  ],
+  "want": "Customer"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "won"
+  ],
+  "want": "Won"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "lost"
+  ],
+  "want": "Lost"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "no_response"
+  ],
+  "want": "No response"
+ },
+ {
+  "fn": "stageName",
+  "args": [
+   "x"
+  ],
+  "want": "x"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "vacation"
+  ],
+  "want": "Vacation leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "sick"
+  ],
+  "want": "Sick leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "personal"
+  ],
+  "want": "Personal leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "medical"
+  ],
+  "want": "Medical leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "family"
+  ],
+  "want": "Family leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "bereavement"
+  ],
+  "want": "Bereavement leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "jury_duty"
+  ],
+  "want": "Jury duty leave"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "other"
+  ],
+  "want": "Other"
+ },
+ {
+  "fn": "leaveKind",
+  "args": [
+   "x"
+  ],
+  "want": "x"
+ },
+ {
+  "fn": "short",
+  "args": [
+   "abcdefghijklmnop"
+  ],
+  "want": "abcdefgh"
+ },
+ {
+  "fn": "short",
+  "args": [
+   "abc"
+  ],
+  "want": "abc"
+ },
+ {
+  "fn": "short",
+  "args": [
+   ""
+  ],
+  "want": ""
+ },
+ {
+  "fn": "firstLine",
+  "args": [
+   "one line"
+  ],
+  "want": "one line"
+ },
+ {
+  "fn": "firstLine",
+  "args": [
+   "first\nsecond"
+  ],
+  "want": "first"
+ },
+ {
+  "fn": "firstLine",
+  "args": [
+   ""
+  ],
+  "want": ""
+ },
+ {
+  "fn": "div",
+  "args": [
+   7,
+   2
+  ],
+  "want": 3
+ },
+ {
+  "fn": "div",
+  "args": [
+   7,
+   0
+  ],
+  "want": 0
+ },
+ {
+  "fn": "date",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "17 Nov 2026"
+ },
+ {
+  "fn": "day",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "17"
+ },
+ {
+  "fn": "month",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "November 2026"
+ },
+ {
+  "fn": "timeofday",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "09:05"
+ },
+ {
+  "fn": "datefield",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "2026-11-17"
+ },
+ {
+  "fn": "dateonly",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "2026-11-17"
+ },
+ {
+  "fn": "dtlocal",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "2026-11-17T09:05"
+ },
+ {
+  "fn": "dateinput",
+  "args": [
+   "2026-11-17T09:05:07-05:00"
+  ],
+  "want": "2026-11-17"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "2006-01-02"
+  ],
+  "want": "2026-11-17"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "Mon 2 Jan"
+  ],
+  "want": "Tue 17 Nov"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "Mon 2 Jan 2006"
+  ],
+  "want": "Tue 17 Nov 2026"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "Monday, January 2"
+  ],
+  "want": "Tuesday, November 17"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "15:04"
+  ],
+  "want": "09:05"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "3:04 PM"
+  ],
+  "want": "9:05 AM"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-11-17T09:05:07-05:00",
+   "02/01/06"
+  ],
+  "want": "17/11/26"
+ },
+ {
+  "fn": "date",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "2 Jan 2026"
+ },
+ {
+  "fn": "day",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "2"
+ },
+ {
+  "fn": "month",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "January 2026"
+ },
+ {
+  "fn": "timeofday",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "23:59"
+ },
+ {
+  "fn": "datefield",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "2026-01-02"
+ },
+ {
+  "fn": "dateonly",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "2026-01-02"
+ },
+ {
+  "fn": "dtlocal",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "2026-01-02T23:59"
+ },
+ {
+  "fn": "dateinput",
+  "args": [
+   "2026-01-02T23:59:00Z"
+  ],
+  "want": "2026-01-02"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "2006-01-02"
+  ],
+  "want": "2026-01-02"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "Mon 2 Jan"
+  ],
+  "want": "Fri 2 Jan"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "Mon 2 Jan 2006"
+  ],
+  "want": "Fri 2 Jan 2026"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "Monday, January 2"
+  ],
+  "want": "Friday, January 2"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "15:04"
+  ],
+  "want": "23:59"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "3:04 PM"
+  ],
+  "want": "11:59 PM"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-01-02T23:59:00Z",
+   "02/01/06"
+  ],
+  "want": "02/01/26"
+ },
+ {
+  "fn": "date",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "31 Dec 2026"
+ },
+ {
+  "fn": "day",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "31"
+ },
+ {
+  "fn": "month",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "December 2026"
+ },
+ {
+  "fn": "timeofday",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "00:00"
+ },
+ {
+  "fn": "datefield",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "2026-12-31"
+ },
+ {
+  "fn": "dateonly",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "2026-12-31"
+ },
+ {
+  "fn": "dtlocal",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "2026-12-31T00:00"
+ },
+ {
+  "fn": "dateinput",
+  "args": [
+   "2026-12-31T00:00:00+02:00"
+  ],
+  "want": "2026-12-31"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "2006-01-02"
+  ],
+  "want": "2026-12-31"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "Mon 2 Jan"
+  ],
+  "want": "Thu 31 Dec"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "Mon 2 Jan 2006"
+  ],
+  "want": "Thu 31 Dec 2026"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "Monday, January 2"
+  ],
+  "want": "Thursday, December 31"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "15:04"
+  ],
+  "want": "00:00"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "3:04 PM"
+  ],
+  "want": "12:00 AM"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-12-31T00:00:00+02:00",
+   "02/01/06"
+  ],
+  "want": "31/12/26"
+ },
+ {
+  "fn": "date",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "8 Mar 2026"
+ },
+ {
+  "fn": "day",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "8"
+ },
+ {
+  "fn": "month",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "March 2026"
+ },
+ {
+  "fn": "timeofday",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "12:00"
+ },
+ {
+  "fn": "datefield",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "2026-03-08"
+ },
+ {
+  "fn": "dateonly",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "2026-03-08"
+ },
+ {
+  "fn": "dtlocal",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "2026-03-08T12:00"
+ },
+ {
+  "fn": "dateinput",
+  "args": [
+   "2026-03-08T12:00:00-05:00"
+  ],
+  "want": "2026-03-08"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "2006-01-02"
+  ],
+  "want": "2026-03-08"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "Mon 2 Jan"
+  ],
+  "want": "Sun 8 Mar"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "Mon 2 Jan 2006"
+  ],
+  "want": "Sun 8 Mar 2026"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "Monday, January 2"
+  ],
+  "want": "Sunday, March 8"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "15:04"
+  ],
+  "want": "12:00"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "3:04 PM"
+  ],
+  "want": "12:00 PM"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "2026-03-08T12:00:00-05:00",
+   "02/01/06"
+  ],
+  "want": "08/03/26"
+ },
+ {
+  "fn": "date",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "1 Jan 0001"
+ },
+ {
+  "fn": "day",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "1"
+ },
+ {
+  "fn": "month",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "January 0001"
+ },
+ {
+  "fn": "timeofday",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "00:00"
+ },
+ {
+  "fn": "datefield",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "0001-01-01"
+ },
+ {
+  "fn": "dateonly",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "0001-01-01"
+ },
+ {
+  "fn": "dtlocal",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "0001-01-01T00:00"
+ },
+ {
+  "fn": "dateinput",
+  "args": [
+   "0001-01-01T00:00:00Z"
+  ],
+  "want": "0001-01-01"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "2006-01-02"
+  ],
+  "want": "0001-01-01"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "Mon 2 Jan"
+  ],
+  "want": "Mon 1 Jan"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "Mon 2 Jan 2006"
+  ],
+  "want": "Mon 1 Jan 0001"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "Monday, January 2"
+  ],
+  "want": "Monday, January 1"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "15:04"
+  ],
+  "want": "00:00"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "3:04 PM"
+  ],
+  "want": "12:00 AM"
+ },
+ {
+  "fn": "Format",
+  "args": [
+   "0001-01-01T00:00:00Z",
+   "02/01/06"
+  ],
+  "want": "01/01/01"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "done"
+  ],
+  "want": "?f=status%3Ais%3Adone"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   ""
+  ],
+  "want": ""
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": ""
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?closed=1"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=prop.criticality%3Ais%3Ahigh+priority+%26+more"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "other",
+   "v"
+  ],
+  "want": "?f=prop.other%3Ais%3Av"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "done"
+  ],
+  "want": "?f=status%3Ais%3Adone"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   ""
+  ],
+  "want": ""
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": ""
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?closed=1"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=prop.criticality%3Ais%3Ahigh+priority+%26+more"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "other",
+   "v"
+  ],
+  "want": "?f=prop.other%3Ais%3Av"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "done"
+  ],
+  "want": "?f=status%3Ais%3Adone\u0026view=board"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   ""
+  ],
+  "want": "?view=board"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?view=board"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?closed=1\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "other",
+   "v"
+  ],
+  "want": "?f=prop.other%3Ais%3Av\u0026view=board"
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "due",
+   true
+  ],
+  "want": false
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "due",
+   false
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Column": "status"
+   },
+   "blocked"
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Property": "criticality"
+   },
+   "high priority \u0026 more"
+  ],
+  "want": false
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "",
+   "done"
+  ],
+  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026space=d1"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "",
+   ""
+  ],
+  "want": "?closed=1\u0026space=d1"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?closed=1\u0026space=d1"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?space=d1"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026space=d1"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "",
+   "other",
+   "v"
+  ],
+  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026space=d1"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "table",
+   "done"
+  ],
+  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026space=d1"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "table",
+   ""
+  ],
+  "want": "?closed=1\u0026space=d1"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?closed=1\u0026space=d1"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?space=d1"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "table",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026space=d1"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "table",
+   "other",
+   "v"
+  ],
+  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026space=d1"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "board",
+   "done"
+  ],
+  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026space=d1\u0026view=board"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "board",
+   ""
+  ],
+  "want": "?closed=1\u0026space=d1\u0026view=board"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?closed=1\u0026space=d1\u0026view=board"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?space=d1\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "board",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026space=d1\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "board",
+   "other",
+   "v"
+  ],
+  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026space=d1\u0026view=board"
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "due",
+   true
+  ],
+  "want": false
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   "due",
+   false
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   {
+    "Column": "status"
+   },
+   "blocked"
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": true,
+    "Columns": null,
+    "Filters": null,
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "task",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": "d1",
+    "Ungrouped": false
+   },
+   {
+    "Property": "criticality"
+   },
+   "high priority \u0026 more"
+  ],
+  "want": false
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "done"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026f=status%3Ais%3Adone\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   ""
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?closed=1\u0026cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "other",
+   "v"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026f=prop.other%3Ais%3Av\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "done"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026f=status%3Ais%3Adone\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   ""
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?closed=1\u0026cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "other",
+   "v"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026f=prop.other%3Ais%3Av\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "done"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026f=status%3Ais%3Adone\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag\u0026view=board"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   ""
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag\u0026view=board"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag\u0026view=board"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?closed=1\u0026cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "other",
+   "v"
+  ],
+  "want": "?cols=title%2Cprop.x+y\u0026f=status%3Ais%3Ablocked\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026f=prop.other%3Ais%3Av\u0026group=status\u0026offset=50\u0026sort=due%3Adesc%2Cprop.asset_tag\u0026view=board"
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "due",
+   true
+  ],
+  "want": true
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "due",
+   false
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Column": "status"
+   },
+   "blocked"
+  ],
+  "want": true
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Property": "criticality"
+   },
+   "high priority \u0026 more"
+  ],
+  "want": true
+ },
+ {
+  "fn": "filterValue",
+  "args": [
+   {
+    "Field": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Op": "is",
+    "Values": [
+     "blocked"
+    ]
+   }
+  ],
+  "want": "status:is:blocked"
+ },
+ {
+  "fn": "hasFilter",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Column": "status",
+    "Key": "status",
+    "Property": ""
+   }
+  ],
+  "want": true
+ },
+ {
+  "fn": "filterValue",
+  "args": [
+   {
+    "Field": {
+     "Column": "",
+     "Key": "prop.criticality",
+     "Property": "criticality"
+    },
+    "Op": "is",
+    "Values": [
+     "high priority \u0026 more"
+    ]
+   }
+  ],
+  "want": "prop.criticality:is:high priority \u0026 more"
+ },
+ {
+  "fn": "hasFilter",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": [
+     {
+      "Column": "title",
+      "Key": "title",
+      "Property": ""
+     },
+     {
+      "Column": "",
+      "Key": "prop.x y",
+      "Property": "x y"
+     }
+    ],
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "blocked"
+      ]
+     },
+     {
+      "Field": {
+       "Column": "",
+       "Key": "prop.criticality",
+       "Property": "criticality"
+      },
+      "Op": "is",
+      "Values": [
+       "high priority \u0026 more"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 50,
+    "Sorts": [
+     {
+      "Desc": true,
+      "Field": {
+       "Column": "due",
+       "Key": "due",
+       "Property": ""
+      }
+     },
+     {
+      "Desc": false,
+      "Field": {
+       "Column": "",
+       "Key": "prop.asset_tag",
+       "Property": "asset_tag"
+      }
+     }
+    ],
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Column": "",
+    "Key": "prop.criticality",
+    "Property": "criticality"
+   }
+  ],
+  "want": true
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "",
+   "done"
+  ],
+  "want": "?f=status%3Ais%3Adone\u0026group="
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "",
+   ""
+  ],
+  "want": "?group="
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   ""
+  ],
+  "want": "?group="
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   ""
+  ],
+  "want": "?closed=1\u0026f=status%3Aany_of%3Atodo%2Cdone\u0026group="
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=status%3Aany_of%3Atodo%2Cdone\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group="
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "",
+   "other",
+   "v"
+  ],
+  "want": "?f=status%3Aany_of%3Atodo%2Cdone\u0026f=prop.other%3Ais%3Av\u0026group="
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "table",
+   "done"
+  ],
+  "want": "?f=status%3Ais%3Adone\u0026group="
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "table",
+   ""
+  ],
+  "want": "?group="
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "table"
+  ],
+  "want": "?group="
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "table"
+  ],
+  "want": "?closed=1\u0026f=status%3Aany_of%3Atodo%2Cdone\u0026group="
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "table",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=status%3Aany_of%3Atodo%2Cdone\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group="
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "table",
+   "other",
+   "v"
+  ],
+  "want": "?f=status%3Aany_of%3Atodo%2Cdone\u0026f=prop.other%3Ais%3Av\u0026group="
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "board",
+   "done"
+  ],
+  "want": "?f=status%3Ais%3Adone\u0026group=\u0026view=board"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "board",
+   ""
+  ],
+  "want": "?group=\u0026view=board"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "board"
+  ],
+  "want": "?group=\u0026view=board"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "board"
+  ],
+  "want": "?closed=1\u0026f=status%3Aany_of%3Atodo%2Cdone\u0026group=\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "board",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=status%3Aany_of%3Atodo%2Cdone\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026group=\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "board",
+   "other",
+   "v"
+  ],
+  "want": "?f=status%3Aany_of%3Atodo%2Cdone\u0026f=prop.other%3Ais%3Av\u0026group=\u0026view=board"
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "due",
+   true
+  ],
+  "want": false
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   "due",
+   false
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   {
+    "Column": "status"
+   },
+   "blocked"
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   {
+    "Property": "criticality"
+   },
+   "high priority \u0026 more"
+  ],
+  "want": false
+ },
+ {
+  "fn": "filterValue",
+  "args": [
+   {
+    "Field": {
+     "Column": "status",
+     "Key": "status",
+     "Property": ""
+    },
+    "Op": "any_of",
+    "Values": [
+     "todo",
+     "done"
+    ]
+   }
+  ],
+  "want": "status:any_of:todo,done"
+ },
+ {
+  "fn": "hasFilter",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "status",
+       "Key": "status",
+       "Property": ""
+      },
+      "Op": "any_of",
+      "Values": [
+       "todo",
+       "done"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": true
+   },
+   {
+    "Column": "status",
+    "Key": "status",
+    "Property": ""
+   }
+  ],
+  "want": true
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "done"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=status%3Ais%3Adone"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   ""
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   ""
+  ],
+  "want": "?closed=1\u0026f=owner%3Ais%3A%C3%A9%2A~%27%28x%29"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "",
+   "other",
+   "v"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=prop.other%3Ais%3Av"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "done"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=status%3Ais%3Adone"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   ""
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table"
+  ],
+  "want": "?closed=1\u0026f=owner%3Ais%3A%C3%A9%2A~%27%28x%29"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "table",
+   "other",
+   "v"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=prop.other%3Ais%3Av"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "done"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=status%3Ais%3Adone\u0026view=board"
+ },
+ {
+  "fn": "withStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   ""
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026view=board"
+ },
+ {
+  "fn": "clearStatus",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026view=board"
+ },
+ {
+  "fn": "toggleClosed",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board"
+  ],
+  "want": "?closed=1\u0026f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "criticality",
+   "high priority \u0026 more"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026view=board"
+ },
+ {
+  "fn": "toggleProp",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "board",
+   "other",
+   "v"
+  ],
+  "want": "?f=owner%3Ais%3A%C3%A9%2A~%27%28x%29\u0026f=prop.other%3Ais%3Av\u0026view=board"
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "due",
+   true
+  ],
+  "want": false
+ },
+ {
+  "fn": "sortedBy",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   "due",
+   false
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Column": "status"
+   },
+   "blocked"
+  ],
+  "want": false
+ },
+ {
+  "fn": "Has",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Property": "criticality"
+   },
+   "high priority \u0026 more"
+  ],
+  "want": false
+ },
+ {
+  "fn": "filterValue",
+  "args": [
+   {
+    "Field": {
+     "Column": "owner",
+     "Key": "owner",
+     "Property": ""
+    },
+    "Op": "is",
+    "Values": [
+     "é*~'(x)"
+    ]
+   }
+  ],
+  "want": "owner:is:é*~'(x)"
+ },
+ {
+  "fn": "hasFilter",
+  "args": [
+   {
+    "Closed": false,
+    "Columns": null,
+    "Filters": [
+     {
+      "Field": {
+       "Column": "owner",
+       "Key": "owner",
+       "Property": ""
+      },
+      "Op": "is",
+      "Values": [
+       "é*~'(x)"
+      ]
+     }
+    ],
+    "GroupBy": {
+     "Column": "",
+     "Key": "",
+     "Property": ""
+    },
+    "Kind": "",
+    "Limit": 0,
+    "Offset": 0,
+    "Sorts": null,
+    "SpaceID": null,
+    "Ungrouped": false
+   },
+   {
+    "Column": "owner",
+    "Key": "owner",
+    "Property": ""
+   }
+  ],
+  "want": true
+ },
+ {
+  "fn": "fieldLabel",
+  "args": [
+   {
+    "Column": "status",
+    "Key": "status",
+    "Property": ""
+   },
+   [
+    {
+     "DataType": "",
+     "ID": "",
+     "Key": "criticality",
+     "Label": "Criticality",
+     "Options": null,
+     "Value": ""
+    }
+   ]
+  ],
+  "want": "Status"
+ },
+ {
+  "fn": "fieldLabel",
+  "args": [
+   {
+    "Column": "nosuch",
+    "Key": "nosuch",
+    "Property": ""
+   },
+   [
+    {
+     "DataType": "",
+     "ID": "",
+     "Key": "criticality",
+     "Label": "Criticality",
+     "Options": null,
+     "Value": ""
+    }
+   ]
+  ],
+  "want": "nosuch"
+ },
+ {
+  "fn": "fieldLabel",
+  "args": [
+   {
+    "Column": "",
+    "Key": "prop.criticality",
+    "Property": "criticality"
+   },
+   [
+    {
+     "DataType": "",
+     "ID": "",
+     "Key": "criticality",
+     "Label": "Criticality",
+     "Options": null,
+     "Value": ""
+    }
+   ]
+  ],
+  "want": "Criticality"
+ },
+ {
+  "fn": "fieldLabel",
+  "args": [
+   {
+    "Column": "",
+    "Key": "prop.other",
+    "Property": "other"
+   },
+   [
+    {
+     "DataType": "",
+     "ID": "",
+     "Key": "criticality",
+     "Label": "Criticality",
+     "Options": null,
+     "Value": ""
+    }
+   ]
+  ],
+  "want": "other"
+ }
+]

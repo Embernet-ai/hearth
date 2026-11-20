@@ -1,0 +1,116 @@
+/* The house look for Hearth: the embernet-design tokens in the day palette, the EmberCORE console's own dark set at night,
+   and the console's shapes (16px cards, pill buttons, ember focus ring, ember marked active items).
+
+   It is loaded after the base stylesheet (hearth.css), which stays in place because it carries the layout of the boards,
+   calendars, popovers and the canvas. This file changes colour, type, radius and shadow only: no box model, no behavior.
+   Both palettes define every variable the base stylesheet reads, at the same specificity, so these win by order.
+
+   Contrast was measured, not assumed (text 4.5:1, a control's edge 3:1), for these pairs in both palettes: text on page, card,
+   hover and table-head grounds; links; muted text; ok, warn and error text; a control's border; white on the ember fill. */
+
+:root[data-theme='day'] {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --panel: #FFFFFF;
+  --surface: #F7F8FA;
+  --rail: #F7F8FA;
+  --hover: #EEF0F4;
+  --line: #D0D5DD;
+  --line-strong: #98A2B3;
+  --edge: #667085;
+  --fg: #101828;
+  --muted: #475467;
+  --accent: #B42318;
+  --accent-dim: #D92D20;
+  --ok: #05603A;
+  --warn: #93370D;
+  --err: #B42318;
+  --tint: #FEF3F2;
+  --ok-tint: #ECFDF3;
+  --warn-tint: #FFFAEB;
+  --err-tint: #FEF3F2;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-pop: 0 12px 32px -8px rgba(16, 24, 40, 0.14), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
+}
+:root[data-theme='dark'], :root:not([data-theme]) {
+  color-scheme: dark;
+  --bg: #0B0E14;
+  --panel: #121722;
+  --surface: #101520;
+  --rail: #0E1219;
+  --hover: #1A2232;
+  --line: #2B3445;
+  --line-strong: #3A4556;
+  --edge: #7A8599;
+  --fg: #E7ECF3;
+  --muted: #AEB7C6;
+  --accent: #FDA29B;
+  --accent-dim: #D92D20;
+  --ok: #6CE9A6;
+  --warn: #FEC84B;
+  --err: #FDA29B;
+  --tint: #2A1512;
+  --ok-tint: #0B2A1E;
+  --warn-tint: #2B1D08;
+  --err-tint: #2A1512;
+  --shadow: none;
+  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+body { font-family: var(--en-font); font-size: var(--en-fs-sm); }
+code, pre, kbd, samp, .elapsed, .who { font-family: var(--en-font-mono); }
+h1, h2, h3 { color: var(--fg); letter-spacing: -0.01em; }
+a { color: var(--accent); }
+
+/* Controls: pill buttons, 10px fields, an ember ring on focus. */
+button, .button { border-radius: var(--en-r-pill); font-weight: 600; background: var(--panel); border-color: var(--edge); color: var(--fg); }
+:root[data-theme='day'] button:hover, :root[data-theme='day'] .button:hover { background: var(--hover); border-color: var(--edge); }
+button:hover, .button:hover { background: var(--hover); }
+button.primary, .button.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
+:root[data-theme='day'] button.primary:hover, :root[data-theme='day'] .button.primary:hover,
+button.primary:hover, .button.primary:hover { background: #B42318; border-color: #B42318; color: #fff; }
+button.ghost { background: transparent; border-color: var(--line-strong); color: var(--fg); }
+button.danger, .danger { color: var(--err); }
+input, select, textarea { border-radius: 10px; background: var(--bg); border-color: var(--edge); color: var(--fg); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+:focus-visible { outline: 2px solid var(--en-focus); outline-offset: 2px; }
+:root[data-theme='dark'] :focus-visible { outline-color: var(--accent); }
+
+/* Surfaces: 16px cards with the console's soft shadow, popovers raised. */
+.card, section.card, details.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--en-r-card); box-shadow: var(--shadow); }
+.popover, [popover] { border-radius: var(--en-r-card); background: var(--panel); border-color: var(--line); box-shadow: var(--shadow-pop); color: var(--fg); }
+
+/* Tables and lists: a quiet head, a clear hover. */
+table.list thead th, table thead th { background: var(--surface); color: var(--muted); font-size: var(--en-fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; }
+table.list tbody tr:hover { background: var(--hover); }
+table.list td, table.list th { border-color: var(--line); }
+
+/* Chips, tags, status: pills, with ember for what is selected. */
+.chip, .tag, .status { border-radius: var(--en-r-pill); }
+.chip { border-color: var(--edge); color: var(--fg); background: var(--panel); }
+a.chip:hover, .chip:hover { background: var(--hover); text-decoration: none; }
+/* The base rules (.chip.on, .toolbar>.chip.on, and the day override) fill the chip with ember and print white on it; the
+   house look marks a selected chip with the ember tint and ember ink, as the console does. Selector weight matches theirs. */
+:root[data-theme] .chip.on, :root[data-theme] .toolbar>.chip.on { background: var(--tint); border-color: var(--accent-dim); color: var(--accent); font-weight: 700; }
+.tag { background: var(--surface); color: var(--muted); border: 1px solid var(--line); }
+:root[data-theme] .status.in_progress { background: var(--warn-tint); color: var(--warn); }
+:root[data-theme] .status.blocked { background: var(--err-tint); color: var(--err); }
+:root[data-theme] .status.done { background: var(--ok-tint); color: var(--ok); }
+:root[data-theme] .status.todo, :root[data-theme] .status.cancelled { background: var(--surface); color: var(--muted); }
+.err, .error, p.err { color: var(--err); }
+.ok { color: var(--ok); }
+.warn, p.warn { color: var(--warn); }
+.muted { color: var(--muted); }
+
+/* The rail: ember marks the page you are on. */
+.sidenav { background: var(--rail); border-right-color: var(--line); }
+.navitem { color: var(--fg); }
+.navitem:hover { background: var(--hover); }
+.navitem.on { background: var(--tint); border-left-color: var(--accent-dim); color: var(--fg); font-weight: 700; }
+.scanlink, .scanlink:hover, .scanlink.on { background: var(--accent-dim); color: #fff; border-left-color: transparent; }
+.unread, .ncount { border-radius: var(--en-r-pill); }
+.unread { background: var(--accent-dim); color: #fff; }
+.topbar { background: var(--panel); border-bottom-color: var(--line); }
+footer { color: var(--muted); border-top-color: var(--line); }
+.playbanner { background: var(--en-warn-tint); color: var(--en-warn-text); }
+:root[data-theme='dark'] .playbanner { background: #2B1D08; color: #FEC84B; }

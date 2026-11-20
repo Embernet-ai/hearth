@@ -1,0 +1,10 @@
+# Derived from: ls /data inside the MinIO pod
+# Captured: 2026-08-10, from the running Hearth (Rust) stack on WSL k3s, namespace hearth.
+# This is OBSERVED BEHAVIOUR of a running system, not source. See PROVENANCE.md.
+#
+bulk-upload-staging
+doc-storage
+docx-upload
+macro-call-recording-local
+macro-email-attachments
+static-file-storage

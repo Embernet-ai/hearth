@@ -1,0 +1,93 @@
+{{- if .Values.opensearch.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hearth.opensearch.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    app.kubernetes.io/component: opensearch
+spec:
+  selector:
+    {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "opensearch") | nindent 4 }}
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "hearth.opensearch.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+    app.kubernetes.io/component: opensearch
+spec:
+  serviceName: {{ include "hearth.opensearch.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "opensearch") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hearth.componentSelectorLabels" (dict "root" . "component" "opensearch") | nindent 8 }}
+    spec:
+      # OpenSearch refuses to start if it cannot raise mmap counts, and the
+      # default on most nodes is far below what Lucene wants. Setting it here
+      # rather than on the node keeps the requirement with the thing that has
+      # it, and it is the single commonest reason this pod crash loops.
+      initContainers:
+        - name: sysctl
+          image: {{ .Values.opensearch.initImage }}
+          command: ["sh", "-c", "sysctl -w vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+            runAsUser: 0
+      containers:
+        - name: opensearch
+          image: {{ .Values.opensearch.image }}
+          env:
+            - name: discovery.type
+              value: single-node
+            # A single self-hosted node behind an application that is already
+            # authenticated. The security plugin here would add a certificate
+            # authority, a demo password to rotate, and TLS on a link that never
+            # leaves the namespace.
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"
+            - name: DISABLE_INSTALL_DEMO_CONFIG
+              value: "true"
+            - name: OPENSEARCH_JAVA_OPTS
+              value: {{ .Values.opensearch.javaOpts | quote }}
+            - name: cluster.name
+              value: hearth
+          ports:
+            - containerPort: 9200
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/opensearch/data
+          readinessProbe:
+            httpGet: { path: /_cluster/health, port: 9200 }
+            # A JVM with a cold page cache takes its time. Probing too early
+            # only produces a restart loop that makes it take longer.
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          resources:
+            {{- toYaml .Values.opensearch.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        annotations:
+          helm.sh/resource-policy: keep
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.opensearch.persistence.storageClass }}
+        storageClassName: {{ .Values.opensearch.persistence.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.opensearch.persistence.size }}
+{{- end }}

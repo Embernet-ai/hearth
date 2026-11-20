@@ -1,0 +1,65 @@
+# Packages the Helm chart and publishes it to GitHub Pages on every release tag, so
+#   helm repo add hearth https://embernet-ai.github.io/hearth/
+# always lists every version. The tag has to match the chart's own version, so a
+# release cannot publish a chart that says something else.
+name: Publish Helm chart
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: chart-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with: { version: v3.16.2 }
+
+      - name: the tag matches the chart
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          want="${GITHUB_REF_NAME#v}"
+          have=$(sed -n 's/^version: *//p' deploy/charts/hearth/Chart.yaml | head -n1)
+          app=$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' deploy/charts/hearth/Chart.yaml | head -n1)
+          [ "$want" = "$have" ] && [ "$want" = "$app" ] || { echo "::error::tag $want, chart version $have, appVersion $app must all match"; exit 1; }
+
+      - name: lint and render
+        run: |
+          helm lint deploy/charts/hearth
+          scripts/chart-test.sh
+
+      - name: package and merge into the published index
+        run: |
+          set -euo pipefail
+          helm package deploy/charts/hearth -d .deploy
+          # Merge into the published index so every version stays listed. A 404 means
+          # nothing is published yet and a fresh index is right. Anything else fails,
+          # because writing a one-entry index over a real one strands every install
+          # pinned to an older version.
+          code=$(curl -sS -o .deploy/existing-index.yaml -w '%{http_code}' https://embernet-ai.github.io/hearth/index.yaml || true)
+          case "$code" in
+            200) helm repo index .deploy --url https://embernet-ai.github.io/hearth/ --merge .deploy/existing-index.yaml ;;
+            404) helm repo index .deploy --url https://embernet-ai.github.io/hearth/ ;;
+            *) echo "::error::could not read the published index (HTTP $code); refusing to overwrite it"; exit 1 ;;
+          esac
+          rm -f .deploy/existing-index.yaml
+          cp internal/web/static/icon-192.png .deploy/icon.png
+
+      - name: deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .deploy
+          keep_files: true

@@ -1,0 +1,110 @@
+name: Publish
+
+# Builds the container image with Podman and publishes it to GHCR.
+#
+# Both triggers, because they name two different things:
+#
+#   push to main   ->  sha-<short>   every commit on main is built, so main is
+#                                    always deployable and a broken build shows
+#                                    up when it lands rather than at release
+#   tag v*         ->  <version>     a release somebody chose by name, the same
+#                                    convention as thoth, the dashboard and vord
+#
+# A tagged build publishes both names for the same image, so a values file
+# pinned to either keeps resolving.
+#
+# There was no publish workflow here at all before this. ci.yml runs tests and
+# builds nothing, yet ghcr.io/embernet-ai/hearth had tags in it, so images were
+# arriving from a workstation with whatever Go version, module cache and
+# uncommitted working tree that machine happened to have. The tag said which
+# commit it claimed to be and nothing checked.
+#
+# No :latest, ever. Beyond the usual argument, a moving tag means the Deployment
+# spec does not change between deploys, so Kubernetes has no reason to act and
+# the pod keeps serving old code while every probe reports healthy. The chart's
+# own comments say that has happened here once.
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to publish, without the leading v"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: work out the version and the tags
+        id: meta
+        run: |
+          set -euo pipefail
+
+          # A registry path must be lowercase and github.repository is not
+          # (Embernet-ai), so it cannot be interpolated directly.
+          image=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          short=$(git rev-parse --short HEAD)
+
+          # A push to main has no version to speak of, so the sha is the only
+          # name it gets. A tag has both.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.tag }}"
+          elif [ "${GITHUB_REF_TYPE:-branch}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=""
+          fi
+
+          {
+            echo "image=$image"
+            echo "short=$short"
+            echo "version=$version"
+            echo "tags<<TAGS_EOF"
+            echo "${REGISTRY}/${image}:sha-${short}"
+            if [ -n "$version" ]; then echo "${REGISTRY}/${image}:${version}"; echo "${REGISTRY}/${image}:stable"; fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "publishing ${REGISTRY}/${image}:sha-${short} ${version:+and :$version}"
+
+      # Podman builds from the Containerfile, the same way you would build it by hand.
+      # GITHUB_TOKEN carries packages:write for this repository, so no personal
+      # access token has to exist anywhere for a publish to happen.
+      - name: log in to the registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+
+      - name: build and push
+        run: |
+          set -euo pipefail
+          # amd64 only. The multi-arch image follows in a small bump release.
+          first=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          podman build --platform linux/amd64 -f Containerfile \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            --label org.opencontainers.image.version=${{ steps.meta.outputs.version }} \
+            -t "$first" .
+          for t in ${{ steps.meta.outputs.tags }}; do
+            podman tag "$first" "$t"
+            podman push "$t"
+          done
+
+      - name: say what to deploy
+        run: |
+          tag="${{ steps.meta.outputs.version }}"
+          if [ -z "$tag" ]; then tag="sha-${{ steps.meta.outputs.short }}"; fi
+          echo "::notice::helm upgrade --install hearth deploy/charts/hearth -n hearth --set image.tag=$tag"
