@@ -222,6 +222,9 @@ func (s *Docs) overlay(ctx context.Context, orgID string, ds []*docs.Document, w
 		}
 		var ext *docs.ExternalTask
 		var assignees []string
+		// A person EmberOps names that this read cannot map to a Hearth id. Staff hold only Select on User, so a read made as
+		// one of them can come back with no hearth_id, and copying that state would clear the task's assignees in the spine.
+		unknown := false
 		if spec.tasky && d.Task != nil {
 			if st := spec.statuses[r.S(spec.status)]; st != "" {
 				d.Task.Status = st
@@ -235,18 +238,23 @@ func (s *Docs) overlay(ctx context.Context, orgID string, ds []*docs.Document, w
 			if a := r.S("hearth_primary_assignee"); a != "" {
 				if id := byEmail[a]; id != "" {
 					d.Task.AssigneeID = &id
+				} else {
+					unknown = true
 				}
 			}
 			for _, e := range assignList(r.S("_assign")) {
 				if id := byEmail[e]; id != "" {
 					assignees = append(assignees, id)
+				} else {
+					unknown = true
 				}
 			}
 			cp := *d.Task
 			ext = &docs.ExternalTask{Status: cp.Status, Priority: cp.Priority, AssigneeID: cp.AssigneeID,
 				DueAt: cp.DueAt, StartedAt: cp.StartedAt, CompletedAt: cp.CompletedAt}
 		}
-		if !isChanged[d.ID] {
+		if !isChanged[d.ID] || unknown {
+			// Unknown people: the page shows EmberOps's state, and the copy waits for a read that can tell who they are.
 			continue
 		}
 		body := d.Body
