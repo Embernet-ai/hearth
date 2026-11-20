@@ -341,6 +341,11 @@ garage:
     # this together with Helm's --timeout.
     timeoutSeconds: 540
 
+  # The Garage chart's own egress policies, which it renders unless told not to. Off, so a
+  # default render of this chart has no NetworkPolicy at all.
+  egressPolicies:
+    enabled: false
+
   # No NetworkPolicy by default: every app in the cluster can reach the object
   # store, the same as every other service this chart installs. To restrict who may
   # reach it, set enabled to true and list who may in s3From.
