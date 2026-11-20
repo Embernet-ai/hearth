@@ -278,6 +278,15 @@ func (s *Service) Authenticate(ctx context.Context, header string) (*Caller, err
 // The endpoints
 // -----------------------------------------------------------------------------
 
+// WithDocs makes the endpoints read and write documents through the store the
+// pages use. On the EmberOps back end that is the one that sends every write on
+// to EmberOps; without it an API write changes Hearth's own row only and the
+// next read shows EmberOps's older record over it.
+func (s *Service) WithDocs(d Spine) *Service {
+	s.docs = d
+	return s
+}
+
 // Routes returns the API handler, already authenticated.
 func (s *Service) Routes() http.Handler {
 	mux := http.NewServeMux()

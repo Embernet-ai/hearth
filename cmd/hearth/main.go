@@ -425,6 +425,10 @@ func run() error {
 	}
 	// The admin time removal answers from whichever back end holds the time.
 	apiSvc.WithTime(set.Time)
+	// The public API and the agent tools write documents through the same store
+	// as the pages, so on the EmberOps back end their writes reach EmberOps.
+	apiSvc.WithDocs(set.Docs)
+	mcpSrv.WithDocs(set.Docs)
 	if rs, ok := set.Rules.(rules.RunStore); ok && ops != nil {
 		// Rules and what they decided live in EmberOPS; the engine, which runs
 		// here on Hearth's events, reads and writes them there.
