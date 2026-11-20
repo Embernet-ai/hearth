@@ -1,6 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
+  import PushSettings from '../../components/PushSettings.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -72,6 +73,8 @@
 
     <div  class="row"><button  type="submit"  class="primary">Save</button></div>
   </form>
+
+  <PushSettings />
 </section>
 {/snippet}
 {@render content(dot)}

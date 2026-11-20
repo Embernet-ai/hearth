@@ -1,0 +1,25 @@
+{{- if and .Values.push.enabled (not .Values.push.vapid.existingSecret) }}
+{{- $name := printf "%s-vapid" (include "hearth.fullname" .) }}
+{{- $old := lookup "v1" "Secret" .Release.Namespace $name }}
+{{- $key := genPrivateKey "ecdsa" }}
+{{- if and $old $old.data (hasKey $old.data "key.pem") }}{{ $key = (index $old.data "key.pem" | b64dec) }}{{ end }}
+# The VAPID key for Web Push, made once and kept. A new key would strand every phone that turned
+# notifications on, because a subscription is bound to the key it was made against. It is a P-256 key
+# in PEM; Hearth derives the two halves Web Push wants. It is never in values and never printed.
+#
+# helm.sh/resource-policy keep leaves it when the release is removed, and the lookup reads it back on
+# every upgrade. A pipeline that renders with `helm template` has no cluster to look in, so such a
+# pipeline names its own Secret in push.vapid.existingSecret instead.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  key.pem: {{ $key | b64enc | quote }}
+{{- end }}

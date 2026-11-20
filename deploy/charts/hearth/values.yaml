@@ -226,6 +226,24 @@ s3:
 encryption:
   enabled: true
 
+# ─── Push notifications ────────────────────────────────────────────────────────
+# The installed app (Hearth is a PWA: Add to Home Screen on an iPhone from iOS 16.4, Install on
+# Android and desktop) rings when it is closed, through Web Push. Each person turns it on for each
+# device from Inbox > Notifications on this device, and chooses which kinds ring. There is no extra
+# service: the sender is part of Hearth, and the one thing the cluster must allow is an outbound
+# connection on 443 to the browsers' push services (Google, Apple, Mozilla and Microsoft).
+#
+# The VAPID key is a Secret the chart makes once and keeps across upgrades (<release>-vapid). Never
+# delete it while people have notifications on: they would each have to turn them on again.
+push:
+  enabled: true
+  # The contact the push services see, a mailto: or https: address. Empty: the public base URL.
+  subject: ""
+  vapid:
+    # A Secret you manage, holding the key as key.pem. Needed only when something renders this chart
+    # without a cluster to look in (helm template), because it would make a new key on every render.
+    existingSecret: ""
+
 # ─── Google, per person ────────────────────────────────────────────────────────
 # Each person connects their own account from /account. Never a service account
 # for the company: a domain-wide credential reads every mailbox, is invisible to

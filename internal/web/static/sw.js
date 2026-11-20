@@ -579,3 +579,76 @@ function offlinePage(title, detail) {
     esc(title) + "</h1><p>" + esc(detail) +
     '</p><a href="/outbox">Outbox</a></main></body></html>';
 }
+
+// ---------------------------------------------------------------------------
+// Web Push
+// ---------------------------------------------------------------------------
+//
+// The server sends a push only for something already in the person's inbox, and it carries the one-line
+// sentence and where to go, never the item's content. A notification has to be shown for every push (the
+// browsers refuse a subscription that is not allowed to, and iOS stops delivering after a silent one), so
+// anything this cannot read still shows as plain "Hearth".
+
+// Where a click goes: a path on this site, nothing else. The payload comes from our own server, but a path
+// that is not ours would open somebody else's page inside the installed app.
+function pushTarget(url) {
+  if (typeof url === "string" && url.charAt(0) === "/" && url.charAt(1) !== "/" && url.indexOf("\\") === -1) {
+    return url;
+  }
+  return "/inbox";
+}
+
+self.addEventListener("push", function (event) {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (err) {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  const title = (typeof data.title === "string" && data.title) || "Hearth";
+  const options = {
+    body: typeof data.body === "string" ? data.body : "",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    // The same thing again replaces the earlier notification instead of stacking.
+    tag: typeof data.tag === "string" && data.tag ? data.tag : undefined,
+    renotify: typeof data.tag === "string" && !!data.tag,
+    data: { url: pushTarget(data.url) },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  const target = pushTarget(event.notification.data && event.notification.data.url);
+  event.waitUntil((async function () {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      // An open window of the app takes the click, so a person already in Hearth is not given a second copy.
+      if (c.url && new URL(c.url).origin === self.location.origin && "focus" in c) {
+        try { await c.focus(); } catch (err) { /* not fatal */ }
+        if ("navigate" in c) { try { await c.navigate(target); } catch (err) { /* opens below */ } }
+        return;
+      }
+    }
+    await self.clients.openWindow(target);
+  })());
+});
+
+// The browser rotated the subscription (the push service asked it to). Subscribe again with the same key and
+// hand the new one to the server, or the device would quietly stop ringing.
+self.addEventListener("pushsubscriptionchange", function (event) {
+  event.waitUntil((async function () {
+    try {
+      const old = event.oldSubscription;
+      const key = old && old.options && old.options.applicationServerKey;
+      if (!key) return;
+      const sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      await fetch("/push/subscribe", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(Object.assign({}, sub.toJSON(), { label: "" })),
+      });
+    } catch (err) { /* the person turns it on again from the settings */ }
+  })());
+});

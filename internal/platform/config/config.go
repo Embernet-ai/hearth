@@ -91,6 +91,15 @@ type Config struct {
 	// third-party credential in the clear.
 	EncryptionKey string
 
+	// VAPIDKeyFile is a P-256 private key in PEM that Web Push signs with
+	// (HEARTH_VAPID_KEY_FILE). The chart mounts one from a Secret that survives
+	// upgrades. Empty is the normal case for a Quadlet install: the key is made
+	// once and kept in the database. PushSubject is the contact the browsers'
+	// push services see, a mailto: or https: address (HEARTH_PUSH_SUBJECT);
+	// empty means the public base URL.
+	VAPIDKeyFile string
+	PushSubject  string
+
 	// Version is the release name this binary was deployed as.
 	//
 	// buildinfo deliberately reads Go's VCS stamps rather than ldflags so the
@@ -329,6 +338,8 @@ func Load() (*Config, error) {
 	// and a deployment that wants it will say so.
 	cfg.InboundKey = strings.TrimSpace(os.Getenv("HEARTH_INBOUND_KEY"))
 	cfg.EncryptionKey = strings.TrimSpace(os.Getenv("HEARTH_ENCRYPTION_KEY"))
+	cfg.VAPIDKeyFile = strings.TrimSpace(os.Getenv("HEARTH_VAPID_KEY_FILE"))
+	cfg.PushSubject = strings.TrimSpace(os.Getenv("HEARTH_PUSH_SUBJECT"))
 	cfg.Version = strings.TrimSpace(os.Getenv("HEARTH_VERSION"))
 	cfg.GoogleClientID = strings.TrimSpace(os.Getenv("HEARTH_GOOGLE_CLIENT_ID"))
 	cfg.GoogleClientSecret = os.Getenv("HEARTH_GOOGLE_CLIENT_SECRET")

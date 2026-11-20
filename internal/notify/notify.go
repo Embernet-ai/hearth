@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Embernet-ai/hearth/internal/core"
+	"github.com/Embernet-ai/hearth/internal/push"
 )
 
 // Reasons somebody is being told something.
@@ -64,16 +65,18 @@ type Notification struct {
 }
 
 // Href is where clicking it goes.
-func (n *Notification) Href() string {
-	switch core.EntityType(n.EntityType) {
+func (n *Notification) Href() string { return hrefOf(n.EntityType, n.EntityID) }
+
+func hrefOf(entityType, entityID string) string {
+	switch core.EntityType(entityType) {
 	case core.EntityChannel:
-		return "/channels/" + n.EntityID
+		return "/channels/" + entityID
 	case core.EntityDepartmentRequest:
-		return "/departments/requests/" + n.EntityID
+		return "/departments/requests/" + entityID
 	case core.EntityTimeOff:
-		return "/time-off#r-" + n.EntityID
+		return "/time-off#r-" + entityID
 	default:
-		return "/documents/" + n.EntityID
+		return "/documents/" + entityID
 	}
 }
 
@@ -101,10 +104,65 @@ func DefaultPrefs() Prefs {
 }
 
 type Service struct {
-	db *pgxpool.Pool
+	db     *pgxpool.Pool
+	pusher Pusher
 }
 
 func New(db *pgxpool.Pool) *Service { return &Service{db: db} }
+
+// Pusher rings a person's devices. It is the slice of the push package this one needs, so the inbox works
+// exactly as before when no push service is configured.
+type Pusher interface {
+	Notify(ctx context.Context, m push.Message)
+}
+
+// SetPusher makes every notification that reaches an inbox also ring the person's devices. Called once at
+// start, before anything is delivered.
+func (s *Service) SetPusher(p Pusher) { s.pusher = p }
+
+// pushKind files a notification under the kind a person chooses between. Requests that wait on a decision
+// (time off, departments) and the answers to them are approvals; the rest keep the reason the inbox gave.
+func pushKind(reason string, entityType core.EntityType) string {
+	if entityType == core.EntityTimeOff || entityType == core.EntityDepartmentRequest {
+		return push.KindApprovals
+	}
+	switch reason {
+	case ReasonAssigned:
+		return push.KindAssigned
+	case ReasonMentioned:
+		return push.KindMentioned
+	case ReasonCommented:
+		return push.KindCommented
+	case ReasonDueSoon:
+		return push.KindDueSoon
+	default:
+		return push.KindChanged
+	}
+}
+
+// ring sends the push that copies a new inbox row. Quiet hours hold it, as they hold email: the row is in
+// the inbox for when the quiet ends, and nobody is woken for a work order raised at three in the morning.
+func (s *Service) ring(ctx context.Context, d Delivery) {
+	if s.pusher == nil {
+		return
+	}
+	p, err := s.Prefs(ctx, d.PrincipalID)
+	if err == nil && p.Quiet(time.Now()) {
+		return
+	}
+	n := &Notification{Reason: d.Reason, Title: d.Title}
+	if d.ActorID != "" {
+		_ = s.db.QueryRow(ctx, `SELECT COALESCE(NULLIF(display_name,''), '') FROM principals WHERE id = $1`,
+			d.ActorID).Scan(&n.ActorName)
+	}
+	s.pusher.Notify(ctx, push.Message{
+		PrincipalID: d.PrincipalID,
+		Kind:        pushKind(d.Reason, d.Ref.Type),
+		Body:        n.Sentence(),
+		URL:         hrefOf(string(d.Ref.Type), d.Ref.ID),
+		Tag:         "hearth-" + string(d.Ref.Type) + "-" + d.Ref.ID,
+	})
+}
 
 // -----------------------------------------------------------------------------
 // Watching
@@ -233,7 +291,11 @@ func (s *Service) Deliver(ctx context.Context, d Delivery) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("notify: deliver: %w", err)
 	}
-	return ct.RowsAffected() > 0, nil
+	created := ct.RowsAffected() > 0
+	if created {
+		s.ring(ctx, d)
+	}
+	return created, nil
 }
 
 // Inbox returns somebody's notifications, newest first.
