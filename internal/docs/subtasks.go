@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -123,14 +124,20 @@ func (s *Service) Children(ctx context.Context, orgID string, actor core.Subject
 
 type closedKey struct{}
 
-// ClosedSink collects the ids of the subtasks a write closed along with its
-// parent. A caller that wants to say so ("Closed with 3 subtasks") or to copy
-// the change somewhere else (EmberOps) puts one on the context with
-// WithClosedSink before the write and reads it after.
-type ClosedSink struct{ IDs []string }
+// ClosedSink collects the ids of the subtasks a write moved along with its
+// parent, and the status they were moved to. A caller that wants to say so
+// ("Closed with 3 subtasks") or to copy the change somewhere else (EmberOps)
+// puts one on the context with WithClosedSink before the write and reads it
+// after. The name is from the first version, which only closed; the sink now
+// carries any status.
+type ClosedSink struct {
+	IDs []string
+	// Status is what the subtasks were moved to. Empty until a cascade ran.
+	Status string
+}
 
 // WithClosedSink returns a context that records, in the returned sink, every
-// subtask a status change on that context closes with its parent.
+// subtask a status change on that context moves with its parent.
 func WithClosedSink(ctx context.Context) (context.Context, *ClosedSink) {
 	sink := &ClosedSink{}
 	return context.WithValue(ctx, closedKey{}, sink), sink
@@ -146,33 +153,63 @@ func WithClosedSinkShared(ctx context.Context) (context.Context, *ClosedSink) {
 	return WithClosedSink(ctx)
 }
 
-// NoteClosed records ids in the context's sink. closeSubtasks calls it after the
-// commit; a store that closes subtasks some other way, or a test double for one,
-// calls it too.
-func NoteClosed(ctx context.Context, ids []string) {
+// NoteClosed records ids closed to done in the context's sink. A store that
+// moves subtasks some other way, or a test double for one, calls it.
+func NoteClosed(ctx context.Context, ids []string) { NoteCascaded(ctx, StatusDone, ids) }
+
+// NoteCascaded records ids moved to status in the context's sink. cascadeStatus
+// calls it after the commit.
+func NoteCascaded(ctx context.Context, status string, ids []string) {
+	if len(ids) == 0 {
+		return
+	}
 	if sink, ok := ctx.Value(closedKey{}).(*ClosedSink); ok && sink != nil {
 		sink.IDs = append(sink.IDs, ids...)
+		sink.Status = status
 	}
 }
 
-// closeSubtasks moves every open task beneath parentID, at any depth, to done,
-// inside the transaction that closed the parent.
+// IsClosedStatus reports whether s is a status a task is finished in: done or
+// cancelled (ClosedStatuses).
+func IsClosedStatus(s string) bool { return slices.Contains(ClosedStatuses, s) }
+
+// cascadeFrom runs the cascade for a status write, if the write changed the
+// status. cur is the status before (nil for none), next the one being set.
+// Every path that sets a status calls this inside its own transaction, so the
+// rule lives in one place: a parent's change reaches its subtasks and a
+// subtask's change never reaches up.
+func (s *Service) cascadeFrom(ctx context.Context, tx pgx.Tx, orgID, parentID, principal string, cur, next *string) ([]string, error) {
+	if next == nil || !IsValidStatus(*next) || (cur != nil && *cur == *next) {
+		return nil, nil
+	}
+	return s.cascadeStatus(ctx, tx, orgID, parentID, principal, *next)
+}
+
+// cascadeStatus moves every open task beneath parentID, at any depth, to the
+// status the parent was just given, inside the transaction that changed the
+// parent.
 //
 // "Open" is anything that is not done and not cancelled (ClosedStatuses): a
 // subtask somebody already finished or deliberately dropped keeps its status
-// and its completed date. The walk goes through closed subtasks too, because
-// an open task under a cancelled one is still an open task under the parent.
+// and its completed date, whatever the parent becomes, so a parent set back to
+// in progress reopens nothing and a parent cancelled does not undo finished
+// work. The walk goes through closed subtasks too, because an open task under
+// a cancelled one is still an open task under the parent. A subtask already in
+// the new status is left alone and gets no row.
 //
-// Each one is closed the way a person closing it would: a new version with its
-// history row, started and completed dates, a status event (so rules, search
-// and notifications see it) and an audit entry naming who closed the parent.
-// The events carry closed_with so notifications can fold them into the
-// parent's. Permission was settled on the parent: whoever may close it closes
-// what is inside it, the way a folder's contents went with the folder, and
-// visibility never flows up so this grants nothing to anybody.
+// Each one is changed the way a person changing it would: a new version with
+// its history row, started and completed dates derived from the status exactly
+// as Update derives them, a status event (so rules, search and notifications
+// see it) and an audit entry naming the parent. The events carry with_parent
+// (and closed_with when the new status is a closed one) so notifications can
+// fold them into the parent's. Permission was settled on the parent: whoever
+// may change it changes what is inside it, the way a folder's contents went
+// with the folder, and visibility never flows up so this grants nothing to
+// anybody. Running timers are not touched, exactly as when a person changes
+// the status of one task by hand.
 //
-// Returns the ids closed, so the caller can report them.
-func (s *Service) closeSubtasks(ctx context.Context, tx pgx.Tx, orgID, parentID, principal string) ([]string, error) {
+// Returns the ids moved, so the caller can report them.
+func (s *Service) cascadeStatus(ctx context.Context, tx pgx.Tx, orgID, parentID, principal, to string) ([]string, error) {
 	rows, err := tx.Query(ctx, `
 		WITH RECURSIVE below AS (
 		    SELECT id, 1 AS depth FROM documents
@@ -187,10 +224,11 @@ func (s *Service) closeSubtasks(ctx context.Context, tx pgx.Tx, orgID, parentID,
 		  JOIN task_fields t ON t.document_id = d.id
 		 WHERE d.id IN (SELECT id FROM below)
 		   AND t.status NOT IN ('done', 'cancelled')
+		   AND t.status <> $3
 		 ORDER BY d.id
-		   FOR UPDATE OF d`, parentID, orgID)
+		   FOR UPDATE OF d`, parentID, orgID, to)
 	if err != nil {
-		return nil, fmt.Errorf("docs: find subtasks to close: %w", err)
+		return nil, fmt.Errorf("docs: find subtasks to move: %w", err)
 	}
 	type open struct {
 		id, status, title, body string
@@ -210,37 +248,49 @@ func (s *Service) closeSubtasks(ctx context.Context, tx pgx.Tx, orgID, parentID,
 		return nil, err
 	}
 
+	closing := IsClosedStatus(to)
 	ids := make([]string, 0, len(todo))
 	for _, o := range todo {
 		next := o.version + 1
 		if _, err := tx.Exec(ctx, `
 			UPDATE documents SET version=$1, updated_by=$2, updated_at=now() WHERE id=$3`,
 			next, principal, o.id); err != nil {
-			return nil, fmt.Errorf("docs: close subtask: %w", err)
+			return nil, fmt.Errorf("docs: move subtask: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO document_versions (document_id, version, title, body, author_id)
 			VALUES ($1,$2,$3,$4,$5)`, o.id, next, o.title, o.body, principal); err != nil {
 			return nil, fmt.Errorf("docs: record subtask version: %w", err)
 		}
+		// The same derivation Update uses, so a subtask moved with its parent
+		// reads as if somebody had set it by hand.
 		if _, err := tx.Exec(ctx, `
 			UPDATE task_fields SET status = $2,
-			    started_at = COALESCE(started_at, now()),
-			    completed_at = COALESCE(completed_at, now())
-			WHERE document_id = $1`, o.id, StatusDone); err != nil {
-			return nil, fmt.Errorf("docs: close subtask fields: %w", err)
+			    started_at = CASE WHEN $2 IN ('in_progress','done')
+			        THEN COALESCE(started_at, now()) ELSE started_at END,
+			    completed_at = CASE WHEN $2 = 'done'
+			        THEN COALESCE(completed_at, now()) ELSE NULL END
+			WHERE document_id = $1`, o.id, to); err != nil {
+			return nil, fmt.Errorf("docs: move subtask fields: %w", err)
+		}
+		evt := map[string]any{"from": o.status, "to": to, "with_parent": parentID}
+		after := map[string]any{"status": to, "with_parent": parentID}
+		upd := map[string]any{"version": next, "with_parent": parentID}
+		if closing {
+			// The names the first version used, for anything reading them.
+			evt["closed_with"] = parentID
+			after["closed_with_parent"] = parentID
+			upd["closed_with"] = parentID
 		}
 		if err := jobs.Publish(ctx, tx, jobs.EventSpec{
 			OrgID: orgID, EntityType: string(core.EntityDocument), EntityID: o.id,
-			Event: jobs.EventUpdated, ActorID: principal,
-			Payload: map[string]any{"version": next, "closed_with": parentID},
+			Event: jobs.EventUpdated, ActorID: principal, Payload: upd,
 		}); err != nil {
 			return nil, err
 		}
 		if err := jobs.Publish(ctx, tx, jobs.EventSpec{
 			OrgID: orgID, EntityType: string(core.EntityDocument), EntityID: o.id,
-			Event: jobs.EventStatus, ActorID: principal,
-			Payload: map[string]any{"from": o.status, "to": StatusDone, "closed_with": parentID},
+			Event: jobs.EventStatus, ActorID: principal, Payload: evt,
 		}); err != nil {
 			return nil, err
 		}
@@ -248,7 +298,7 @@ func (s *Service) closeSubtasks(ctx context.Context, tx pgx.Tx, orgID, parentID,
 			OrgID: orgID, ActorID: principal, Action: audit.ActionTaskCloseWithParent,
 			EntityType: string(core.EntityDocument), EntityID: o.id,
 			Before: map[string]any{"status": o.status},
-			After:  map[string]any{"status": StatusDone, "closed_with_parent": parentID},
+			After:  after,
 		}); err != nil {
 			return nil, err
 		}

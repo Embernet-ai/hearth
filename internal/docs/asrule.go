@@ -181,18 +181,18 @@ func (s *Service) updateAsRule(ctx context.Context, orgID string, actor RuleActo
 			return err
 		}
 	}
-	// A rule that marks a task done closes what is inside it, the same as a
-	// person doing it; the subtasks are closed in the rule's name.
-	var closed []string
-	if patch.Status != nil && *patch.Status == StatusDone && (curStatus == nil || *curStatus != StatusDone) {
-		if closed, err = s.closeSubtasks(ctx, tx, orgID, docID, actor.PrincipalID); err != nil {
-			return err
-		}
+	// A rule that changes a task's status moves what is inside it, the same as
+	// a person doing it; the subtasks move in the rule's name.
+	closed, err := s.cascadeFrom(ctx, tx, orgID, docID, actor.PrincipalID, curStatus, patch.Status)
+	if err != nil {
+		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
-	NoteClosed(ctx, closed)
+	if patch.Status != nil {
+		NoteCascaded(ctx, *patch.Status, closed)
+	}
 	return nil
 }
 

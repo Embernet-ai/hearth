@@ -695,3 +695,46 @@ func TestAdminTimeRemovalOverTheAPIIsSuperAdminOnlyDryFirstAndAudited(t *testing
 		t.Fatalf("a read token removed time: %d", code)
 	}
 }
+
+// Any status on a task through the API moves its open subtasks, and the answer
+// says to what; a subtask's own change is answered with nothing moved.
+func TestPatchingATaskStatusMovesItsOpenSubtasks(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	alice := f.subj(t, f.alice)
+
+	parent, err := f.docs.Create(ctx, f.org, alice, docs.CreateParams{
+		Kind: docs.KindTask, Title: "Ignition", Task: &docs.TaskFields{Status: docs.StatusTodo}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := f.docs.Create(ctx, f.org, alice, docs.CreateParams{
+		Kind: docs.KindTask, Title: "Alice", ParentID: &parent.ID, Task: &docs.TaskFields{Status: docs.StatusTodo}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := f.token(t, f.alice, api.ScopeWrite)
+	code, out, raw := f.call(t, token, http.MethodPatch, "/v1/documents/"+parent.ID, map[string]any{"status": "in_progress"})
+	if code != http.StatusOK {
+		t.Fatalf("PATCH answered %d: %s", code, raw)
+	}
+	moved, _ := out["cascaded_subtasks"].([]any)
+	if len(moved) != 1 || moved[0] != kid.ID || out["cascaded_to"] != "in_progress" {
+		t.Fatalf("the answer should name the subtask and where it went: %s", raw)
+	}
+	if _, closed := out["closed_subtasks"]; closed {
+		t.Fatalf("an in progress move is not a close: %s", raw)
+	}
+	if got, err := f.docs.Get(ctx, f.org, alice, kid.ID); err != nil || got.Task.Status != docs.StatusInProgress {
+		t.Fatalf("the subtask is not in progress: %v %+v", err, got)
+	}
+
+	// The subtask's own change leaves the parent alone.
+	code, out, raw = f.call(t, token, http.MethodPatch, "/v1/documents/"+kid.ID, map[string]any{"status": "cancelled"})
+	if code != http.StatusOK || out["cascaded_subtasks"] != nil {
+		t.Fatalf("a subtask's change should move nothing: %d %s", code, raw)
+	}
+	if got, err := f.docs.Get(ctx, f.org, alice, parent.ID); err != nil || got.Task.Status != docs.StatusInProgress {
+		t.Fatalf("the parent changed with its subtask: %v %+v", err, got)
+	}
+}

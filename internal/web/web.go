@@ -18,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1883,7 +1884,7 @@ func (s *Server) showDocument(w http.ResponseWriter, r *http.Request, docID stri
 		Comments: comments, MentionedIn: mentioned, Channels: myChannels,
 		Watching: watching, Checklist: checklist, Progress: docs.Progress(checklist),
 		Effort: effort, TimeEntries: entries, Tags: tags, AssetTime: assetTime,
-		Flash:          closedFlash(r.URL.Query().Get("closed")),
+		Flash:          closedFlash(r.URL.Query().Get("closed"), r.URL.Query().Get("moved")),
 		JustRemoved:    r.URL.Query().Get("justRemoved"),
 		CommentRemoved: r.URL.Query().Get("commentRemoved"),
 		ChecklistOpen:  r.URL.Query().Get("checklist") == "open",
@@ -2215,7 +2216,7 @@ func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
 	// Closing a task closed what was inside it; say so on the page it lands on.
 	to := "/documents/" + docID
 	if n := len(closed.IDs); n > 0 {
-		to += "?closed=" + strconv.Itoa(n)
+		to += "?closed=" + strconv.Itoa(n) + "&moved=" + url.QueryEscape(closed.Status)
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
@@ -2223,12 +2224,12 @@ func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
 // closedFlash is the line a task page shows after a status change closed
 // subtasks with it. The count comes back in the address, and anything that is
 // not a small positive number shows nothing.
-func closedFlash(n string) string {
+func closedFlash(n, status string) string {
 	c, err := strconv.Atoi(n)
 	if err != nil || c < 1 || c > 100000 {
 		return ""
 	}
-	return ClosedMessage(c)
+	return CascadeMessage(c, status)
 }
 
 // ClosedMessage is how a close that took subtasks with it reads.
@@ -2237,6 +2238,20 @@ func ClosedMessage(n int) string {
 		return "Closed with 1 subtask"
 	}
 	return "Closed with " + strconv.Itoa(n) + " subtasks"
+}
+
+// CascadeMessage is how a status change that moved subtasks with it reads. A
+// close to done keeps the first version's words; any other status says where
+// they went.
+func CascadeMessage(n int, status string) string {
+	if status == "" || status == docs.StatusDone {
+		return ClosedMessage(n)
+	}
+	word := " subtasks"
+	if n == 1 {
+		word = " subtask"
+	}
+	return "Moved " + strconv.Itoa(n) + word + " to " + docs.StatusLabel(status)
 }
 
 func heading(kind string) string {

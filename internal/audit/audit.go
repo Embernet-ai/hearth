@@ -78,8 +78,11 @@ const (
 	ActionApproverSet     = "person.approver"
 	ActionTimeImport      = "time.import"
 	ActionDailyReportFile = "daily_report.file"
-	// ActionTaskCloseWithParent is a subtask moved to done because the task it
-	// sits under was. One entry per subtask, naming whoever closed the parent.
+	// ActionTaskCloseWithParent is a subtask moved to a new status (done,
+	// cancelled, in progress, blocked or to do) because the task it sits under
+	// was. One entry per subtask, naming whoever changed the parent; the entry's
+	// after holds status and with_parent. The name is from the first version,
+	// which only closed, and stays so rows from both read as one list.
 	ActionTaskCloseWithParent = "task.close_with_parent"
 	ActionSpaceDelete         = "space.delete"
 	// ActionTimeRemove is one time entry taken out of every list, by whichever

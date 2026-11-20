@@ -48,9 +48,13 @@ function submit(ev: SubmitEvent) {
         }
         if (host) host.dispatchEvent(new CustomEvent('hearth:reload'));
         else refreshPage(true);
-        // A status change that closed subtasks with it comes back as ?closed=N on the page it redirects to.
-        const closed = res.redirected ? Number(new URL(res.url).searchParams.get('closed')) : 0;
-        if (closed > 0) (window as any).hearthNotice?.(`Closed with ${closed} subtask${closed === 1 ? '' : 's'}`);
+        // A status change that moved subtasks with it comes back as ?closed=N&moved=<status> on the page it redirects to.
+        const params = res.redirected ? new URL(res.url).searchParams : null;
+        const closed = Number(params?.get('closed'));
+        const moved = params?.get('moved') ?? '';
+        const word = `subtask${closed === 1 ? '' : 's'}`;
+        const label: Record<string, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', cancelled: 'Cancelled' };
+        if (closed > 0) (window as any).hearthNotice?.(!moved || moved === 'done' ? `Closed with ${closed} ${word}` : `Moved ${closed} ${word} to ${label[moved] ?? moved}`);
         return;
       }
       const ct = res.headers.get('Content-Type') ?? '';

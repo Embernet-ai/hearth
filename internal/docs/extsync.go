@@ -216,17 +216,21 @@ func (s *Service) ApplyExternal(ctx context.Context, orgID, id string, c Externa
 			}
 		}
 	}
-	// Closed in EmberOPS: the subtasks follow, as they do for an edit made here.
+	// Changed in EmberOPS: the subtasks follow, as they do for an edit made here.
+	// EmberOPS's own Task hook moved them there already; this copy makes the
+	// spine agree and writes its audit rows, and it is idempotent.
 	var closed []string
-	if t := c.Task; t != nil && t.Status == StatusDone && (curStatus == nil || *curStatus != StatusDone) {
-		if closed, err = s.closeSubtasks(ctx, tx, orgID, id, by); err != nil {
+	var cascadedTo string
+	if t := c.Task; t != nil {
+		cascadedTo = t.Status
+		if closed, err = s.cascadeFrom(ctx, tx, orgID, id, by, curStatus, &t.Status); err != nil {
 			return err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("docs: commit: %w", err)
 	}
-	NoteClosed(ctx, closed)
+	NoteCascaded(ctx, cascadedTo, closed)
 	return s.syncAssignees(ctx, id, c)
 }
 

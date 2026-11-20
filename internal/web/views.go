@@ -794,7 +794,7 @@ func (s *Server) moveCard(w http.ResponseWriter, r *http.Request) {
 	// back through its old position on every drop. A card dropped into done that
 	// took subtasks with it says so in a header the board shows.
 	if n := len(closed.IDs); n > 0 {
-		w.Header().Set("X-Hearth-Notice", ClosedMessage(n))
+		w.Header().Set("X-Hearth-Notice", CascadeMessage(n, closed.Status))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
