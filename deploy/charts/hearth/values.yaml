@@ -341,11 +341,11 @@ garage:
     # this together with Helm's --timeout.
     timeoutSeconds: 540
 
-  # S3 from the app and the backup job, the only two things that touch the
-  # object store, and nothing else. The chart's default with this off is every
-  # pod in every namespace.
+  # No NetworkPolicy by default: every app in the cluster can reach the object
+  # store, the same as every other service this chart installs. To restrict who may
+  # reach it, set enabled to true and list who may in s3From.
   networkPolicy:
-    enabled: true
+    enabled: false
     s3From:
       - podSelector:
           matchLabels:

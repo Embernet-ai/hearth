@@ -46,6 +46,11 @@ expect "smtp password from the secret" "$out" 'key: SMTP_PASSWORD'
 out=$(render --set oidc.enabled=true --set oidc.issuer=https://accounts.google.com --set oidc.clientId=abc --set oidc.allowedDomains=example.com)
 expect "any oidc issuer" "$out" 'value: "https://accounts.google.com"'
 
+out=$(render | awk 'BEGIN{RS="\n---\n"} /kind: NetworkPolicy/ && /name: hearth-garage\n/ {print "ingress-policy"}')
+reject "the object store has no ingress NetworkPolicy by default" "$out" 'ingress-policy'
+out=$(render --set garage.networkPolicy.enabled=true | awk 'BEGIN{RS="\n---\n"} /kind: NetworkPolicy/ && /name: hearth-garage\n/ {print "ingress-policy"}')
+expect "and it can be turned on" "$out" 'ingress-policy'
+
 out=$(render --set opensearch.enabled=false)
 reject "opensearch is off by default" "$out" 'component: opensearch'
 
