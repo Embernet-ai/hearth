@@ -116,7 +116,7 @@ func (s *Syncer) timeline(ctx context.Context, rep *Report, write bool) {
 	}
 	existing, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: "Comment",
 		Fields:  []string{"name", "hearth_id", "content", "reference_doctype", "reference_name", "comment_by", "comment_type"},
-		Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, 0)
+		Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, readAll)
 	if err != nil {
 		s.add(rep, Action{"comment", "", "timeline", "failed", "read the Comments EmberOps has: " + err.Error()})
 		return

@@ -212,7 +212,7 @@ func (s *Syncer) links(ctx context.Context, rep *Report) {
 	}
 	for _, dt := range []string{"Customer", "Supplier", "Lead", "Contact", "Opportunity"} {
 		rows, err := s.ops.ListAll(ctx, emberops.ListQuery{Doctype: dt, Fields: []string{"name", "hearth_id"},
-			Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, 0)
+			Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, readAll)
 		if err != nil {
 			s.add(rep, Action{"link", "", dt, "failed", err.Error()})
 			continue
