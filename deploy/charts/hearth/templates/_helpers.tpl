@@ -202,12 +202,19 @@ Postgres. Three ways in, one place:
 The DSN is assembled in the pod from the password, so the credential exists once and
 never lands in a ConfigMap.
 */}}
+{{/*
+The Secret the Postgres password is read from: postgresPasswordSecret when it is set, else existingSecret, so a chart
+that sets nothing reads what it always read. Postgres itself, the app and every job read it from the same place.
+*/}}
+{{- define "hearth.postgres.passwordSecret" -}}
+{{- .Values.postgresPasswordSecret | default .Values.existingSecret -}}
+{{- end }}
 {{- define "hearth.database.env" -}}
 {{- if .Values.postgresql.enabled -}}
 - name: POSTGRES_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.existingSecret }}
+      name: {{ include "hearth.postgres.passwordSecret" . }}
       key: {{ .Values.secretKeys.postgresPassword }}
 - name: HEARTH_DATABASE_URL
   value: postgres://{{ .Values.postgresql.user }}:$(POSTGRES_PASSWORD)@{{ include "hearth.postgres.fullname" . }}:5432/{{ .Values.postgresql.database }}?sslmode=disable
@@ -221,7 +228,7 @@ never lands in a ConfigMap.
 - name: POSTGRES_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.existingSecret }}
+      name: {{ include "hearth.postgres.passwordSecret" . }}
       key: {{ .Values.secretKeys.postgresPassword }}
 - name: HEARTH_DATABASE_URL
   value: postgres://{{ .Values.externalDatabase.user }}:$(POSTGRES_PASSWORD)@{{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}/{{ .Values.externalDatabase.database }}?sslmode={{ .Values.externalDatabase.sslmode }}

@@ -50,7 +50,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.existingSecret }}
+                  name: {{ .Values.postgresql.passwordSecret | default .Values.existingSecret }}
                   key: {{ .Values.secretKeys.postgresPassword }}
             # Postgres refuses to initialise into a non-empty directory, and a
             # mounted volume always has lost+found. This is the standard fix and
