@@ -72,3 +72,6 @@ Thumbs.db
 /ui/.astro/
 /internal/web/next/dist/*
 !/internal/web/next/dist/.placeholder
+
+# Dependencies come from the module proxy, pinned by go.sum. Nothing of them is committed.
+/vendor/
