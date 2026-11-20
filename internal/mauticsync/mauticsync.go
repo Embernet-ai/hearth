@@ -564,7 +564,7 @@ func (s *Syncer) pushOne(ctx context.Context, c contact, l *link, types [][2]str
 
 	first, last := splitName(c.Name)
 	f := mautic.Fields{"firstname": first, "lastname": last, "email": strings.TrimSpace(c.Email), "phone": c.Phone,
-		"position": c.Title, "company": c.CompanyName, contactIDField: c.ID}
+		"position": c.Title, "company": clip(c.CompanyName, mauticNameMax), contactIDField: c.ID}
 	owner := int64(0)
 	if c.OwnerEmail != "" {
 		owner = s.users[strings.ToLower(strings.TrimSpace(c.OwnerEmail))]
@@ -766,7 +766,7 @@ func (s *Syncer) ensureCompany(ctx context.Context, id string) int64 {
 		}
 		return 0
 	}
-	f := mautic.Fields{"companyname": co.Name, "companywebsite": co.Website, "companyaddress1": co.Street, "companycity": co.City,
+	f := mautic.Fields{"companyname": clip(co.Name, mauticNameMax), "companywebsite": co.Website, "companyaddress1": co.Street, "companycity": co.City,
 		"companystate": co.State, "companyzipcode": co.Postcode, "companycountry": co.Country, companyIDField: co.ID}
 	if co.OwnerEmail != "" {
 		if u := s.users[strings.ToLower(strings.TrimSpace(co.OwnerEmail))]; u != 0 {
@@ -799,6 +799,14 @@ func (s *Syncer) ensureCompany(ctx context.Context, id string) int64 {
 	nid, uerr := s.mc.UpsertCompany(ctx, mid, f)
 	if mautic.IsNotFound(uerr) {
 		nid, uerr = s.mc.UpsertCompany(ctx, 0, f)
+	}
+	if dropRefused(f, uerr) {
+		// Mautic refused the state or country as one it does not list. The company goes without it, and the hash above is of
+		// what Hearth holds, so the next run sees nothing changed and does not ask again.
+		nid, uerr = s.mc.UpsertCompany(ctx, mid, f)
+		if mautic.IsNotFound(uerr) {
+			nid, uerr = s.mc.UpsertCompany(ctx, 0, f)
+		}
 	}
 	if uerr != nil {
 		s.rep.add("failed", "company", id, co.Name, uerr.Error())
@@ -842,4 +850,37 @@ func (s *Syncer) retire(ctx context.Context, l *link) {
 		return
 	}
 	s.rep.add("update", "contact", l.ContactID, "", "left its segments: deleted in Hearth or no address")
+}
+
+// mauticNameMax is the longest company name Mautic takes, on the company and on a contact's own company field.
+const mauticNameMax = 64
+
+// clip cuts a value to at most n characters, so a long name is stored short and not refused whole.
+func clip(v string, n int) string {
+	v = strings.TrimSpace(v)
+	if r := []rune(v); len(r) > n {
+		return strings.TrimSpace(string(r[:n]))
+	}
+	return v
+}
+
+// dropRefused takes the state and country out of f when Mautic's answer was a 400 over either (they are selects whose lists the API
+// does not expose, and Hearth holds free text like "OH"). It says whether it took anything out, so the caller tries again.
+func dropRefused(f mautic.Fields, err error) bool {
+	e, ok := err.(*mautic.APIError)
+	if !ok || e.Status != 400 {
+		return false
+	}
+	if !strings.Contains(e.Body, "companystate") && !strings.Contains(e.Body, "companycountry") {
+		return false
+	}
+	// A state belongs to a country, so when Mautic refuses either one both go, and the retry cannot be refused over the other.
+	dropped := false
+	for _, k := range []string{"companystate", "companycountry"} {
+		if _, has := f[k]; has {
+			delete(f, k)
+			dropped = true
+		}
+	}
+	return dropped
 }
