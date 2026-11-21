@@ -958,10 +958,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 		if n, err := s.deptreq.PendingCount(r.Context(), p.Identity.OrgID, p.Identity.PrincipalID); err == nil {
 			p.DeptPending = n
 		}
-		if p.Path != "/departments/request" {
+		if p.Path != "/departments/request" && !p.Identity.Contractor {
 			if cur, err := s.deptreq.Current(r.Context(), p.Identity.OrgID, p.Identity.PrincipalID); err == nil && len(cur) == 0 {
 				if last, err := s.deptreq.Latest(r.Context(), p.Identity.OrgID, p.Identity.PrincipalID); err == nil &&
-					(last == nil || last.Status != "pending") {
+					departmentPromptOwed(p.Identity.Contractor, last) {
 					p.NeedsDepartment = true
 				}
 			}
@@ -1373,7 +1373,7 @@ func (s *Server) Routes() http.Handler {
 	// session, which is what makes the offline write path and the online one
 	// the same code rather than two that have to be kept in step.
 	s.authed = authed
-	mux.Handle("/", auth.Require(s.mustChangeGate(s.playgroundGuard(authed))))
+	mux.Handle("/", auth.Require(s.mustChangeGate(s.contractorGate(s.playgroundGuard(authed)))))
 
 	return mux
 }
@@ -2489,4 +2489,14 @@ func (s *Server) ssoCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// departmentPromptOwed is whether somebody who is in no department is asked
+// which they are in: not while a request of theirs is waiting, and never a
+// contractor account, which is in no department on purpose.
+func departmentPromptOwed(contractor bool, last *deptreq.Request) bool {
+	if contractor {
+		return false
+	}
+	return last == nil || last.Status != "pending"
 }

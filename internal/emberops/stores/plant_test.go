@@ -290,3 +290,44 @@ func TestAssetTreeRollupsPriceLabourByActivityCost(t *testing.T) {
 		t.Fatalf("press own cost = %d, line rolled = %d, line own = %d", press.OwnCostCents, line.RolledCost, line.OwnCostCents)
 	}
 }
+
+// A space deleted in Hearth goes from EmberOPS even when work Hearth deleted is
+// still marked deleted there and links it: EmberOPS will not delete a space
+// something links, and the sync retried that forever. The deleted work goes
+// first; work that is still live is never touched and keeps the space.
+func TestADeletedSpaceGoesEvenWhenDeletedWorkStillLinksIt(t *testing.T) {
+	e, s, _ := newPlant(t)
+	ctx := e.as("svc-tok")
+	gone, _ := s.CreateSpace(ctx, org, actor(ann), "Gone", "folder", nil)
+	kept, _ := s.CreateSpace(ctx, org, actor(ann), "Kept", "folder", nil)
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	name := map[string]string{}
+	for _, sp := range e.f.All("Hearth Space") {
+		name[sp["space_name"].(string)] = sp["name"].(string)
+	}
+	e.f.Put("Task", map[string]any{"name": "TASK-D", "hearth_space": name["Gone"], "hearth_deleted_at": "2026-11-21 03:00:00"})
+	e.f.Put("Hearth Document", map[string]any{"name": "HDOC-D", "hearth_space": name["Gone"], "deleted_at": "2026-11-21 03:00:00"})
+	e.f.Put("Task", map[string]any{"name": "TASK-L", "hearth_space": name["Kept"]})
+
+	if err := s.DeleteSpace(ctx, org, actor(ann), gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteSpace(ctx, org, actor(ann), kept.ID); err != nil {
+		t.Fatal(err)
+	}
+	left := map[string]bool{}
+	for _, sp := range e.f.All("Hearth Space") {
+		left[sp["space_name"].(string)] = true
+	}
+	if left["Gone"] {
+		t.Error("a deleted space stayed in EmberOPS because deleted work still linked it")
+	}
+	if !left["Kept"] {
+		t.Error("a space with live work linked was deleted out from under it")
+	}
+	if len(e.f.All("Task")) != 1 || e.f.All("Task")[0]["name"] != "TASK-L" || len(e.f.All("Hearth Document")) != 0 {
+		t.Errorf("tasks = %v, documents = %v: want only the live task left", e.f.All("Task"), e.f.All("Hearth Document"))
+	}
+}

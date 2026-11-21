@@ -34,6 +34,10 @@ Whoever may give a folder (a manager of it, or of any folder above it) can also 
 
 A super admin is never narrowed by any of this. They open every folder at every depth, see every parent's full name, see everybody in every list, and can give and take back a folder anywhere, even on an account marked as a contractor's.
 
+## What a contractor account can reach
+
+A contractor account is let into the folder and the work in it (the Spaces and Projects pages, documents, tasks, work orders, views), search, its own inbox and its own account page, and nothing else. Every other address (contacts, companies, deals, channels, the calendar, daily reports, time, people, teams, settings, plant and the rest) answers "no such page" whatever the page would have shown, and so does a queued offline write to one. A page added later is closed to contractor accounts until it is put on the list. The rail shows only what the account can use, its front page is Spaces, and it is never asked which department it is in. A super admin is never narrowed, even on an account marked as a contractor's.
+
 ## Lists of people for a contractor account
 
 An assignee picker, a filter by person, a mention: for a contractor account each is cut to the person themselves and the people who hold a grant of their own on a folder the account can open (the managers of that folder, whoever made it, and anyone else it was given to). Everybody else gets those lists as they always did. A name is still shown on work the contractor can open, because it is part of that work.

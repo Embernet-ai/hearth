@@ -2,12 +2,14 @@ package stores
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/docs"
+	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/mapping"
 )
 
@@ -282,6 +284,18 @@ func (s *Docs) Delete(ctx context.Context, orgID string, actor core.Subjects, id
 		return err
 	}
 	if dt := doctypeFor(d.Kind); dt != "" {
+		// A task or a document is taken out of EmberOPS with it. Soft deleted
+		// there it still showed in EmberOPS's own task list and kept a link to
+		// its space, which stopped the space ever being removed. If EmberOPS
+		// will not delete it (a subtask under it, a timesheet on it), it is
+		// marked deleted instead, as every other kind is.
+		if dt == "Task" || dt == "Hearth Document" {
+			err := s.C.DeleteByHearthID(ctx, dt, id)
+			if err == nil || errors.Is(err, emberops.ErrNotFound) {
+				return nil
+			}
+			s.log().Warn("emberops: could not delete, marking deleted instead", "doctype", dt, "id", id, "error", err)
+		}
 		now := time.Now().UTC()
 		field := "hearth_deleted_at"
 		if dt == "Hearth Document" {

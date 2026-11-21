@@ -211,7 +211,9 @@ func (s *Server) dispatch(r *http.Request, op offline.Op) (int, string) {
 	req.Header.Set("X-Hearth-Replay", "1")
 
 	rec := &recorder{code: http.StatusOK}
-	s.authed.ServeHTTP(rec, req)
+	// Through the same gate as a live request, so a queued write is not a way
+	// round what the account may reach.
+	s.contractorGate(s.authed).ServeHTTP(rec, req)
 	return rec.code, rec.reason()
 }
 

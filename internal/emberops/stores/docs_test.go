@@ -614,3 +614,36 @@ func TestDocsEditNamingSomeoneUnknownIsNotCopiedIntoTheSpine(t *testing.T) {
 		t.Fatalf("the page must still show EmberOps's state: %+v", rows)
 	}
 }
+
+// Deleting a task or a document in Hearth removes it from EmberOPS, where only
+// marking it deleted left it in EmberOPS's own task list and linked to its space.
+// A work order is still only marked, as it always was.
+func TestDeletingATaskOrDocumentRemovesItFromEmberOPS(t *testing.T) {
+	e := newEnv(t)
+	pg := newSpine()
+	s := &stores.Docs{Store: pg, Base: e.base, Dir: e.dir}
+	ctx := e.as("ann-tok")
+
+	task, err := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindTask, Title: "Fix belt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindDoc, Title: "Notes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.f.All("Task")) != 1 || len(e.f.All("Hearth Document")) != 1 {
+		t.Fatalf("before: tasks %d, documents %d", len(e.f.All("Task")), len(e.f.All("Hearth Document")))
+	}
+	for _, id := range []string{task.ID, doc.ID} {
+		if err := s.Delete(ctx, org, actor(ann), id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(e.f.All("Task")); n != 0 {
+		t.Errorf("%d tasks still in EmberOPS after the delete", n)
+	}
+	if n := len(e.f.All("Hearth Document")); n != 0 {
+		t.Errorf("%d documents still in EmberOPS after the delete", n)
+	}
+}
