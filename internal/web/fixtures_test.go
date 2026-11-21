@@ -160,6 +160,20 @@ func fixtures() map[string]page {
 			Items: []connect.FileItem{{ID: "fo", Name: "Quotes", Folder: true}, {ID: "fi", Name: "quote-118.pdf", WebURL: "https://files.example/fi"}},
 			DocID: "doc1", DocTitle: "Quote 118"}},
 		"cloud-none": {Title: "Cloud files", Cloud: &CloudView{}},
+		"cloud-save": {Title: "Cloud files", Cloud: &CloudView{
+			Providers: []CloudProvider{{Key: "google", Label: "Google Workspace"}}, Provider: "google", Label: "Google Workspace",
+			Drives: []connect.Drive{{ID: "root", Name: "My Drive", Kind: "personal"}}, DriveID: "root",
+			Items:   []connect.FileItem{{ID: "fo", Name: "Quotes", Folder: true}, {ID: "fi", Name: "quote-118.pdf", WebURL: "https://files.example/fi"}},
+			Folders: []connect.FileItem{{ID: "fo", Name: "Quotes", Folder: true}},
+			SaveDoc: "doc1", SaveFile: "file1", SaveName: "spec.txt"}},
+		"mailbox-list": {Title: "Mailbox", Mailbox: &MailboxView{
+			Providers: []CloudProvider{{Key: "microsoft", Label: "Microsoft 365"}}, Provider: "microsoft", Label: "Microsoft 365", Folder: "inbox",
+			Messages: []connect.Message{{ID: "m1", Subject: "Quote 118", From: "priya@acme.test", Snippet: "Please find", Unread: true}}, Next: "cursor"}},
+		"mailbox-open": {Title: "Mailbox", Mailbox: &MailboxView{
+			Providers: []CloudProvider{{Key: "google", Label: "Google Workspace"}}, Provider: "google", Label: "Google Workspace", Folder: "inbox",
+			Labels: []string{"Quotes"},
+			Open:   &connect.Message{ID: "m1", Subject: "Quote 118", From: "priya@acme.test", To: []string{"dana@example.com"}, Body: "Hi Dana, the quote.", Attached: []string{"quote-118.pdf"}}}},
+		"mailbox-none": {Title: "Mailbox", Mailbox: &MailboxView{}},
 
 		"person-everything":   everything,
 		"person-not-admin":    notAdmin,

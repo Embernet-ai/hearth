@@ -217,6 +217,7 @@
  "MCPURL": "",
  "MailReady": false,
  "MailThread": null,
+ "Mailbox": null,
  "ManageableSpaces": null,
  "Me": "",
  "MentionedIn": null,

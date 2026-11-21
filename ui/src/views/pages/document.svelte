@@ -492,6 +492,11 @@
           </ul>
         {/if}
         {#if F.t(dot?.CloudOn)}<p><a  href={"/cloud?doc=" + S(dot?.Doc?.ID)}>Add from OneDrive, SharePoint or Drive</a></p>{/if}
+        {#if F.t(dot?.CloudOn) && F.t(dot?.Attachments)}
+          <p  class="muted small"  data-save-out>Save an attachment to a drive:
+            {#each dot.Attachments as a}<a  href={"/cloud?savedoc=" + S(dot?.Doc?.ID) + "&savefile=" + S(a?.FileID)}>{a?.Filename}</a> {/each}
+          </p>
+        {/if}
       {/if}
 
       <h3>Attachments</h3>

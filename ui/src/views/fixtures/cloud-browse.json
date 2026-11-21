@@ -94,6 +94,7 @@
    }
   ],
   "FolderID": "",
+  "Folders": null,
   "Items": [
    {
     "DriveID": "",
@@ -124,7 +125,10 @@
     "Key": "microsoft",
     "Label": "Microsoft 365"
    }
-  ]
+  ],
+  "SaveDoc": "",
+  "SaveFile": "",
+  "SaveName": ""
  },
  "CloudLinks": null,
  "CloudOn": false,
@@ -228,6 +232,7 @@
  "MCPURL": "",
  "MailReady": false,
  "MailThread": null,
+ "Mailbox": null,
  "ManageableSpaces": null,
  "Me": "",
  "MentionedIn": null,

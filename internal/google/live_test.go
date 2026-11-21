@@ -7,19 +7,24 @@ package google
 // To run it, sign in as a Workspace user whose account may use these scopes and take an access token for it, for
 // example:
 //
-//	gcloud auth application-default login --scopes=openid,https://www.googleapis.com/auth/calendar,\
-//	  https://www.googleapis.com/auth/contacts.readonly,https://www.googleapis.com/auth/drive.readonly
-//	export HEARTH_LIVE_GOOGLE_TOKEN=$(gcloud auth application-default print-access-token)
+//	secrets/access/google-dwd-mint.py --sub account@fireballz.ai \
+//	  --scope "https://mail.google.com/ https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/drive" \
+//	  -- go test ./internal/google -run Live -v
+//
+// or take any access token for the four full scopes and set HEARTH_LIVE_GOOGLE_TOKEN yourself:
 //	export HEARTH_LIVE_GOOGLE_SHARE_WITH=second.user@example.com     # optional: a second account in the domain
 //	export HEARTH_LIVE_GOOGLE_SECOND_TOKEN=...                        # optional: that account's token
 //	go test ./internal/google -run Live -v
 //
-// It makes one throwaway calendar, works in it, and deletes it. Nothing is read from or written to the account's
-// own primary calendar, and the token is never printed.
+// It is read and write: a throwaway calendar, a message sent to the account itself and replied to, labelled,
+// archived and deleted, a throwaway contact, and a throwaway Drive folder. Each is deleted at the end, and the token
+// is never printed.
 
 import (
 	"context"
+	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,7 +103,7 @@ func TestLiveGoogleWorkspace(t *testing.T) {
 
 	// Shared with a second account: visible to them, through their own token if given.
 	if with := os.Getenv("HEARTH_LIVE_GOOGLE_SHARE_WITH"); with != "" {
-		rule, err := cal.Acl.Insert(created.Id, &gcal.AclRule{Role: "reader", Scope: &gcal.AclRuleScope{Type: "user", Value: with}}).Context(ctx).Do()
+		rule, err := cal.Acl.Insert(created.Id, &gcal.AclRule{Role: "reader", Scope: &gcal.AclRuleScope{Type: "user", Value: with}}).SendNotifications(false).Context(ctx).Do()
 		if err != nil {
 			t.Fatalf("share: %v", err)
 		}
@@ -125,15 +130,132 @@ func TestLiveGoogleWorkspace(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 
-	// Contacts and Drive, read only.
-	cs, err := contactsAdapter{s}.Contacts(ctx)
-	t.Logf("contacts: %d (%v)", len(cs), err)
-	drives, err := s.Drives(ctx)
-	t.Logf("drives: %d (%v)", len(drives), err)
-	if err == nil {
-		items, err := s.List(ctx, "root", "")
-		t.Logf("My Drive root: %d items (%v)", len(items), err)
+	liveMail(t, ctx, s)
+	liveContacts(t, ctx, s)
+	liveDrive(t, ctx, s)
+}
+
+// liveMail sends a message to the account itself, finds it, opens it in full, replies, labels, archives and deletes it.
+func liveMail(t *testing.T, ctx context.Context, s *session) {
+	t.Helper()
+	mb := mailAdapter{s}
+	me, err := s.self(ctx)
+	if err != nil {
+		t.Fatalf("who am I: %v", err)
 	}
+	subject := "Hearth live proof " + time.Now().UTC().Format("20060102T150405")
+	if err := mb.Send(ctx, connect.Outgoing{To: []string{me}, Subject: subject, Body: "live proof body"}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	var found connect.Message
+	for i := 0; i < 12 && found.ID == ""; i++ {
+		list, _, err := mb.Inbox(ctx, connect.MailQuery{Folder: "all", Search: "subject:\"" + subject + "\"", Limit: 5})
+		if err != nil {
+			t.Fatalf("search: %v", err)
+		}
+		if len(list) > 0 {
+			found = list[0]
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+	if found.ID == "" {
+		t.Fatal("the message sent to myself never arrived")
+	}
+	full, err := mb.Get(ctx, found.ID)
+	if err != nil || !strings.Contains(full.Body, "live proof body") {
+		t.Fatalf("open %+v %v", full, err)
+	}
+	t.Logf("mail: sent, found and opened in full (%d chars)", len(full.Body))
+	if err := mb.Reply(ctx, found.ID, connect.Outgoing{Body: "live proof reply"}, false); err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	if err := mb.Label(ctx, found.ID, []string{"Hearth live proof"}, nil); err != nil {
+		t.Fatalf("label: %v", err)
+	}
+	if err := mb.Archive(ctx, found.ID); err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	if err := mb.Delete(ctx, found.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	t.Log("mail: replied, labelled, archived and deleted")
+}
+
+func liveContacts(t *testing.T, ctx context.Context, s *session) {
+	t.Helper()
+	api := contactsAdapter{s}
+	c, err := api.Create(ctx, connect.Contact{Name: "Hearth Liveproof", Email: "liveproof@example.invalid", Phone: "555 0100", Title: "Test"})
+	if err != nil {
+		// Reported, not fatal, so the rest of the proof still runs: the usual cause is the People API not being
+		// enabled on the Google project, which is a console step and not a fault in Hearth.
+		t.Errorf("contact create: %v", err)
+		return
+	}
+	c.Title = "Test, edited"
+	upd, err := api.Update(ctx, c)
+	if err != nil {
+		t.Fatalf("contact update: %v", err)
+	}
+	all, err := api.Contacts(ctx)
+	if err != nil {
+		t.Fatalf("contact list: %v", err)
+	}
+	seen := false
+	for _, x := range all {
+		seen = seen || (x.ID == upd.ID && x.Title == "Test, edited")
+	}
+	if !seen {
+		t.Error("the edited contact is not in the list with its new title (Google can take a few seconds to show a new contact)")
+	}
+	if err := api.Delete(ctx, upd.ID); err != nil {
+		t.Fatalf("contact delete: %v", err)
+	}
+	t.Logf("contacts: created, edited, listed (%d total) and deleted", len(all))
+}
+
+func liveDrive(t *testing.T, ctx context.Context, s *session) {
+	t.Helper()
+	fs := filesAdapter{s}
+	dir, err := fs.Mkdir(ctx, "root", "", "Hearth live proof "+time.Now().UTC().Format("150405"))
+	if err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() { _ = fs.Delete(ctx, "root", dir.ID) })
+	up, err := fs.Upload(ctx, "root", dir.ID, "proof.txt", "text/plain", 5, strings.NewReader("hello"))
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	if _, err := fs.Replace(ctx, "root", up.ID, "text/plain", 6, strings.NewReader("hello!")); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	if _, err := fs.Rename(ctx, "root", up.ID, "proof2.txt"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	sub, err := fs.Mkdir(ctx, "root", dir.ID, "inner")
+	if err != nil {
+		t.Fatalf("mkdir inner: %v", err)
+	}
+	if _, err := fs.Move(ctx, "root", up.ID, sub.ID); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	items, err := fs.List(ctx, "root", sub.ID)
+	if err != nil || len(items) != 1 || items[0].Name != "proof2.txt" {
+		t.Fatalf("list inner %+v %v", items, err)
+	}
+	_, body, err := fs.Open(ctx, "root", up.ID, 1<<20)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	data, _ := io.ReadAll(body)
+	body.Close()
+	if string(data) != "hello!" {
+		t.Fatalf("content %q", data)
+	}
+	if err := fs.Delete(ctx, "root", up.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	t.Log("drive: made folders, uploaded, replaced, renamed, moved, read back and deleted")
 }
 
 func evt(title string, start, end time.Time) connect.Event {

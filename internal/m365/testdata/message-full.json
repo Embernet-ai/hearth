@@ -1,0 +1,10 @@
+{
+  "id": "AAMkMSG1", "conversationId": "conv-1", "subject": "Quote 118", "bodyPreview": "Please find the quote attached",
+  "receivedDateTime": "2026-12-01T08:15:00Z", "webLink": "https://outlook.office365.com/owa/?ItemID=AAMkMSG1",
+  "isRead": false, "categories": ["Quotes"], "hasAttachments": true,
+  "body": {"contentType": "text", "content": "Hi Dana,\r\n\r\nPlease find the quote.\r\n\r\nPriya"},
+  "from": {"emailAddress": {"name": "Priya Shah", "address": "priya@acme.test"}},
+  "toRecipients": [{"emailAddress": {"name": "Dana", "address": "dana@contoso.test"}}],
+  "ccRecipients": [{"emailAddress": {"address": "ops@contoso.test"}}],
+  "attachments": [{"id": "att1", "name": "quote-118.pdf"}]
+}

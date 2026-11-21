@@ -50,6 +50,20 @@ type fakeProvider struct {
 	meeting  bool
 	people   []Conn
 	revoked  bool
+
+	// contacts written to the provider
+	cNext    int
+	cCreated []Contact
+	cUpdated []Contact
+	cDeleted []string
+
+	// mail actions, as "verb id"
+	mailLog []string
+	sent    []Outgoing
+	labels  map[string][]string
+
+	// file actions
+	fileLog []string
 }
 
 func newFake(p Provider) *fakeProvider {
@@ -57,7 +71,7 @@ func newFake(p Provider) *fakeProvider {
 		name: p, events: map[string]map[string]*Event{"primary": {}},
 		calendar: []CalendarInfo{{ID: "primary", Name: "Calendar", Primary: true, Writable: true}},
 		items:    map[string][]FileItem{}, body: map[string]string{},
-		scopes: []string{"cal", "contacts", "mail", "files"},
+		scopes: []string{"cal", "contacts", "mail", "files"}, labels: map[string][]string{},
 	}
 }
 
@@ -109,12 +123,142 @@ func (f *fakeProvider) Disconnect(_ context.Context, id string) error {
 
 func (f *fakeProvider) Calendar() CalendarAPI { return f }
 func (f *fakeProvider) Contacts() ContactsAPI { return fakeContacts{f} }
-func (f *fakeProvider) Mail() MailAPI         { return f }
-func (f *fakeProvider) Files() FilesAPI       { return f }
+func (f *fakeProvider) Mail() MailAPI         { return fakeMail{f} }
+func (f *fakeProvider) Files() FilesAPI       { return fakeFiles{f} }
 
 type fakeContacts struct{ f *fakeProvider }
 
 func (c fakeContacts) Contacts(context.Context) ([]Contact, error) { return c.f.contacts, nil }
+func (c fakeContacts) Create(_ context.Context, ct Contact) (Contact, error) {
+	c.f.cNext++
+	ct.ID = fmt.Sprintf("new%d", c.f.cNext)
+	ct.Version = "v-new"
+	c.f.cCreated = append(c.f.cCreated, ct)
+	c.f.contacts = append(c.f.contacts, ct)
+	return ct, nil
+}
+func (c fakeContacts) Update(_ context.Context, ct Contact) (Contact, error) {
+	c.f.cUpdated = append(c.f.cUpdated, ct)
+	ct.Version = ct.Version + "+"
+	for i := range c.f.contacts {
+		if c.f.contacts[i].ID == ct.ID {
+			c.f.contacts[i] = ct
+		}
+	}
+	return ct, nil
+}
+func (c fakeContacts) Delete(_ context.Context, id string) error {
+	c.f.cDeleted = append(c.f.cDeleted, id)
+	for i := range c.f.contacts {
+		if c.f.contacts[i].ID == id {
+			c.f.contacts = append(c.f.contacts[:i], c.f.contacts[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
+
+type fakeMail struct{ f *fakeProvider }
+
+func (m fakeMail) Messages(_ context.Context, since time.Time, limit int) ([]Message, error) {
+	var out []Message
+	for _, x := range m.f.messages {
+		if !x.Received.Before(since) {
+			out = append(out, x)
+		}
+	}
+	return out, nil
+}
+func (m fakeMail) Inbox(_ context.Context, q MailQuery) ([]Message, string, error) {
+	m.f.mailLog = append(m.f.mailLog, "inbox "+q.Folder+" "+q.Search)
+	return m.f.messages, "", nil
+}
+func (m fakeMail) Get(_ context.Context, id string) (Message, error) {
+	for _, x := range m.f.messages {
+		if x.ID == id {
+			return x, nil
+		}
+	}
+	return Message{}, ErrNotFound
+}
+func (m fakeMail) Send(_ context.Context, o Outgoing) error {
+	m.f.sent = append(m.f.sent, o)
+	m.f.mailLog = append(m.f.mailLog, "send")
+	return nil
+}
+func (m fakeMail) Reply(_ context.Context, id string, o Outgoing, all bool) error {
+	v := "reply"
+	if all {
+		v = "replyall"
+	}
+	m.f.mailLog = append(m.f.mailLog, v+" "+id)
+	return nil
+}
+func (m fakeMail) Forward(_ context.Context, id string, o Outgoing) error {
+	m.f.mailLog = append(m.f.mailLog, "forward "+id+" "+strings.Join(o.To, ","))
+	return nil
+}
+func (m fakeMail) Archive(_ context.Context, id string) error {
+	m.f.mailLog = append(m.f.mailLog, "archive "+id)
+	return nil
+}
+func (m fakeMail) Label(_ context.Context, id string, add, remove []string) error {
+	m.f.mailLog = append(m.f.mailLog, "label "+id+" +"+strings.Join(add, ",")+" -"+strings.Join(remove, ","))
+	return nil
+}
+func (m fakeMail) Labels(context.Context) ([]string, error) { return []string{"Quotes"}, nil }
+func (m fakeMail) MarkRead(_ context.Context, id string, read bool) error {
+	m.f.mailLog = append(m.f.mailLog, fmt.Sprintf("read %s %t", id, read))
+	return nil
+}
+func (m fakeMail) Delete(_ context.Context, id string) error {
+	m.f.mailLog = append(m.f.mailLog, "delete "+id)
+	return nil
+}
+
+type fakeFiles struct{ f *fakeProvider }
+
+func (x fakeFiles) Drives(ctx context.Context) ([]Drive, error) { return x.f.Drives(ctx) }
+func (x fakeFiles) List(ctx context.Context, d, fo string) ([]FileItem, error) {
+	return x.f.List(ctx, d, fo)
+}
+func (x fakeFiles) Item(ctx context.Context, d, id string) (FileItem, error) {
+	return x.f.Item(ctx, d, id)
+}
+func (x fakeFiles) Open(ctx context.Context, d, id string, max int64) (FileItem, io.ReadCloser, error) {
+	return x.f.Open(ctx, d, id, max)
+}
+func (x fakeFiles) Upload(_ context.Context, d, fo, name, mime string, size int64, r io.Reader) (FileItem, error) {
+	b, _ := io.ReadAll(r)
+	id := "up-" + name
+	x.f.body[id] = string(b)
+	x.f.fileLog = append(x.f.fileLog, "upload "+fo+"/"+name+" "+string(b))
+	it := FileItem{ID: id, DriveID: d, Name: name, MIME: mime, Size: int64(len(b))}
+	x.f.items[d+"/"+fo] = append(x.f.items[d+"/"+fo], it)
+	return it, nil
+}
+func (x fakeFiles) Replace(_ context.Context, d, id, mime string, size int64, r io.Reader) (FileItem, error) {
+	b, _ := io.ReadAll(r)
+	x.f.body[id] = string(b)
+	x.f.fileLog = append(x.f.fileLog, "replace "+id+" "+string(b))
+	return FileItem{ID: id, DriveID: d}, nil
+}
+func (x fakeFiles) Rename(_ context.Context, d, id, name string) (FileItem, error) {
+	x.f.fileLog = append(x.f.fileLog, "rename "+id+" "+name)
+	return FileItem{ID: id, Name: name}, nil
+}
+func (x fakeFiles) Move(_ context.Context, d, id, fo string) (FileItem, error) {
+	x.f.fileLog = append(x.f.fileLog, "move "+id+" "+fo)
+	return FileItem{ID: id}, nil
+}
+func (x fakeFiles) Mkdir(_ context.Context, d, fo, name string) (FileItem, error) {
+	x.f.fileLog = append(x.f.fileLog, "mkdir "+fo+"/"+name)
+	return FileItem{ID: "dir-" + name, Name: name, Folder: true}, nil
+}
+func (x fakeFiles) Delete(_ context.Context, d, id string) error {
+	x.f.fileLog = append(x.f.fileLog, "delete "+id)
+	return nil
+}
 
 func (f *fakeProvider) Calendars(context.Context) ([]CalendarInfo, error) { return f.calendar, nil }
 func (f *fakeProvider) Events(_ context.Context, cal string, from, to time.Time) ([]Event, error) {
@@ -158,15 +302,6 @@ func (f *fakeProvider) Delete(_ context.Context, cal, id string) error {
 	defer f.mu.Unlock()
 	delete(f.events[cal], id)
 	return nil
-}
-func (f *fakeProvider) Messages(_ context.Context, since time.Time, limit int) ([]Message, error) {
-	var out []Message
-	for _, m := range f.messages {
-		if !m.Received.Before(since) {
-			out = append(out, m)
-		}
-	}
-	return out, nil
 }
 func (f *fakeProvider) Drives(context.Context) ([]Drive, error) { return f.drives, nil }
 func (f *fakeProvider) List(_ context.Context, drive, folder string) ([]FileItem, error) {
@@ -547,11 +682,17 @@ func TestADepartmentCalendarIsTheDepartmentsAndNeedsAManager(t *testing.T) {
 
 // ---- contacts -------------------------------------------------------------
 
-func TestContactsImportAdoptAndNeverLoseHearthsOwnEdits(t *testing.T) {
+func TestContactsSyncBothWaysIncludingEditsAndDeletes(t *testing.T) {
 	f := setup(t)
 	f.turnOn(Contacts)
 	ctx := context.Background()
 	actor, _ := f.az.SubjectsFor(ctx, f.org, f.dana)
+	sync := func() {
+		t.Helper()
+		if _, err := f.svc.SyncContacts(ctx, f.org, f.dana, Google); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	existing, err := f.crm.CreateContact(ctx, f.org, actor, crm.Contact{Name: "Priya Shah", Email: "priya@acme.test", Title: "Buyer"})
 	if err != nil {
@@ -563,14 +704,16 @@ func TestContactsImportAdoptAndNeverLoseHearthsOwnEdits(t *testing.T) {
 		{ID: "c3", Version: "1", Email: "noname@acme.test"},
 		{ID: "c4", Version: "1"},
 	}
-	if _, err := f.svc.SyncContacts(ctx, f.org, f.dana, Google); err != nil {
-		t.Fatal(err)
-	}
+	sync()
 
-	// An address already in the CRM is linked, not overwritten.
+	// An address already in the CRM is linked, not overwritten, and the CRM contact this person made earlier
+	// is not exported a second time because it is already linked.
 	got, _ := f.crm.GetContact(ctx, f.org, actor, existing.ID)
 	if got.Name != "Priya Shah" || got.Title != "Buyer" {
 		t.Fatalf("an existing contact was overwritten: %+v", got)
+	}
+	if len(f.fake.cCreated) != 0 {
+		t.Fatalf("a contact that was linked to an existing address book entry was exported again: %+v", f.fake.cCreated)
 	}
 	m, err := f.crm.ByEmail(ctx, f.org, "marcus@acme.test")
 	if err != nil || m.Name != "Marcus Lee" || m.Phone != "555 0100" {
@@ -580,46 +723,74 @@ func TestContactsImportAdoptAndNeverLoseHearthsOwnEdits(t *testing.T) {
 		t.Fatalf("a contact with only an address should be named by it: %+v %v", n, err)
 	}
 
-	// A change at the provider reaches a contact nobody has edited in Hearth.
+	// Changed at the provider, not in Hearth: Hearth takes it.
 	f.fake.contacts[1] = Contact{ID: "c2", Version: "2", Name: "Marcus Lee", Email: "marcus@acme.test", Phone: "555 0199", Title: "Senior engineer"}
-	if _, err := f.svc.SyncContacts(ctx, f.org, f.dana, Google); err != nil {
-		t.Fatal(err)
-	}
+	sync()
 	if m, _ := f.crm.GetContact(ctx, f.org, actor, m.ID); m.Title != "Senior engineer" || m.Phone != "555 0199" {
 		t.Fatalf("the provider's change did not arrive: %+v", m)
 	}
 
-	// An edit in Hearth is kept when the provider changes it afterwards.
+	// Changed in Hearth: the provider takes it.
 	mine, _ := f.crm.GetContact(ctx, f.org, actor, m.ID)
 	mine.Title = "Plant manager"
 	if err := f.crm.UpdateContact(ctx, f.org, actor, *mine); err != nil {
 		t.Fatal(err)
 	}
-	f.fake.contacts[1] = Contact{ID: "c2", Version: "3", Name: "Marcus Lee", Email: "marcus@acme.test", Title: "Director"}
-	if _, err := f.svc.SyncContacts(ctx, f.org, f.dana, Google); err != nil {
-		t.Fatal(err)
+	sync()
+	if len(f.fake.cUpdated) != 1 || f.fake.cUpdated[0].ID != "c2" || f.fake.cUpdated[0].Title != "Plant manager" || f.fake.cUpdated[0].Version != "2" {
+		t.Fatalf("an edit in Hearth did not reach the address book, with the version it was read at: %+v", f.fake.cUpdated)
 	}
-	if m, _ := f.crm.GetContact(ctx, f.org, actor, m.ID); m.Title != "Plant manager" {
-		t.Fatalf("an edit made in Hearth was overwritten: %q", m.Title)
+	if n := len(f.fake.cUpdated); true {
+		sync()
+		if len(f.fake.cUpdated) != n {
+			t.Fatal("an unchanged contact was updated again")
+		}
 	}
 
-	// Deleted at the provider: the CRM record stays. Deleted in Hearth: it is not made again.
-	f.fake.contacts = f.fake.contacts[:1]
-	if _, err := f.svc.SyncContacts(ctx, f.org, f.dana, Google); err != nil {
+	// Changed on both sides: the provider wins and nothing is written over it.
+	mine, _ = f.crm.GetContact(ctx, f.org, actor, m.ID)
+	mine.Title = "Hearth edit"
+	_ = f.crm.UpdateContact(ctx, f.org, actor, *mine)
+	f.fake.contacts[1] = Contact{ID: "c2", Version: "9", Name: "Marcus Lee", Email: "marcus@acme.test", Title: "Provider edit"}
+	before := len(f.fake.cUpdated)
+	sync()
+	if m, _ := f.crm.GetContact(ctx, f.org, actor, m.ID); m.Title != "Provider edit" {
+		t.Fatalf("on a clash the provider's version did not win: %q", m.Title)
+	}
+	if len(f.fake.cUpdated) != before {
+		t.Fatal("on a clash Hearth wrote over the provider's version")
+	}
+
+	// New in Hearth: created at the provider, once.
+	if _, err := f.crm.CreateContact(ctx, f.org, actor, crm.Contact{Name: "Dana Park", Email: "dana.park@acme.test", Phone: "555 0123", Title: "CFO"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.crm.ByEmail(ctx, f.org, "marcus@acme.test"); err != nil {
-		t.Fatal("a contact deleted at the provider was removed from the CRM")
+	sync()
+	if len(f.fake.cCreated) != 1 || f.fake.cCreated[0].Name != "Dana Park" || f.fake.cCreated[0].Email != "dana.park@acme.test" || f.fake.cCreated[0].Title != "CFO" {
+		t.Fatalf("a Hearth contact did not reach the address book: %+v", f.fake.cCreated)
 	}
+	sync()
+	if len(f.fake.cCreated) != 1 {
+		t.Fatal("the same contact was created twice")
+	}
+
+	// Deleted at the provider: deleted in Hearth.
+	f.fake.contacts = f.fake.contacts[:1]
+	sync()
+	if _, err := f.crm.ByEmail(ctx, f.org, "marcus@acme.test"); err == nil {
+		t.Fatal("a contact deleted at the provider is still in the CRM")
+	}
+	// Deleted in Hearth: deleted at the provider, and not made again.
 	if err := f.crm.DeleteContact(ctx, f.org, actor, existing.ID); err != nil {
 		t.Fatal(err)
 	}
-	f.fake.contacts[0].Version = "9"
-	if _, err := f.svc.SyncContacts(ctx, f.org, f.dana, Google); err != nil {
-		t.Fatal(err)
+	sync()
+	if len(f.fake.cDeleted) != 1 || f.fake.cDeleted[0] != "c1" {
+		t.Fatalf("a contact deleted in Hearth was not deleted at the provider: %+v", f.fake.cDeleted)
 	}
+	sync()
 	if _, err := f.crm.ByEmail(ctx, f.org, "priya@acme.test"); err == nil {
-		t.Fatal("a contact deleted in Hearth was made again")
+		t.Fatal("a contact deleted in Hearth came back")
 	}
 }
 
@@ -645,7 +816,7 @@ func TestAnImportedContactIsPrivateToTheImporter(t *testing.T) {
 
 // ---- mail -----------------------------------------------------------------
 
-func TestMailIsLinkedOnlyToPeopleInTheCRMAndOnlyShownToTheMailboxOwner(t *testing.T) {
+func TestMailIsLinkedToPeopleInTheCRMWithItsBodyAndOnlyShownToTheMailboxOwner(t *testing.T) {
 	f := setup(t)
 	f.turnOn(Mail)
 	ctx := context.Background()
@@ -656,7 +827,7 @@ func TestMailIsLinkedOnlyToPeopleInTheCRMAndOnlyShownToTheMailboxOwner(t *testin
 	}
 	f.fake.messages = []Message{
 		{ID: "m1", Subject: "Quote", From: "Priya Shah <priya@acme.test>", To: []string{"dana@example.com"},
-			Snippet: "Please find", Received: f.clock.Add(-time.Hour), WebLink: "https://mail.example/m1"},
+			Snippet: "Please find", Body: "Please find the quote below.\n\nPriya", Received: f.clock.Add(-time.Hour), WebLink: "https://mail.example/m1"},
 		{ID: "m2", Subject: "Re: Quote", From: "dana@example.com", To: []string{"PRIYA@acme.test"}, Received: f.clock.Add(-30 * time.Minute)},
 		{ID: "m3", Subject: "Newsletter", From: "list@spam.test", To: []string{"dana@example.com"}, Received: f.clock.Add(-time.Hour)},
 		{ID: "old", Subject: "Ancient", From: "priya@acme.test", Received: f.clock.Add(-60 * 24 * time.Hour)},
@@ -675,10 +846,13 @@ func TestMailIsLinkedOnlyToPeopleInTheCRMAndOnlyShownToTheMailboxOwner(t *testin
 	if theirs, _ := f.svc.MailFor(ctx, f.org, f.omar, priya.ID, 10); len(theirs) != 0 {
 		t.Fatal("a colleague sees mail from somebody else's mailbox")
 	}
-	var snippet string
-	_ = f.db.QueryRow(ctx, `SELECT snippet FROM connector_mail WHERE message_id='m1'`).Scan(&snippet)
-	if snippet != "Please find" {
-		t.Fatalf("snippet %q", snippet)
+	var snippet, body string
+	_ = f.db.QueryRow(ctx, `SELECT snippet, body FROM connector_mail WHERE message_id='m1'`).Scan(&snippet, &body)
+	if snippet != "Please find" || body != "Please find the quote below.\n\nPriya" {
+		t.Fatalf("snippet %q body %q: the whole message is kept for a linked contact", snippet, body)
+	}
+	if got, _ := f.svc.MailFor(ctx, f.org, f.dana, priya.ID, 10); len(got) != 2 || !strings.Contains(got[1].Body, "the quote below") {
+		t.Fatalf("the body did not come back with the linked message: %+v", got)
 	}
 }
 
@@ -802,5 +976,122 @@ func TestAScheduledPassSyncsEveryoneAndRecordsWhatHappened(t *testing.T) {
 	}
 	if failed == 0 {
 		t.Fatal("a revoked connection left no error for the administrator to read")
+	}
+}
+
+func TestTheWholeMailboxIsReadableAndWritableAsThePerson(t *testing.T) {
+	f := setup(t)
+	f.turnOn(Mail)
+	ctx := context.Background()
+	f.fake.messages = []Message{{ID: "z1", Subject: "Not from anybody in the CRM", From: "stranger@nowhere.test", Body: "the full body", Received: f.clock}}
+
+	// Any message, whoever it is from, with its body.
+	list, _, err := f.svc.Inbox(ctx, f.org, f.dana, Google, MailQuery{Folder: "inbox", Search: "invoice"})
+	if err != nil || len(list) != 1 {
+		t.Fatalf("inbox %+v %v", list, err)
+	}
+	m, err := f.svc.Message(ctx, f.org, f.dana, Google, "z1")
+	if err != nil || m.Body != "the full body" {
+		t.Fatalf("message %+v %v", m, err)
+	}
+
+	if err := f.svc.SendMail(ctx, f.org, f.dana, Google, Outgoing{Subject: "Hello", Body: "hi"}); err == nil {
+		t.Fatal("a message with nobody to go to was sent")
+	}
+	if err := f.svc.SendMail(ctx, f.org, f.dana, Google, Outgoing{To: []string{"a@b.test"}, Subject: "Hello", Body: "hi"}); err != nil || len(f.fake.sent) != 1 {
+		t.Fatalf("send: %v %+v", err, f.fake.sent)
+	}
+	if err := f.svc.ReplyMail(ctx, f.org, f.dana, Google, "z1", Outgoing{Body: "thanks"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.ForwardMail(ctx, f.org, f.dana, Google, "z1", Outgoing{To: []string{"c@d.test"}, Body: "fyi"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.ForwardMail(ctx, f.org, f.dana, Google, "z1", Outgoing{Body: "fyi"}); err == nil {
+		t.Fatal("a forward with nobody to go to was sent")
+	}
+	for _, do := range []func() error{
+		func() error { return f.svc.ArchiveMail(ctx, f.org, f.dana, Google, "z1") },
+		func() error {
+			return f.svc.LabelMail(ctx, f.org, f.dana, Google, "z1", []string{"Quotes"}, []string{"Old"})
+		},
+		func() error { return f.svc.MarkMailRead(ctx, f.org, f.dana, Google, "z1", true) },
+		func() error { return f.svc.DeleteMail(ctx, f.org, f.dana, Google, "z1") },
+	} {
+		if err := do(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"inbox inbox invoice", "send", "replyall z1", "forward z1 c@d.test", "archive z1", "label z1 +Quotes -Old", "read z1 true", "delete z1"}
+	if strings.Join(f.fake.mailLog, "|") != strings.Join(want, "|") {
+		t.Fatalf("the provider saw %v, want %v", f.fake.mailLog, want)
+	}
+	// And all of it needs the connector on and the grant to cover it.
+	f.fake.scopes = []string{"contacts"}
+	if err := f.svc.SendMail(ctx, f.org, f.dana, Google, Outgoing{To: []string{"a@b.test"}}); !errors.Is(err, ErrScope) {
+		t.Fatalf("a grant without mail permission sent mail: %v", err)
+	}
+}
+
+func TestFilesUploadReplaceRenameMoveMakeFolderAndDelete(t *testing.T) {
+	f := setup(t)
+	f.turnOn(Files)
+	ctx := context.Background()
+	it, err := f.svc.UploadFile(ctx, f.org, f.dana, Google, "d1", "fo1", "plan.txt", "text/plain", 5, strings.NewReader("hello"))
+	if err != nil || it.Name != "plan.txt" {
+		t.Fatalf("upload %+v %v", it, err)
+	}
+	if _, err := f.svc.UploadFile(ctx, f.org, f.dana, Google, "d1", "", "", "text/plain", 1, strings.NewReader("x")); err == nil {
+		t.Fatal("a file with no name was uploaded")
+	}
+	if _, err := f.svc.ReplaceFile(ctx, f.org, f.dana, Google, "d1", it.ID, "text/plain", 5, strings.NewReader("newer")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.RenameFile(ctx, f.org, f.dana, Google, "d1", it.ID, "plan v2.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.MoveFile(ctx, f.org, f.dana, Google, "d1", it.ID, "fo2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.MakeFolder(ctx, f.org, f.dana, Google, "d1", "", "Quotes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.DeleteFile(ctx, f.org, f.dana, Google, "d1", it.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"upload fo1/plan.txt hello", "replace up-plan.txt newer", "rename up-plan.txt plan v2.txt", "move up-plan.txt fo2", "mkdir /Quotes", "delete up-plan.txt"}
+	if strings.Join(f.fake.fileLog, "|") != strings.Join(want, "|") {
+		t.Fatalf("the provider saw %v, want %v", f.fake.fileLog, want)
+	}
+}
+
+func TestAHearthAttachmentCanBeSavedToADrive(t *testing.T) {
+	if os.Getenv("TEST_MINIO_ENDPOINT") == "" {
+		t.Skip("TEST_MINIO_ENDPOINT not set")
+	}
+	f := setup(t)
+	f.turnOn(Files)
+	ctx := context.Background()
+	actor, _ := f.az.SubjectsFor(ctx, f.org, f.dana)
+	doc, err := f.docs.Create(ctx, f.org, actor, docs.CreateParams{Title: "Quote 120"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, err := f.svc.files.Upload(ctx, f.org, f.dana, "spec.txt", "text/plain", 4, strings.NewReader("spec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.docs.Attach(ctx, f.org, actor, doc.ID, up.ID); err != nil {
+		t.Fatal(err)
+	}
+	it, err := f.svc.SaveAttachment(ctx, f.org, f.dana, Google, doc.ID, up.ID, "d1", "fo1")
+	if err != nil || it.Name != "spec.txt" {
+		t.Fatalf("save %+v %v", it, err)
+	}
+	if got := f.fake.fileLog[len(f.fake.fileLog)-1]; got != "upload fo1/spec.txt spec" {
+		t.Fatalf("the drive received %q", got)
+	}
+	if _, err := f.svc.SaveAttachment(ctx, f.org, f.omar, Google, doc.ID, up.ID, "d1", ""); err == nil {
+		t.Fatal("a person who cannot see the document saved its attachment to their drive")
 	}
 }

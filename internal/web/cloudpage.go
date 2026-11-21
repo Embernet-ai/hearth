@@ -5,10 +5,13 @@ package web
 // the document.
 
 import (
+	"context"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/connect"
@@ -28,6 +31,12 @@ type CloudView struct {
 	DocTitle  string
 	Documents []CloudDoc
 	Notice    string
+	// Folders are the folders in the one being shown, which a file can be moved into.
+	Folders []connect.FileItem
+	// Saving, when a Hearth attachment is being saved out: which document and file, and what it is called.
+	SaveDoc  string
+	SaveFile string
+	SaveName string
 }
 
 // CloudProvider is a provider the person can browse.
@@ -44,7 +53,8 @@ func (s *Server) getCloud(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := auth.From(ctx)
 	q := r.URL.Query()
-	v := &CloudView{Notice: q.Get("notice"), DocID: q.Get("doc"), DriveID: q.Get("drive"), FolderID: q.Get("folder")}
+	v := &CloudView{Notice: q.Get("notice"), DocID: q.Get("doc"), DriveID: q.Get("drive"), FolderID: q.Get("folder"),
+		SaveDoc: q.Get("savedoc"), SaveFile: q.Get("savefile")}
 
 	// Which providers this person can browse: Files switched on, and a live connection that covers it.
 	for _, p := range connect.Providers {
@@ -86,6 +96,23 @@ func (s *Server) getCloud(w http.ResponseWriter, r *http.Request) {
 				v.Notice = cloudErr(err)
 			}
 			v.Items = items
+			for _, it := range items {
+				if it.Folder {
+					v.Folders = append(v.Folders, it)
+				}
+			}
+		}
+	}
+	if v.SaveDoc != "" && v.SaveFile != "" {
+		if atts, err := s.docs.Attachments(ctx, id.OrgID, id.Subjects, v.SaveDoc); err == nil {
+			for _, a := range atts {
+				if a.FileID == v.SaveFile {
+					v.SaveName = a.Filename
+				}
+			}
+		}
+		if v.SaveName == "" {
+			v.SaveDoc, v.SaveFile = "", ""
 		}
 	}
 	if v.DocID != "" {
@@ -180,4 +207,125 @@ func (s *Server) postCloudUnlink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/documents/"+url.PathEscape(r.FormValue("doc")), http.StatusSeeOther)
+}
+
+// -----------------------------------------------------------------------------
+// Writing to a drive
+// -----------------------------------------------------------------------------
+
+// maxUpload is the largest upload accepted, the same limit an import has.
+const maxUpload = connect.MaxImport
+
+// cloudBack returns to the folder the person was in, with a note.
+func (s *Server) cloudBack(w http.ResponseWriter, r *http.Request, p connect.Provider, msg string, err error) {
+	q := url.Values{"provider": {string(p)}, "drive": {r.FormValue("drive")}}
+	if f := r.FormValue("folder"); f != "" {
+		q.Set("folder", f)
+	}
+	if d := r.FormValue("doc"); d != "" {
+		q.Set("doc", d)
+	}
+	if err != nil {
+		s.log.WarnContext(r.Context(), "cloud file", "error", err)
+		q.Set("notice", cloudErr(err))
+	} else if msg != "" {
+		q.Set("notice", msg)
+	}
+	http.Redirect(w, r, "/cloud?"+q.Encode(), http.StatusSeeOther)
+}
+
+func (s *Server) cloudAct(w http.ResponseWriter, r *http.Request, done string, act func(ctx context.Context, org, who string, p connect.Provider) error) {
+	p, ok := s.cloudForm(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+	s.cloudBack(w, r, p, done, act(ctx, id.OrgID, id.PrincipalID, p))
+}
+
+// uploaded reads the file part of a multipart form, refusing one over the limit.
+func (s *Server) uploaded(w http.ResponseWriter, r *http.Request) (multipart.File, *multipart.FileHeader, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload+(1<<20))
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		return nil, nil, errors.New("that file is too large, or the upload was cut off")
+	}
+	f, h, err := r.FormFile("file")
+	if err != nil {
+		return nil, nil, errors.New("choose a file")
+	}
+	return f, h, nil
+}
+
+func (s *Server) postCloudUpload(w http.ResponseWriter, r *http.Request) {
+	if !s.connectorsOn() {
+		s.fail(w, r, http.StatusNotFound, "the connectors are not set up on this installation")
+		return
+	}
+	f, h, err := s.uploaded(w, r)
+	if err != nil {
+		p, _ := connect.ParseProvider(r.FormValue("provider"))
+		s.cloudBack(w, r, p, "", err)
+		return
+	}
+	defer f.Close()
+	s.cloudAct(w, r, "Uploaded "+h.Filename+".", func(ctx context.Context, org, who string, p connect.Provider) error {
+		_, err := s.connect.UploadFile(ctx, org, who, p, r.FormValue("drive"), r.FormValue("folder"), h.Filename,
+			h.Header.Get("Content-Type"), h.Size, f)
+		return err
+	})
+}
+
+func (s *Server) postCloudReplace(w http.ResponseWriter, r *http.Request) {
+	if !s.connectorsOn() {
+		s.fail(w, r, http.StatusNotFound, "the connectors are not set up on this installation")
+		return
+	}
+	f, h, err := s.uploaded(w, r)
+	if err != nil {
+		p, _ := connect.ParseProvider(r.FormValue("provider"))
+		s.cloudBack(w, r, p, "", err)
+		return
+	}
+	defer f.Close()
+	s.cloudAct(w, r, "Replaced.", func(ctx context.Context, org, who string, p connect.Provider) error {
+		_, err := s.connect.ReplaceFile(ctx, org, who, p, r.FormValue("drive"), r.FormValue("item"), h.Header.Get("Content-Type"), h.Size, f)
+		return err
+	})
+}
+
+func (s *Server) postCloudRename(w http.ResponseWriter, r *http.Request) {
+	s.cloudAct(w, r, "Renamed.", func(ctx context.Context, org, who string, p connect.Provider) error {
+		_, err := s.connect.RenameFile(ctx, org, who, p, r.FormValue("drive"), r.FormValue("item"), strings.TrimSpace(r.FormValue("name")))
+		return err
+	})
+}
+
+func (s *Server) postCloudMove(w http.ResponseWriter, r *http.Request) {
+	s.cloudAct(w, r, "Moved.", func(ctx context.Context, org, who string, p connect.Provider) error {
+		_, err := s.connect.MoveFile(ctx, org, who, p, r.FormValue("drive"), r.FormValue("item"), r.FormValue("to"))
+		return err
+	})
+}
+
+func (s *Server) postCloudMkdir(w http.ResponseWriter, r *http.Request) {
+	s.cloudAct(w, r, "Folder made.", func(ctx context.Context, org, who string, p connect.Provider) error {
+		_, err := s.connect.MakeFolder(ctx, org, who, p, r.FormValue("drive"), r.FormValue("folder"), strings.TrimSpace(r.FormValue("name")))
+		return err
+	})
+}
+
+func (s *Server) postCloudDelete(w http.ResponseWriter, r *http.Request) {
+	s.cloudAct(w, r, "Moved to the bin.", func(ctx context.Context, org, who string, p connect.Provider) error {
+		return s.connect.DeleteFile(ctx, org, who, p, r.FormValue("drive"), r.FormValue("item"))
+	})
+}
+
+// postCloudSave saves a file attached to a Hearth document into the folder being shown.
+func (s *Server) postCloudSave(w http.ResponseWriter, r *http.Request) {
+	s.cloudAct(w, r, "Saved.", func(ctx context.Context, org, who string, p connect.Provider) error {
+		_, err := s.connect.SaveAttachment(ctx, org, who, p, r.FormValue("savedoc"), r.FormValue("savefile"), r.FormValue("drive"), r.FormValue("folder"))
+		return err
+	})
 }

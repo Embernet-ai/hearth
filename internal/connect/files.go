@@ -1,10 +1,11 @@
 package connect
 
-// Files: browse OneDrive, SharePoint and Google Drive, link a file to a Hearth document, or import a copy.
+// Files: OneDrive, SharePoint and Google Drive, read and write, as the person.
 //
-// Browsing is live and nothing is cached: what a person sees is what the provider says they may see. A link
-// records where the file lives; an import downloads it once and attaches the copy to the document. Both need the
-// person to be able to edit the document, which the document service decides.
+// Browse, open, upload, replace, rename, move, make folders and delete, straight through to the provider, and link a
+// file to a Hearth document or import a copy into it. A Hearth attachment can also be saved out to a drive. Deleting
+// sends to the provider's bin, where the person can restore it. Everything is done as the signed-in person, and the
+// document service decides whether they may add to a document.
 
 import (
 	"context"
@@ -191,4 +192,85 @@ func (s *Service) CanBrowse(ctx context.Context, orgID, principalID string) bool
 		}
 	}
 	return false
+}
+
+// UploadFile puts a new file in a folder of a drive.
+func (s *Service) UploadFile(ctx context.Context, orgID, principalID string, p Provider, driveID, folderID, name, mime string, size int64, r io.Reader) (FileItem, error) {
+	if name == "" {
+		return FileItem{}, errors.New("connect: a file needs a name")
+	}
+	sess, err := s.session(ctx, orgID, principalID, p, Files)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return sess.Files().Upload(ctx, driveID, folderID, name, mime, size, io.LimitReader(r, MaxImport+1))
+}
+
+// ReplaceFile overwrites a file's content.
+func (s *Service) ReplaceFile(ctx context.Context, orgID, principalID string, p Provider, driveID, itemID, mime string, size int64, r io.Reader) (FileItem, error) {
+	sess, err := s.session(ctx, orgID, principalID, p, Files)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return sess.Files().Replace(ctx, driveID, itemID, mime, size, io.LimitReader(r, MaxImport+1))
+}
+
+// RenameFile renames a file or folder.
+func (s *Service) RenameFile(ctx context.Context, orgID, principalID string, p Provider, driveID, itemID, name string) (FileItem, error) {
+	if name == "" {
+		return FileItem{}, errors.New("connect: a file needs a name")
+	}
+	sess, err := s.session(ctx, orgID, principalID, p, Files)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return sess.Files().Rename(ctx, driveID, itemID, name)
+}
+
+// MoveFile moves a file or folder into another folder.
+func (s *Service) MoveFile(ctx context.Context, orgID, principalID string, p Provider, driveID, itemID, folderID string) (FileItem, error) {
+	sess, err := s.session(ctx, orgID, principalID, p, Files)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return sess.Files().Move(ctx, driveID, itemID, folderID)
+}
+
+// MakeFolder makes a folder.
+func (s *Service) MakeFolder(ctx context.Context, orgID, principalID string, p Provider, driveID, folderID, name string) (FileItem, error) {
+	if name == "" {
+		return FileItem{}, errors.New("connect: a folder needs a name")
+	}
+	sess, err := s.session(ctx, orgID, principalID, p, Files)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return sess.Files().Mkdir(ctx, driveID, folderID, name)
+}
+
+// DeleteFile sends a file or folder to the provider's bin.
+func (s *Service) DeleteFile(ctx context.Context, orgID, principalID string, p Provider, driveID, itemID string) error {
+	sess, err := s.session(ctx, orgID, principalID, p, Files)
+	if err != nil {
+		return err
+	}
+	return sess.Files().Delete(ctx, driveID, itemID)
+}
+
+// SaveAttachment copies a file attached to a Hearth document out to a folder of a drive. The person has to be able
+// to see the document, which the document service decides when it opens the attachment.
+func (s *Service) SaveAttachment(ctx context.Context, orgID, principalID string, p Provider, docID, fileID, driveID, folderID string) (FileItem, error) {
+	actor, err := s.actor(ctx, orgID, principalID)
+	if err != nil {
+		return FileItem{}, err
+	}
+	if err := s.docs.CanReadAttachment(ctx, orgID, actor, docID, fileID); err != nil {
+		return FileItem{}, ErrNotFound
+	}
+	f, body, err := s.files.Open(ctx, orgID, fileID)
+	if err != nil {
+		return FileItem{}, ErrNotFound
+	}
+	defer body.Close()
+	return s.UploadFile(ctx, orgID, principalID, p, driveID, folderID, f.Filename, f.ContentType, f.Size, body)
 }

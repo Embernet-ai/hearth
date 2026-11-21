@@ -153,22 +153,72 @@ type Contact struct {
 
 type ContactsAPI interface {
 	Contacts(ctx context.Context) ([]Contact, error)
+	// Create, Update and Delete write to the person's address book. Update needs the Version the contact was last
+	// read with, because Google refuses an edit made from a stale copy.
+	Create(ctx context.Context, c Contact) (Contact, error)
+	Update(ctx context.Context, c Contact) (Contact, error)
+	Delete(ctx context.Context, id string) error
 }
 
-// Message is a mail message's headers and a short preview. Never a body, never an attachment.
+// Message is a mail message. Messages listed by Inbox carry the preview; Get returns the whole message with its
+// body.
 type Message struct {
 	ID       string
+	ThreadID string
 	Subject  string
 	From     string
 	To       []string
+	Cc       []string
 	Snippet  string
+	Body     string // plain text; empty until Get
+	HTML     bool   // true when Body is HTML because the message had no plain text part
 	Received time.Time
 	WebLink  string
+	Unread   bool
+	Labels   []string // Gmail labels, or Outlook categories
+	Folder   string   // Outlook folder name, Gmail "INBOX" or "SENT" and so on
+	Attached []string // attachment file names
 }
 
+// Outgoing is a message to send, reply with or forward. Body is plain text unless HTML is set.
+type Outgoing struct {
+	To      []string
+	Cc      []string
+	Bcc     []string
+	Subject string
+	Body    string
+	HTML    bool
+}
+
+// MailQuery selects what Inbox lists. Search uses the provider's own search syntax.
+type MailQuery struct {
+	Folder string // "inbox" (default), "sent", "archive" or "all"
+	Search string
+	Limit  int
+	Cursor string
+}
+
+// MailAPI is one person's mailbox, read and write: everything the person can see, and everything they can do with it
+// in their own mail client.
 type MailAPI interface {
-	// Messages lists messages received since a time, newest first, up to limit.
+	// Messages lists messages received since a time, newest first, with their bodies, for the sync that links mail
+	// to contacts.
 	Messages(ctx context.Context, since time.Time, limit int) ([]Message, error)
+	// Inbox lists a page of the mailbox and the cursor for the next one ("" when there is none).
+	Inbox(ctx context.Context, q MailQuery) ([]Message, string, error)
+	Get(ctx context.Context, id string) (Message, error)
+	Send(ctx context.Context, o Outgoing) error
+	// Reply answers a message to its sender, or to everybody when all is set.
+	Reply(ctx context.Context, id string, o Outgoing, all bool) error
+	// Forward sends a message on to the people in o.To, with o.Body above it.
+	Forward(ctx context.Context, id string, o Outgoing) error
+	// Archive takes a message out of the inbox without deleting it.
+	Archive(ctx context.Context, id string) error
+	// Label adds and removes labels (Gmail) or categories (Outlook), by name.
+	Label(ctx context.Context, id string, add, remove []string) error
+	Labels(ctx context.Context) ([]string, error)
+	MarkRead(ctx context.Context, id string, read bool) error
+	Delete(ctx context.Context, id string) error
 }
 
 // Drive is a place files live: a person's OneDrive, a SharePoint document library, My Drive or a shared drive.
@@ -198,6 +248,16 @@ type FilesAPI interface {
 	// Open streams a file. A Google document is exported to a format Hearth can keep, so the name and type it
 	// reports are the ones of what is returned.
 	Open(ctx context.Context, driveID, itemID string, maxBytes int64) (FileItem, io.ReadCloser, error)
+	// Upload puts a new file in a folder ("" is the drive's root).
+	Upload(ctx context.Context, driveID, folderID, name, mime string, size int64, r io.Reader) (FileItem, error)
+	// Replace overwrites a file's content, keeping its name, place and link.
+	Replace(ctx context.Context, driveID, itemID, mime string, size int64, r io.Reader) (FileItem, error)
+	Rename(ctx context.Context, driveID, itemID, name string) (FileItem, error)
+	// Move puts a file or folder in another folder ("" is the root).
+	Move(ctx context.Context, driveID, itemID, folderID string) (FileItem, error)
+	Mkdir(ctx context.Context, driveID, folderID, name string) (FileItem, error)
+	// Delete sends a file or folder to the provider's bin, where the person can restore it.
+	Delete(ctx context.Context, driveID, itemID string) error
 }
 
 // Session is one person's connection to one provider, ready to call.

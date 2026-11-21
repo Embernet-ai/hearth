@@ -21,7 +21,8 @@
     <div  class="card">
       <h3>Connections</h3>
       <a  class="settinglink"  href={("/settings/connectors")}><span  class="sl-title">Microsoft 365 and Google Workspace</span><span  class="sl-note">Connect your own account for calendar, contacts, mail and files.</span></a>
-      <a  class="settinglink"  href={("/cloud")}><span  class="sl-title">Cloud files</span><span  class="sl-note">Browse OneDrive, SharePoint and Drive, and add files to documents.</span></a>
+      <a  class="settinglink"  href={("/mailbox")}><span  class="sl-title">Mailbox</span><span  class="sl-note">Read, send, reply, forward and file your Microsoft 365 or Google mail.</span></a>
+      <a  class="settinglink"  href={("/cloud")}><span  class="sl-title">Cloud files</span><span  class="sl-note">Open, upload, edit, move and delete files in OneDrive, SharePoint and Drive.</span></a>
     </div>
     {/if}
     <div  class="card">
