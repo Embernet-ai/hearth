@@ -36,6 +36,21 @@ type SpaceAccess struct {
 // queries. It checks no permission: it is for the system copying the structure
 // elsewhere.
 func (s *Service) SpaceAccessAll(ctx context.Context, orgID string) ([]*SpaceAccess, error) {
+	return s.spaceAccess(ctx, orgID, "")
+}
+
+// SpaceAccessOne is one space with the same access, for a copy of just that space (a folder made, renamed or removed does
+// not need every other folder sent again). It is nil when the space is not in the org.
+func (s *Service) SpaceAccessOne(ctx context.Context, orgID, id string) (*SpaceAccess, error) {
+	list, err := s.spaceAccess(ctx, orgID, id)
+	if err != nil || len(list) == 0 {
+		return nil, err
+	}
+	return list[0], nil
+}
+
+// spaceAccess reads every space of the org, or only onlyID when it is set.
+func (s *Service) spaceAccess(ctx context.Context, orgID, onlyID string) ([]*SpaceAccess, error) {
 	rows, err := s.db.Query(ctx, `
 		WITH RECURSIVE tree AS (
 		    SELECT id, parent_id, name, kind, position, 0 AS depth FROM spaces WHERE org_id = $1 AND parent_id IS NULL
@@ -43,8 +58,9 @@ func (s *Service) SpaceAccessAll(ctx context.Context, orgID string) ([]*SpaceAcc
 		    SELECT c.id, c.parent_id, c.name, c.kind, c.position, t.depth + 1
 		      FROM spaces c JOIN tree t ON c.parent_id = t.id WHERE t.depth < $2
 		) CYCLE id SET looped USING tree_path
-		SELECT id::text, parent_id::text, name, kind, position FROM tree WHERE NOT looped ORDER BY depth, position, lower(name), id`,
-		orgID, maxDepth)
+		SELECT id::text, parent_id::text, name, kind, position FROM tree WHERE NOT looped AND ($3 = '' OR id::text = $3)
+		ORDER BY depth, position, lower(name), id`,
+		orgID, maxDepth, onlyID)
 	if err != nil {
 		return nil, fmt.Errorf("plant: space access: %w", err)
 	}
@@ -68,12 +84,12 @@ func (s *Service) SpaceAccessAll(ctx context.Context, orgID string) ([]*SpaceAcc
 		sql string
 		add func(sp *SpaceAccess, id string)
 	}{
-		{`SELECT m.space_id::text, m.principal_id::text FROM space_managers m JOIN spaces s ON s.id = m.space_id WHERE s.org_id = $1`,
+		{`SELECT m.space_id::text, m.principal_id::text FROM space_managers m JOIN spaces s ON s.id = m.space_id WHERE s.org_id = $1 AND ($2 = '' OR s.id::text = $2)`,
 			func(sp *SpaceAccess, id string) { sp.Managers = append(sp.Managers, id) }},
-		{`SELECT d.space_id::text, d.principal_id::text FROM principal_departments d JOIN spaces s ON s.id = d.space_id WHERE s.org_id = $1`,
+		{`SELECT d.space_id::text, d.principal_id::text FROM principal_departments d JOIN spaces s ON s.id = d.space_id WHERE s.org_id = $1 AND ($2 = '' OR s.id::text = $2)`,
 			func(sp *SpaceAccess, id string) { sp.Members = append(sp.Members, id) }},
 	} {
-		rs, err := s.db.Query(ctx, q.sql, orgID)
+		rs, err := s.db.Query(ctx, q.sql, orgID, onlyID)
 		if err != nil {
 			return nil, fmt.Errorf("plant: space people: %w", err)
 		}
@@ -95,7 +111,8 @@ func (s *Service) SpaceAccessAll(ctx context.Context, orgID string) ([]*SpaceAcc
 
 	gr, err := s.db.Query(ctx, `
 		SELECT entity_id::text, subject_key, level, expires_at FROM grants
-		 WHERE org_id = $1 AND entity_type = 'space' AND (expires_at IS NULL OR expires_at > now())`, orgID)
+		 WHERE org_id = $1 AND entity_type = 'space' AND (expires_at IS NULL OR expires_at > now())
+		   AND ($2 = '' OR entity_id::text = $2)`, orgID, onlyID)
 	if err != nil {
 		return nil, fmt.Errorf("plant: space grants: %w", err)
 	}

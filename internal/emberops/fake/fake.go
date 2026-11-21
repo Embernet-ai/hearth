@@ -26,9 +26,10 @@ import (
 type Frappe struct {
 	*httptest.Server
 
-	mu   sync.Mutex
-	docs map[string]map[string]map[string]any // doctype -> name -> doc
-	seq  int
+	mu        sync.Mutex
+	docs      map[string]map[string]map[string]any // doctype -> name -> doc
+	seq       int
+	bulkItems int
 	// Tokens maps an accepted bearer token to the Frappe user it acts as.
 	Tokens map[string]string
 	// Calls records "METHOD path?query" for every request, for N+1 assertions.
@@ -321,6 +322,7 @@ func (f *Frappe) method(w http.ResponseWriter, r *http.Request, name, user strin
 		reply(w, "message", res)
 	case "emberops_hearth.api.bulk_upsert":
 		items, _ := args["items"].([]any)
+		f.bulkItems += len(items)
 		if len(items) > 500 {
 			fail(w, 417, "ValidationError", "Send at most 500 items at a time")
 			return
@@ -802,4 +804,11 @@ func (f *Frappe) decidedTimeOff(doctype string, d, vals map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// BulkItems is how many records have been sent through bulk_upsert in all, so a test can say how much a request sent.
+func (f *Frappe) BulkItems() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.bulkItems
 }
