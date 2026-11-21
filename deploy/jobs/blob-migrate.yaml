@@ -1,0 +1,88 @@
+# One-off Job for hearthctl blob-migrate: copies every object from the MinIO an
+# older install still has into the Garage that ships in this chart, reads each one
+# back and compares SHA-256, and counts both stores. Nothing is ever deleted, and
+# nothing the destination already holds is overwritten, so MinIO stays whole as
+# the fallback and the Job can be run again. Without -apply it writes nothing:
+# run it that way first and read the log.
+#
+#   sed -e 's#__NAME__#blob-migrate-dry#' -e 's#__TAG__#2.23.0#' \
+#       -e 's#__ARGS__#["blob-migrate"]#' deploy/jobs/blob-migrate.yaml | kubectl apply -f -
+#   sed -e 's#__NAME__#blob-migrate-1#' -e 's#__TAG__#2.23.0#' \
+#       -e 's#__ARGS__#["blob-migrate", "-apply"]#' deploy/jobs/blob-migrate.yaml | kubectl apply -f -
+#   kubectl -n hearth logs job/blob-migrate-1
+#
+# The destination is the Garage beside the app, with the key the chart made for
+# it (Secret <release>-garage-key-hearth, release "hearth" here). The source is
+# the chart's MinIO, with the keys in Secret hearth. For another release name or
+# another source, change the names below. The pod carries the backup job's
+# labels because that is what Garage's NetworkPolicy lets reach it.
+#
+# The exit code is 0 only when nothing conflicted, nothing failed, and (with
+# -apply) every source object was read back from Garage with an equal SHA-256.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: __NAME__
+  namespace: hearth
+  labels:
+    app.kubernetes.io/name: hearth-blob-migrate
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hearth
+        app.kubernetes.io/component: backup
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: blob-migrate
+          image: ghcr.io/embernet-ai/hearth:__TAG__
+          command: ["/usr/local/bin/hearthctl"]
+          args: __ARGS__
+          env:
+            # Source: MinIO.
+            - name: HEARTH_SRC_STORAGE_BACKEND
+              value: s3
+            - name: HEARTH_SRC_S3_ENDPOINT
+              value: minio:9000
+            - name: HEARTH_SRC_S3_PUBLIC_ENDPOINT
+              value: files.invalid
+            - name: HEARTH_SRC_S3_BUCKET
+              value: hearth
+            - name: HEARTH_SRC_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: hearth, key: S3_ACCESS_KEY }
+            - name: HEARTH_SRC_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: hearth, key: S3_SECRET_KEY }
+            # Destination: Garage.
+            - name: HEARTH_STORAGE_BACKEND
+              value: garage
+            - name: HEARTH_S3_ENDPOINT
+              value: hearth-garage:3900
+            - name: HEARTH_S3_PUBLIC_ENDPOINT
+              value: files.invalid
+            - name: HEARTH_S3_BUCKET
+              value: hearth
+            - name: HEARTH_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: hearth-garage-key-hearth, key: S3_ACCESS_KEY_ID }
+            - name: HEARTH_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: hearth-garage-key-hearth, key: S3_SECRET_ACCESS_KEY }
+            - name: HEARTH_S3_REGION
+              valueFrom:
+                secretKeyRef: { name: hearth-garage-key-hearth, key: S3_REGION }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }

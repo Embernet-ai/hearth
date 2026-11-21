@@ -67,13 +67,7 @@ spec:
             # footer cannot name a version other than the one running.
             - name: HEARTH_VERSION
               value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
-            - name: HEARTH_S3_ENDPOINT
-              value: {{ include "hearth.s3.endpoint" . | quote }}
-            - name: HEARTH_S3_PUBLIC_ENDPOINT
-              value: {{ .Values.s3.publicEndpoint | quote }}
-            - name: HEARTH_S3_BUCKET
-              value: {{ .Values.s3.bucket | quote }}
-            {{- include "hearth.s3.credentialEnv" . | nindent 12 }}
+            {{- include "hearth.storage.env" . | nindent 12 }}
             {{- if .Values.mail.smtp.host }}
             - name: HEARTH_SMTP_HOST
               value: {{ .Values.mail.smtp.host | quote }}

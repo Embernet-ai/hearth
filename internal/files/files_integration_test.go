@@ -31,9 +31,9 @@ type env struct {
 func setup(t *testing.T) *env {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
-	endpoint := os.Getenv("TEST_MINIO_ENDPOINT")
+	endpoint := os.Getenv("TEST_GARAGE_ENDPOINT")
 	if dsn == "" || endpoint == "" {
-		t.Skip("TEST_DATABASE_URL and TEST_MINIO_ENDPOINT not set, skipping")
+		t.Skip("TEST_DATABASE_URL and TEST_GARAGE_ENDPOINT not set, skipping")
 	}
 	ctx := context.Background()
 
@@ -53,14 +53,15 @@ func setup(t *testing.T) *env {
 		// Deliberately different from Endpoint, which is what makes the
 		// presigned-URL test below meaningful.
 		PublicEndpoint: "files.hearth-next.example.com",
-		AccessKey:      envOr("TEST_MINIO_ACCESS_KEY", "hearth"),
-		SecretKey:      envOr("TEST_MINIO_SECRET_KEY", "hearthsecret"),
+		AccessKey:      os.Getenv("TEST_GARAGE_ACCESS_KEY"),
+		SecretKey:      os.Getenv("TEST_GARAGE_SECRET_KEY"),
+		Region:         envOr("TEST_GARAGE_REGION", "garage"),
 		Bucket:         "hearth-test",
 		UseSSL:         false,
 		PublicUseSSL:   true,
 	})
 	if err != nil {
-		t.Fatalf("minio: %v", err)
+		t.Fatalf("object store: %v", err)
 	}
 
 	e := &env{

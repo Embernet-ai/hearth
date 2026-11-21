@@ -90,19 +90,38 @@ volume beside the full one and come up with nothing in it.
 {{- end }}
 
 {{/*
-Where the app and the backup job reach object storage, as host:port with no
-scheme. The chart's own MinIO unless s3.endpoint says otherwise, which is how a
-release points at some other S3 API (Garage, for one) with minio.enabled false.
+Which store the app and the backup job use, and where they reach an S3 API, as
+host:port with no scheme: the Garage beside the app unless s3.endpoint says
+otherwise, which is how a release points at some other S3 API.
 */}}
 {{- define "hearth.s3.backend" -}}
-{{- $b := .Values.s3.backend | default "minio" -}}
-{{- if not (has $b (list "minio" "garage")) -}}
-{{- fail (printf "s3.backend must be minio or garage, not %q" $b) -}}
+{{- $b := .Values.s3.backend | default "garage" -}}
+{{- if not (has $b (list "garage" "minio" "s3" "azure" "gcs")) -}}
+{{- fail (printf "s3.backend must be garage, minio, s3, azure or gcs, not %q" $b) -}}
 {{- end -}}
-{{- if and (eq $b "garage") (not .Values.garage.enabled) -}}
+{{- if and (eq $b "garage") (not .Values.garage.enabled) (not .Values.s3.endpoint) -}}
 {{- fail "s3.backend is garage but garage.enabled is false: there is no Garage to point at" -}}
 {{- end -}}
+{{- if and (eq $b "s3") (not .Values.s3.endpoint) -}}
+{{- fail "s3.backend is s3 but s3.endpoint is empty: say which S3 API to use" -}}
+{{- end -}}
 {{- $b -}}
+{{- end }}
+
+{{/*
+Which store the application is told to use, as its own HEARTH_STORAGE_BACKEND
+value. An s3.endpoint means some other S3 API, whatever s3.backend says. The
+chart's MinIO is an S3 API too.
+*/}}
+{{- define "hearth.storage.kind" -}}
+{{- $b := include "hearth.s3.backend" . -}}
+{{- if or (eq $b "azure") (eq $b "gcs") -}}
+{{- $b -}}
+{{- else if or .Values.s3.endpoint (eq $b "s3") (eq $b "minio") -}}
+s3
+{{- else -}}
+garage
+{{- end -}}
 {{- end }}
 
 {{- define "hearth.s3.endpoint" -}}
@@ -244,4 +263,53 @@ that sets nothing reads what it always read. Postgres itself, the app and every 
 {{- else if and .Values.externalDatabase.host (not .Values.externalDatabase.dsnKey) -}}
 {{- printf "%s %v" .Values.externalDatabase.host .Values.externalDatabase.port -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Everything the app and the backup job are told about object storage, in one
+place so the two can never point at different stores. The S3 family (Garage, the
+chart's MinIO, any other S3 API) keeps the settings it always had; Azure Blob and
+Google Cloud Storage have their own.
+*/}}
+{{- define "hearth.storage.env" -}}
+{{- $b := include "hearth.s3.backend" . -}}
+- name: HEARTH_STORAGE_BACKEND
+  value: {{ include "hearth.storage.kind" . | quote }}
+{{- if eq $b "azure" }}
+- name: HEARTH_STORAGE_BUCKET
+  value: {{ .Values.azure.container | default .Values.s3.bucket | quote }}
+- name: HEARTH_AZURE_ACCOUNT
+  value: {{ required "azure.account is required when s3.backend is azure" .Values.azure.account | quote }}
+{{- if .Values.azure.endpoint }}
+- name: HEARTH_AZURE_ENDPOINT
+  value: {{ .Values.azure.endpoint | quote }}
+{{- end }}
+- name: HEARTH_AZURE_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.existingSecret }}
+      key: {{ .Values.secretKeys.azureKey }}
+{{- else if eq $b "gcs" }}
+- name: HEARTH_STORAGE_BUCKET
+  value: {{ .Values.gcs.bucket | default .Values.s3.bucket | quote }}
+{{- if .Values.gcs.credentialsKey }}
+- name: HEARTH_GCS_CREDENTIALS_JSON
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.existingSecret }}
+      key: {{ .Values.gcs.credentialsKey }}
+{{- end }}
+{{- if .Values.gcs.endpoint }}
+- name: HEARTH_GCS_ENDPOINT
+  value: {{ .Values.gcs.endpoint | quote }}
+{{- end }}
+{{- else }}
+- name: HEARTH_S3_ENDPOINT
+  value: {{ include "hearth.s3.endpoint" . | quote }}
+- name: HEARTH_S3_PUBLIC_ENDPOINT
+  value: {{ .Values.s3.publicEndpoint | quote }}
+- name: HEARTH_S3_BUCKET
+  value: {{ .Values.s3.bucket | quote }}
+{{ include "hearth.s3.credentialEnv" . }}
+{{- end }}
 {{- end }}
