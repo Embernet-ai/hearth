@@ -888,7 +888,7 @@ func (s *Syncer) upsertCompany(ctx context.Context, mid int64, f mautic.Fields) 
 // nameTaken is Mautic's answer to a company name another company already has.
 func nameTaken(err error) bool {
 	e, ok := err.(*mautic.APIError)
-	return ok && e.Status == 400 && strings.Contains(e.Body, "companyname") && strings.Contains(e.Body, "unique")
+	return ok && validationRefusal(e) && strings.Contains(e.Body, "companyname") && strings.Contains(e.Body, "unique")
 }
 
 // fit makes f something Mautic will take, from Mautic's own field definitions (read once per object): a text value is cut to the
@@ -946,7 +946,7 @@ func clip(v string, n int) string {
 // does not expose, and Hearth holds free text like "OH"). It says whether it took anything out, so the caller tries again.
 func dropRefused(f mautic.Fields, err error) bool {
 	e, ok := err.(*mautic.APIError)
-	if !ok || e.Status != 400 {
+	if !ok || !validationRefusal(e) {
 		return false
 	}
 	if !strings.Contains(e.Body, "companystate") && !strings.Contains(e.Body, "companycountry") {
@@ -962,3 +962,6 @@ func dropRefused(f mautic.Fields, err error) bool {
 	}
 	return dropped
 }
+
+// validationRefusal is Mautic refusing a value: a 400 when one field is wrong, and a 422 when several are at once.
+func validationRefusal(e *mautic.APIError) bool { return e.Status == 400 || e.Status == 422 }
