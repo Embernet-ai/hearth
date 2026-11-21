@@ -127,6 +127,7 @@ type Server struct {
 	search     *search.Service
 	playground *playground.Service
 	timeoff    timeoff.Store
+	people     PersonSync
 	deptreq    deptreq.Store
 	queue      *jobs.Queue
 	relay      *jobs.Relay
@@ -201,6 +202,9 @@ type Deps struct {
 	Playground *playground.Service
 	// TimeOff is requesting and deciding days away.
 	TimeOff timeoff.Store
+	// People, with the EmberOPS back end, makes sure a person exists there (User, Employee, approver link). Nil in the
+	// default back end.
+	People PersonSync
 	// DeptRequests is people asking which departments they belong in.
 	DeptRequests deptreq.Store
 	Queue        *jobs.Queue
@@ -227,7 +231,7 @@ type Deps struct {
 func New(d Deps) (*Server, error) {
 	s := &Server{
 		docs: d.Docs, files: d.Files, auth: d.Auth, views: d.Views,
-		channels: d.Channels, inbox: d.Notify, push: d.Push, search: d.Search, playground: d.Playground, timeoff: d.TimeOff, deptreq: d.DeptRequests,
+		channels: d.Channels, inbox: d.Notify, push: d.Push, search: d.Search, playground: d.Playground, timeoff: d.TimeOff, people: d.People, deptreq: d.DeptRequests,
 		rules: d.Rules, engine: d.Engine, time: d.Time,
 		maint: d.Maint, pm: d.PM, plant: d.Plant, crm: d.CRM, sales: d.Sales, crmViews: d.CRMViews,
 		mail: d.Mail, mailset: d.MailSettings, orgMail: d.OrgMailer, calls: d.Calls,

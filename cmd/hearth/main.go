@@ -423,6 +423,22 @@ func run() error {
 			DeptReqNotify:        web.NewDeptRequestNotifier(notifySvc),
 		})
 	}
+	// With EmberOPS holding the records, a person has to exist there before their first page works: their User, their
+	// Employee and the approver link. emberops-migrate made them once; this makes them for whoever signs in next.
+	var peopleSync web.PersonSync
+	if ops != nil {
+		ep := &stores.People{Base: stores.Base{C: ops, Loc: cfg.EmberOPSTimezone}, Source: stores.PGPerson{DB: pools.Web}, Log: log}
+		peopleSync = ep
+		if oidcRP != nil {
+			oidcRP.OnSignIn = func(ctx context.Context, orgID, principalID string) {
+				ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				defer cancel()
+				if err := ep.Ensure(ctx, orgID, principalID); err != nil {
+					log.WarnContext(ctx, "could not make the signed-in person's EmberOPS account", "person", principalID, "error", err)
+				}
+			}
+		}
+	}
 	// The admin time removal answers from whichever back end holds the time.
 	apiSvc.WithTime(set.Time)
 	// Time off for the people who decide it, over the API and as connector tools, through the
@@ -444,6 +460,7 @@ func run() error {
 		Offline: offlineSvc, Search: searchSvc,
 		Playground:   playground.New(pools.Web, azSvc, set.Plant, set.Docs, channelsSvc, set.Time, set.TimeOff),
 		TimeOff:      set.TimeOff,
+		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
 		Calendar: set.Calendar, Google: googleSvc,
