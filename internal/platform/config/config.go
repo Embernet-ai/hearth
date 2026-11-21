@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Embernet-ai/hearth/internal/platform/blob"
 )
 
 // Config is the whole configuration surface. There is no global, and nothing
@@ -52,6 +54,21 @@ type Config struct {
 	// endpoint: virtual-host style for AWS, path style for everything else.
 	S3PathStyle    bool
 	S3PublicUseSSL bool
+
+	// StorageBackend is which object store backs Hearth: garage (the default,
+	// our own S3-compatible store), s3 (any other S3-compatible store), azure
+	// (Azure Blob Storage) or gcs (Google Cloud Storage). The S3 settings above
+	// apply to garage and s3; the ones below to azure and gcs.
+	StorageBackend string
+	// AzureAccount, AzureKey and AzureEndpoint: the storage account, its shared
+	// key, and the blob service URL when it is not the public Azure cloud.
+	AzureAccount  string
+	AzureKey      string
+	AzureEndpoint string
+	// GCSCredentialsJSON is a service account key. Empty uses the environment's
+	// application default credentials. GCSEndpoint points at an emulator.
+	GCSCredentialsJSON string
+	GCSEndpoint        string
 
 	// Background work. The worker runs inside this binary rather than as a
 	// second image, because two images is two builds, two deploys, and two
@@ -257,38 +274,7 @@ func Load() (*Config, error) {
 		fail("HEARTH_DATABASE_URL must start with postgres:// or postgresql://")
 	}
 
-	cfg.S3Endpoint = os.Getenv("HEARTH_S3_ENDPOINT")
-	cfg.S3PublicEndpoint = os.Getenv("HEARTH_S3_PUBLIC_ENDPOINT")
-	cfg.S3AccessKey = os.Getenv("HEARTH_S3_ACCESS_KEY")
-	cfg.S3SecretKey = os.Getenv("HEARTH_S3_SECRET_KEY")
-	cfg.S3Bucket = envOr("HEARTH_S3_BUCKET", "hearth")
-	cfg.S3Region = os.Getenv("HEARTH_S3_REGION")
-	cfg.S3UseSSL = envBool("HEARTH_S3_USE_SSL", false)
-	cfg.S3PathStyle = envBool("HEARTH_S3_PATH_STYLE", false)
-	cfg.S3PublicUseSSL = envBool("HEARTH_S3_PUBLIC_USE_SSL", true)
-
-	for name, v := range map[string]string{
-		"HEARTH_S3_ENDPOINT":        cfg.S3Endpoint,
-		"HEARTH_S3_PUBLIC_ENDPOINT": cfg.S3PublicEndpoint,
-		"HEARTH_S3_ACCESS_KEY":      cfg.S3AccessKey,
-		"HEARTH_S3_SECRET_KEY":      cfg.S3SecretKey,
-	} {
-		if v == "" {
-			fail("%s is required", name)
-		}
-	}
-
-	// An endpoint carrying a scheme is the commonest mistake here, and the SDK
-	// treats it as part of the hostname, producing a signature for a host that
-	// does not exist.
-	for name, v := range map[string]string{
-		"HEARTH_S3_ENDPOINT":        cfg.S3Endpoint,
-		"HEARTH_S3_PUBLIC_ENDPOINT": cfg.S3PublicEndpoint,
-	} {
-		if strings.Contains(v, "://") {
-			fail("%s must be host:port with no scheme, got %q", name, v)
-		}
-	}
+	loadStorage("HEARTH_", cfg, fail)
 
 	// THE guard. In production these must differ.
 	//
@@ -299,7 +285,8 @@ func Load() (*Config, error) {
 	// how the predecessor shipped a build where every upload succeeded and
 	// every download was dead, and it went unnoticed because uploads report
 	// success either way.
-	if cfg.Env == "production" && cfg.S3Endpoint == cfg.S3PublicEndpoint {
+	if (cfg.StorageBackend == "garage" || cfg.StorageBackend == "s3") &&
+		cfg.Env == "production" && cfg.S3Endpoint == cfg.S3PublicEndpoint {
 		fail("HEARTH_S3_PUBLIC_ENDPOINT must differ from HEARTH_S3_ENDPOINT in production: " +
 			"presigned URLs are handed to browsers and must not point at an in-cluster address")
 	}
@@ -587,4 +574,111 @@ func envBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+// Blob is this configuration as the object store package wants it.
+func (c Config) Blob() blob.Config {
+	return blob.Config{
+		Backend:            c.StorageBackend,
+		Bucket:             c.S3Bucket,
+		Endpoint:           c.S3Endpoint,
+		PublicEndpoint:     c.S3PublicEndpoint,
+		AccessKey:          c.S3AccessKey,
+		SecretKey:          c.S3SecretKey,
+		Region:             c.S3Region,
+		UseSSL:             c.S3UseSSL,
+		PublicUseSSL:       c.S3PublicUseSSL,
+		PathStyle:          c.S3PathStyle,
+		AzureAccount:       c.AzureAccount,
+		AzureKey:           c.AzureKey,
+		AzureEndpoint:      c.AzureEndpoint,
+		GCSCredentialsJSON: c.GCSCredentialsJSON,
+		GCSEndpoint:        c.GCSEndpoint,
+	}
+}
+
+// loadStorage reads the object store settings under one prefix. The server and
+// hearthctl read them under HEARTH_; the migration tool reads a second set under
+// HEARTH_SRC_, for the store it is copying out of.
+func loadStorage(p string, cfg *Config, fail func(string, ...any)) {
+	cfg.StorageBackend = strings.ToLower(strings.TrimSpace(envOr(p+"STORAGE_BACKEND", "garage")))
+	cfg.S3Endpoint = os.Getenv(p + "S3_ENDPOINT")
+	cfg.S3PublicEndpoint = os.Getenv(p + "S3_PUBLIC_ENDPOINT")
+	cfg.S3AccessKey = os.Getenv(p + "S3_ACCESS_KEY")
+	cfg.S3SecretKey = os.Getenv(p + "S3_SECRET_KEY")
+	// HEARTH_STORAGE_BUCKET names the bucket (the container, on Azure) for every
+	// backend. HEARTH_S3_BUCKET is the older name for it and still works.
+	cfg.S3Bucket = envOr(p+"STORAGE_BUCKET", envOr(p+"S3_BUCKET", "hearth"))
+	cfg.S3Region = os.Getenv(p + "S3_REGION")
+	cfg.S3UseSSL = envBool(p+"S3_USE_SSL", false)
+	cfg.S3PathStyle = envBool(p+"S3_PATH_STYLE", false)
+	cfg.S3PublicUseSSL = envBool(p+"S3_PUBLIC_USE_SSL", true)
+	cfg.AzureAccount = os.Getenv(p + "AZURE_ACCOUNT")
+	cfg.AzureKey = os.Getenv(p + "AZURE_KEY")
+	cfg.AzureEndpoint = os.Getenv(p + "AZURE_ENDPOINT")
+	cfg.GCSCredentialsJSON = os.Getenv(p + "GCS_CREDENTIALS_JSON")
+	cfg.GCSEndpoint = os.Getenv(p + "GCS_ENDPOINT")
+	if f := os.Getenv(p + "GCS_CREDENTIALS_FILE"); f != "" && cfg.GCSCredentialsJSON == "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			fail(p+"GCS_CREDENTIALS_FILE: %w", err)
+		} else {
+			cfg.GCSCredentialsJSON = string(b)
+		}
+	}
+
+	var storageRequired map[string]string
+	switch cfg.StorageBackend {
+	case "garage", "s3":
+		storageRequired = map[string]string{
+			p + "S3_ENDPOINT":        cfg.S3Endpoint,
+			p + "S3_PUBLIC_ENDPOINT": cfg.S3PublicEndpoint,
+			p + "S3_ACCESS_KEY":      cfg.S3AccessKey,
+			p + "S3_SECRET_KEY":      cfg.S3SecretKey,
+		}
+	case "azure":
+		storageRequired = map[string]string{
+			p + "AZURE_ACCOUNT": cfg.AzureAccount,
+			p + "AZURE_KEY":     cfg.AzureKey,
+		}
+	case "gcs":
+		// Application default credentials are allowed, so nothing is required
+		// beyond the bucket, which has a default.
+	default:
+		fail(p+"STORAGE_BACKEND must be garage, s3, azure or gcs, got %q", cfg.StorageBackend)
+	}
+	for name, v := range storageRequired {
+		if v == "" {
+			fail("%s is required", name)
+		}
+	}
+
+	// An endpoint carrying a scheme is the commonest mistake here, and the SDK
+	// treats it as part of the hostname, producing a signature for a host that
+	// does not exist.
+	if cfg.StorageBackend == "garage" || cfg.StorageBackend == "s3" {
+		for name, v := range map[string]string{
+			p + "S3_ENDPOINT":        cfg.S3Endpoint,
+			p + "S3_PUBLIC_ENDPOINT": cfg.S3PublicEndpoint,
+		} {
+			if strings.Contains(v, "://") {
+				fail("%s must be host:port with no scheme, got %q", name, v)
+			}
+		}
+	}
+
+}
+
+// LoadStorage reads only the object store settings under a prefix (HEARTH_, or
+// HEARTH_SRC_ for a migration's source) and returns them, or every error found.
+// It needs no database and no public base URL.
+func LoadStorage(prefix string) (blob.Config, error) {
+	var errs []error
+	fail := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
+	cfg := &Config{}
+	loadStorage(prefix, cfg, fail)
+	if len(errs) > 0 {
+		return blob.Config{}, errors.Join(errs...)
+	}
+	return cfg.Blob(), nil
 }

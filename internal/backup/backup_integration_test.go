@@ -50,9 +50,9 @@ func setup(t *testing.T) *fx {
 	// TestCompareNoticesAMissingFile failed for a reason that had nothing to
 	// do with a missing file.
 	dsn := pgtest.Database(t, "hearth_test_backup")
-	endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	endpoint := os.Getenv("TEST_GARAGE_ENDPOINT")
 	if endpoint == "" {
-		t.Skip("TEST_S3_ENDPOINT not set")
+		t.Skip("TEST_GARAGE_ENDPOINT not set")
 	}
 	ctx := context.Background()
 
@@ -72,8 +72,9 @@ func setup(t *testing.T) *fx {
 	store, err := blob.Open(ctx, blob.Config{
 		Endpoint:       endpoint,
 		PublicEndpoint: endpoint,
-		AccessKey:      envOr("TEST_S3_ACCESS_KEY", "hearth"),
-		SecretKey:      envOr("TEST_S3_SECRET_KEY", "hearthsecret"),
+		AccessKey:      os.Getenv("TEST_GARAGE_ACCESS_KEY"),
+		SecretKey:      os.Getenv("TEST_GARAGE_SECRET_KEY"),
+		Region:         envOr("TEST_GARAGE_REGION", "garage"),
 		Bucket:         bucket,
 	})
 	if err != nil {

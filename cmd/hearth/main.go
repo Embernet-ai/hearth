@@ -112,24 +112,14 @@ func run() error {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
-	store, err := blob.Open(ctx0, blob.Config{
-		Endpoint:       cfg.S3Endpoint,
-		PublicEndpoint: cfg.S3PublicEndpoint,
-		AccessKey:      cfg.S3AccessKey,
-		SecretKey:      cfg.S3SecretKey,
-		Bucket:         cfg.S3Bucket,
-		Region:         cfg.S3Region,
-		UseSSL:         cfg.S3UseSSL,
-		PublicUseSSL:   cfg.S3PublicUseSSL,
-		PathStyle:      cfg.S3PathStyle,
-	})
+	store, err := blob.Open(ctx0, cfg.Blob())
 	if err != nil {
 		return err
 	}
 	log.Info("object storage connected",
-		"bucket", cfg.S3Bucket,
-		"internal", cfg.S3Endpoint,
-		"public", cfg.S3PublicEndpoint)
+		"backend", store.Backend(),
+		"bucket", store.Bucket(),
+		"endpoint", store.InternalEndpoint())
 
 	azSvc := authz.New(pools.Web)
 	calendarSvc := calendar.New(pools.Web)

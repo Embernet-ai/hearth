@@ -102,6 +102,8 @@ func main() {
 		err = runChannelRemove(ctx, os.Args[2:])
 	case "groups-sync":
 		err = runGroupsSync(ctx, os.Args[2:])
+	case "blob-migrate":
+		err = runBlobMigrate(ctx, os.Args[2:])
 	case "emberops-migrate":
 		err = runEmberOPSMigrate(ctx, os.Args[2:])
 	case "-h", "--help", "help":
@@ -144,11 +146,13 @@ func usage() {
   person-suspend -as ADMIN -email A,B -reason WHY [-apply]  suspend accounts (off their teams, sessions ended), audited, dry run by default
   channel-remove -as ADMIN -channel ID -reason WHY [-apply]  archive a channel so it is in no list, audited, dry run by default
   groups-sync -config FILE [-apply]  make Google Workspace group members follow Hearth teams and departments (dry run by default)
+  blob-migrate [-apply]  copy every object from the store in HEARTH_SRC_* into the configured one and prove it (dry run by default, see docs/storage/migrating.md)
   emberops-migrate [--dry-run]  copy Postgres data into EmberOps (see docs/emberops-backend.md)
 
 Configuration comes from the same environment the server reads:
-HEARTH_DATABASE_URL, HEARTH_S3_ENDPOINT, HEARTH_S3_ACCESS_KEY,
-HEARTH_S3_SECRET_KEY, HEARTH_S3_BUCKET.
+HEARTH_DATABASE_URL and the object store settings (HEARTH_STORAGE_BACKEND,
+HEARTH_STORAGE_BUCKET, and HEARTH_S3_*, HEARTH_AZURE_* or HEARTH_GCS_* for the
+backend in use; see docs/storage/).
 `)
 }
 
@@ -169,11 +173,9 @@ func open(ctx context.Context, dsn, bucket string) (*pg.Pools, *blob.Store, erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect to postgres: %w", err)
 	}
-	store, err := blob.Open(ctx, blob.Config{
-		Endpoint: cfg.S3Endpoint, PublicEndpoint: cfg.S3PublicEndpoint,
-		AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey,
-		Bucket: bucket, Region: cfg.S3Region, UseSSL: cfg.S3UseSSL, PublicUseSSL: cfg.S3PublicUseSSL, PathStyle: cfg.S3PathStyle,
-	})
+	bc := cfg.Blob()
+	bc.Bucket = bucket
+	store, err := blob.Open(ctx, bc)
 	if err != nil {
 		pools.Close()
 		return nil, nil, fmt.Errorf("connect to the object store: %w", err)

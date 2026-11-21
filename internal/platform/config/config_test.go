@@ -273,3 +273,89 @@ func TestBackendPostgresRejectsEmberOPSSettings(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// Garage is what an install gets when it says nothing.
+func TestStorageBackendDefaultsToGarage(t *testing.T) {
+	validEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.StorageBackend != "garage" || cfg.Blob().Backend != "garage" {
+		t.Fatalf("default backend is %q, want garage", cfg.StorageBackend)
+	}
+}
+
+// Azure and Google need none of the S3 settings, and the S3 ones are not asked
+// for when they are not in use.
+func TestAzureNeedsItsOwnSettingsOnly(t *testing.T) {
+	t.Setenv("HEARTH_PUBLIC_BASE_URL", "https://hearth.example.com")
+	t.Setenv("HEARTH_DATABASE_URL", "postgres://u:p@db:5432/hearth")
+	t.Setenv("HEARTH_STORAGE_BACKEND", "azure")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "HEARTH_AZURE_ACCOUNT") || !strings.Contains(err.Error(), "HEARTH_AZURE_KEY") {
+		t.Fatalf("azure with nothing set should name its account and key, got %v", err)
+	}
+	t.Setenv("HEARTH_AZURE_ACCOUNT", "acct")
+	t.Setenv("HEARTH_AZURE_KEY", "a2V5")
+	t.Setenv("HEARTH_STORAGE_BUCKET", "hearth-files")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := cfg.Blob(); b.Backend != "azure" || b.AzureAccount != "acct" || b.Bucket != "hearth-files" {
+		t.Fatalf("%+v", b)
+	}
+}
+
+func TestGCSNeedsNoCredentialsInTheEnvironment(t *testing.T) {
+	t.Setenv("HEARTH_PUBLIC_BASE_URL", "https://hearth.example.com")
+	t.Setenv("HEARTH_DATABASE_URL", "postgres://u:p@db:5432/hearth")
+	t.Setenv("HEARTH_STORAGE_BACKEND", "GCS")
+	if _, err := Load(); err != nil {
+		t.Fatalf("gcs with application default credentials was refused: %v", err)
+	}
+	t.Setenv("HEARTH_GCS_CREDENTIALS_FILE", "/nonexistent/key.json")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "HEARTH_GCS_CREDENTIALS_FILE") {
+		t.Fatalf("an unreadable credentials file should be named, got %v", err)
+	}
+}
+
+func TestUnknownStorageBackendIsRefused(t *testing.T) {
+	validEnv(t)
+	t.Setenv("HEARTH_STORAGE_BACKEND", "tape")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "HEARTH_STORAGE_BACKEND") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// The old bucket name still works, and the new one wins.
+func TestBucketNames(t *testing.T) {
+	validEnv(t)
+	t.Setenv("HEARTH_S3_BUCKET", "old")
+	cfg, _ := Load()
+	if cfg.S3Bucket != "old" {
+		t.Fatalf("HEARTH_S3_BUCKET ignored: %q", cfg.S3Bucket)
+	}
+	t.Setenv("HEARTH_STORAGE_BUCKET", "new")
+	cfg, _ = Load()
+	if cfg.S3Bucket != "new" {
+		t.Fatalf("HEARTH_STORAGE_BUCKET should win: %q", cfg.S3Bucket)
+	}
+}
+
+// The migration reads its source from the same names under HEARTH_SRC_.
+func TestLoadStorageReadsAPrefix(t *testing.T) {
+	t.Setenv("HEARTH_SRC_STORAGE_BACKEND", "s3")
+	t.Setenv("HEARTH_SRC_S3_ENDPOINT", "minio:9000")
+	t.Setenv("HEARTH_SRC_S3_PUBLIC_ENDPOINT", "minio:9000")
+	t.Setenv("HEARTH_SRC_S3_ACCESS_KEY", "a")
+	t.Setenv("HEARTH_SRC_S3_SECRET_KEY", "b")
+	t.Setenv("HEARTH_SRC_S3_BUCKET", "hearth")
+	c, err := LoadStorage("HEARTH_SRC_")
+	if err != nil || c.Backend != "s3" || c.Endpoint != "minio:9000" || c.Bucket != "hearth" {
+		t.Fatalf("%+v %v", c, err)
+	}
+	if _, err := LoadStorage("HEARTH_NOPE_"); err == nil || !strings.Contains(err.Error(), "HEARTH_NOPE_S3_ENDPOINT") {
+		t.Fatalf("a missing prefix should name what it looked for: %v", err)
+	}
+}

@@ -46,6 +46,28 @@ expect "s3 region" "$out" 'HEARTH_S3_REGION'
 expect "s3 tls" "$out" 'HEARTH_S3_USE_SSL'
 expect "s3 path style" "$out" 'HEARTH_S3_PATH_STYLE'
 
+out=$(render)
+expect "the default object store is Garage" "$out" 'HEARTH_STORAGE_BACKEND'
+expect "the default points at the bundled Garage" "$out" 'hearth-garage:3900'
+reject "a default render runs no MinIO" "$out" 'component: minio'
+
+out=$(render --set s3.backend=azure --set azure.account=acct)
+expect "azure names its account" "$out" 'HEARTH_AZURE_ACCOUNT'
+expect "azure reads its key from the Secret" "$out" 'key: AZURE_STORAGE_KEY'
+reject "azure sets no S3 endpoint" "$out" 'HEARTH_S3_ENDPOINT'
+if render --set s3.backend=azure >/dev/null 2>&1; then echo "FAIL: azure with no account should not render"; fail=1; else echo "ok: azure with no account refuses to render"; fi
+
+out=$(render --set s3.backend=gcs --set gcs.bucket=files --set gcs.credentialsKey=GCS_KEY --set garage.enabled=false)
+expect "gcs names its bucket" "$out" 'HEARTH_STORAGE_BUCKET'
+expect "gcs reads its service account key from the Secret" "$out" 'key: GCS_KEY'
+reject "gcs sets no S3 endpoint" "$out" 'HEARTH_S3_ENDPOINT'
+out=$(render --set s3.backend=gcs --set gcs.bucket=files --set garage.enabled=false)
+reject "gcs with application default credentials reads no key" "$out" 'HEARTH_GCS_CREDENTIALS_JSON'
+
+out=$(render --set s3.backend=s3 --set s3.endpoint=objects.example.com:443)
+expect "any S3 API says s3" "$out" 'value: "s3"'
+if render --set s3.backend=s3 >/dev/null 2>&1; then echo "FAIL: s3 with no endpoint should not render"; fail=1; else echo "ok: s3 with no endpoint refuses to render"; fi
+
 out=$(render --set mail.smtp.host=smtp.example.com:587 --set mail.smtp.from=hearth@example.com --set mail.smtp.username=hearth)
 expect "smtp host" "$out" 'HEARTH_SMTP_HOST'
 expect "smtp password from the secret" "$out" 'key: SMTP_PASSWORD'

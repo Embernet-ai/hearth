@@ -34,27 +34,18 @@ jobs:
 
     env:
       TEST_DATABASE_URL: postgres://hearth:test@127.0.0.1:5432/hearth_test?sslmode=disable
-      TEST_MINIO_ENDPOINT: 127.0.0.1:9000
-      TEST_MINIO_ACCESS_KEY: hearth
-      TEST_MINIO_SECRET_KEY: hearthsecret
-      # The backup suite reads TEST_S3_ENDPOINT, not TEST_MINIO_ENDPOINT, and
-      # nothing here ever set it. So every test in internal/backup skipped, in
-      # CI, silently, on every run since it was written. `ok ... backup` meant
-      # "ran nothing".
+      # The object store the suites use is Garage, the one Hearth ships with. It is
+      # started below and its TEST_GARAGE_* variables are written to the job's
+      # environment by scripts/garage-test-up.sh.
       #
-      # What that hid: TestTablesComeOutInAnOrderTheyCanGoBackIn calls
-      # Discover() against the real migrated schema and is exactly the test that
-      # catches a foreign key cycle. 00026 introduced one, the backup stopped
-      # being able to produce an archive at all, and this suite reported success
-      # through the whole thing. It was found by the post-release backup job in
-      # production instead.
-      #
-      # Same host and credentials as the MinIO the other suites use. The two
-      # names are a wart worth keeping for now: renaming the variable would be a
-      # change in the same commit that proves the variable matters.
+      # A MinIO runs beside it as the generic S3 case: the s3 backend is tested
+      # against it, and so is moving files from MinIO to Garage. Azurite is
+      # Microsoft's Azure Blob emulator. Google's backend is tested in process
+      # against fake-gcs-server.
       TEST_S3_ENDPOINT: 127.0.0.1:9000
       TEST_S3_ACCESS_KEY: hearth
       TEST_S3_SECRET_KEY: hearthsecret
+      TEST_AZURITE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
       TEST_OPENSEARCH_URL: http://127.0.0.1:9200
 
     steps:
@@ -71,6 +62,18 @@ jobs:
       # never passed, and it cannot be faked: the bug it guards against is about
       # how a URL is signed and whether the bytes actually come back.
       #
+      # Garage is the store Hearth runs on, so it is what the suites run against.
+      - name: start Garage
+        run: |
+          scripts/garage-test-up.sh | sed 's/^export //' > /tmp/garage.env
+          while IFS='=' read -r k v; do
+            case "$k" in *SECRET_KEY) echo "::add-mask::$v";; esac
+          done < /tmp/garage.env
+          cat /tmp/garage.env >> "$GITHUB_ENV"
+          echo "ok: Garage live"
+
+      # A generic S3 API, for the s3 backend and for the move from MinIO to Garage.
+      #
       # Started as a step rather than a service container because minio/minio
       # needs a `server /data` command and service containers cannot set one.
       #
@@ -85,6 +88,24 @@ jobs:
           done
           curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null             || { echo "::error::MinIO never became healthy"; podman logs minio; exit 1; }
           echo "ok: MinIO live"
+
+      # Azure Blob Storage, as Microsoft's own emulator.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: start Azurite
+        run: |
+          npm install --no-audit --no-fund --prefix /tmp/azurite azurite@3.38.0
+          mkdir -p /tmp/azurite-data
+          nohup /tmp/azurite/node_modules/.bin/azurite-blob --silent --location /tmp/azurite-data \
+            --blobHost 127.0.0.1 --blobPort 10000 --skipApiVersionCheck > /tmp/azurite.log 2>&1 &
+          for i in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:10000/devstoreaccount1?comp=list)" != "000" ] && break
+            sleep 1
+          done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:10000/devstoreaccount1?comp=list)" != "000" ] \
+            || { echo "::error::Azurite never came up"; cat /tmp/azurite.log; exit 1; }
+          echo "ok: Azurite live"
 
       # A real search cluster. The permission filter for the external engine
       # lives INSIDE each indexed document, because a cluster cannot join
@@ -165,10 +186,11 @@ jobs:
         run: |
           export HEARTH_PUBLIC_BASE_URL=https://ci.invalid
           export HEARTH_DATABASE_URL="$TEST_DATABASE_URL"
-          export HEARTH_S3_ENDPOINT="$TEST_MINIO_ENDPOINT"
+          export HEARTH_S3_ENDPOINT="$TEST_GARAGE_ENDPOINT"
           export HEARTH_S3_PUBLIC_ENDPOINT=files.ci.invalid
-          export HEARTH_S3_ACCESS_KEY="$TEST_MINIO_ACCESS_KEY"
-          export HEARTH_S3_SECRET_KEY="$TEST_MINIO_SECRET_KEY"
+          export HEARTH_S3_ACCESS_KEY="$TEST_GARAGE_ACCESS_KEY"
+          export HEARTH_S3_SECRET_KEY="$TEST_GARAGE_SECRET_KEY"
+          export HEARTH_S3_REGION="$TEST_GARAGE_REGION"
           export HEARTH_S3_BUCKET=hearth-test
           /tmp/hearth & pid=$!
           for i in $(seq 1 30); do
@@ -194,7 +216,7 @@ jobs:
           [ "$blank" = "401" ] || [ "$blank" = "303" ] || { echo "::error::a blank password did not fail (HTTP $blank)"; exit 1; }
 
       # The full acceptance run, against a real server with real Postgres and
-      # real MinIO. This is the check the predecessor carried as a runbook
+      # real Garage. This is the check the predecessor carried as a runbook
       # checklist for months and never completed, because a checklist only runs
       # when somebody remembers.
       #
@@ -235,10 +257,11 @@ jobs:
           export HEARTH_ADDR=:8097
           export HEARTH_PUBLIC_BASE_URL=http://127.0.0.1:8097
           export HEARTH_DATABASE_URL="postgres://hearth:test@127.0.0.1:5432/hearth_acceptance?sslmode=disable"
-          export HEARTH_S3_ENDPOINT="$TEST_MINIO_ENDPOINT"
-          export HEARTH_S3_PUBLIC_ENDPOINT="$TEST_MINIO_ENDPOINT"
-          export HEARTH_S3_ACCESS_KEY="$TEST_MINIO_ACCESS_KEY"
-          export HEARTH_S3_SECRET_KEY="$TEST_MINIO_SECRET_KEY"
+          export HEARTH_S3_ENDPOINT="$TEST_GARAGE_ENDPOINT"
+          export HEARTH_S3_PUBLIC_ENDPOINT="$TEST_GARAGE_ENDPOINT"
+          export HEARTH_S3_ACCESS_KEY="$TEST_GARAGE_ACCESS_KEY"
+          export HEARTH_S3_SECRET_KEY="$TEST_GARAGE_SECRET_KEY"
+          export HEARTH_S3_REGION="$TEST_GARAGE_REGION"
           export HEARTH_S3_BUCKET=hearth-acceptance
           export HEARTH_OPENSEARCH_URL="$TEST_OPENSEARCH_URL"
           /tmp/hearth & pid=$!

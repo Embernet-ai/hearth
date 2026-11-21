@@ -86,8 +86,9 @@ questions:
     default: 5Gi
     group: Storage
 
-  - variable: minio.persistence.size
+  - variable: garage.garage.persistence.data.size
     label: Object storage volume size
+    description: Where Hearth keeps its files, on the Garage that ships in this chart.
     type: string
-    default: 10Gi
+    default: 20Gi
     group: Storage

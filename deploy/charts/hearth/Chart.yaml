@@ -21,11 +21,9 @@ annotations:
   catalog.cattle.io/display-name: Hearth
   catalog.cattle.io/type: cluster-template
 
-# Garage, beside MinIO for this release. Nothing reads from it yet: the app and
-# the backup job stay on MinIO until the files have been copied across and
-# s3.endpoint is switched. The packaged chart is vendored in charts/ so an
-# upgrade from a copied chart directory needs no repo access, and Chart.lock
-# pins its digest.
+# Garage is the object store, and the default. The packaged chart is vendored in
+# charts/ so an upgrade from a copied chart directory needs no repo access, and
+# Chart.lock pins its digest.
 dependencies:
   - name: garage
     version: 0.1.6

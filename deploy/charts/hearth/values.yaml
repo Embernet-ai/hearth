@@ -127,6 +127,8 @@ secretKeys:
   postgresPassword: POSTGRES_PASSWORD
   s3AccessKey: S3_ACCESS_KEY
   s3SecretKey: S3_SECRET_KEY
+  # Azure Blob Storage: the storage account's key (s3.backend azure).
+  azureKey: AZURE_STORAGE_KEY
   oidcClientSecret: OIDC_CLIENT_SECRET
   inboundKey: INBOUND_KEY
   encryptionKey: ENCRYPTION_KEY
@@ -153,18 +155,26 @@ externalDatabase:
 # ─── Object storage ────────────────────────────────────────────────────────────
 s3:
   bucket: hearth
-  # -- minio or garage: which object store the app AND the backup job use, so
-  # the two can never point at different stores.
+  # -- Which object store the app AND the backup job use, so the two can never
+  # point at different stores. Garage is the default: a fresh install runs on the
+  # Garage that ships in this chart, with nothing to configure and no cloud
+  # account. Anything else is for someone who chooses it.
   #
-  #   minio   this chart's MinIO, its keys from existingSecret, signed for
-  #           us-east-1. What every release before 2.3.0 did.
   #   garage  the Garage beside it (garage.enabled): its Service on :3900, and
   #           its keys and region from the Secret the garage subchart writes,
-  #           <release>-garage-key-<s3.garage.key>.
+  #           <release>-garage-key-<s3.garage.key>. The default.
+  #   s3      any other S3-compatible store (AWS, Wasabi, Backblaze): set
+  #           s3.endpoint, and put the keys in existingSecret.
+  #   azure   Azure Blob Storage: set azure.account, and put the account key in
+  #           existingSecret under secretKeys.azureKey.
+  #   gcs     Google Cloud Storage: set gcs.bucket, and put a service account
+  #           key (JSON) in existingSecret under gcs.credentialsKey.
+  #   minio   this chart's old MinIO (minio.enabled), only for an install that
+  #           still has data in it. Move it to Garage with
+  #           `hearthctl blob-migrate`; see docs/storage/migrating.md.
   #
-  # Switch only after the objects have been copied across and checked (rclone
-  # check --download, zero differences). Rolling back is setting minio again,
-  # after copying anything uploaded since the switch back into MinIO.
+  # Changing backend does not move anything. Copy the objects across first and
+  # read the report, then change this.
   backend: garage
   garage:
     # -- The key under garage.keys whose Secret the app and backup job read.
@@ -188,6 +198,27 @@ s3:
   # bucket policy to get wrong. It exists because presigned URLs become worth it
   # for very large files, and that day this gets a real hostname.
   publicEndpoint: files.example.com
+
+# Azure Blob Storage, when s3.backend is azure. The container is s3.bucket unless
+# set here; it is created if it does not exist.
+azure:
+  account: ""
+  container: ""
+  # The blob service URL. Empty means https://<account>.blob.core.windows.net.
+  # Set it for a sovereign cloud, a private endpoint, or Azurite.
+  endpoint: ""
+
+# Google Cloud Storage, when s3.backend is gcs. The bucket must already exist
+# (bucket names are global, so Hearth does not create one).
+gcs:
+  bucket: ""
+  # A key in existingSecret holding a service account key as JSON. With it,
+  # downloads can go straight from Google to the browser. Empty uses the pod's
+  # application default credentials (Workload Identity), and downloads stream
+  # through Hearth.
+  credentialsKey: ""
+  # A GCS emulator, for testing.
+  endpoint: ""
 
 # ─── Inbound mail ──────────────────────────────────────────────────────────────
 # Mail arriving against work, for the record. Hearth does not answer it: replies
@@ -314,7 +345,8 @@ opensearch:
 
 minio:
   # The bundled object store is Garage (garage.enabled). MinIO is only for an install that already
-  # has data in it; leave it off otherwise.
+  # has data in it: leave it off otherwise, and turn it off after `hearthctl blob-migrate` has
+  # copied everything to Garage and verified it. Turning it off never deletes its volume.
   enabled: false
   # Bare "minio", because the StatefulSet name decides the PVC name and PVC names
   # cannot be changed. See the helper for why this is not release-prefixed.
@@ -339,11 +371,10 @@ minio:
 # values, and everything under `garage.garage:` is passed on to Garage's
 # official chart.
 #
-# Beside MinIO for this release, and nothing reads from it yet. The order is:
-# install it (this), copy the objects across with rclone and check them, then
-# point s3.endpoint and the keys at it. MinIO stays, idle, as the rollback until
-# a later release removes it. Never delete MinIO's PVC: its reclaim policy is
-# Delete, so the data would go with it.
+# This is where Hearth's files live by default. A release that still has a MinIO
+# with data in it keeps it (minio.enabled) until `hearthctl blob-migrate` has
+# copied every object across and verified it. Never delete MinIO's PVC: its
+# reclaim policy is Delete, so the data would go with it.
 garage:
   enabled: true
 
@@ -525,7 +556,7 @@ backup:
   #   open /backups/.hearth-backup-3946516088: permission denied
   #
   # Match it to podSecurityContext.runAsUser. The deployment shares that context
-  # and never noticed, because it writes to MinIO over the network rather than to
+  # and never noticed, because it writes to object storage over the network rather than to
   # a volume.
   fsGroup: 65532
   persistence:
