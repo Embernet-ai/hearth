@@ -34,6 +34,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -76,7 +77,9 @@ type Syncer struct {
 	// mine is the EmberOps users that the sync's own records belong to, learned from the records it
 	// made. A Contact that one of them owns and that carries no Hearth id was made by EmberOps itself
 	// when a Lead was saved, so it is the sync's to take over and not somebody else's to leave alone.
-	mine      map[string]bool
+	mine map[string]bool
+	// zone is the time zone EmberOps' Datetime fields are written in (a Frappe Datetime has none of its own).
+	zone      *time.Location
 	prospects bool
 	// byID is the same records as idx, by Hearth id.
 	byID map[string]map[string]emberops.Row
@@ -434,6 +437,8 @@ type Options struct {
 	Prospects bool
 	// Timeline also sends Hearth's notes and calls as Comments on the matching EmberOps record, one way.
 	Timeline bool
+	// TimeZone is the zone the EmberOps site is set to, for the start and end of a Call Log. Empty is America/New_York, Fireball's.
+	TimeZone string
 	// Companies makes a company in Hearth when EmberOps has a Customer or Supplier no Hearth company matches.
 	// Without it such a party is reported and left.
 	Companies CompanyMaker
@@ -576,6 +581,16 @@ func (s *Syncer) Run(ctx context.Context, o Options) (*Report, error) {
 	rep := &Report{Write: o.Write}
 	s.idx, s.byID, s.adopted, s.mine, s.leadOf = nil, nil, nil, nil, map[string]string{}
 	s.prospects = o.Prospects
+	s.zone = nil
+	if tz := strings.TrimSpace(o.TimeZone); tz != "" {
+		z, err := time.LoadLocation(tz)
+		if err != nil {
+			return rep, fmt.Errorf("crmsync: the EmberOps time zone %q: %w", tz, err)
+		}
+		s.zone = z
+	} else if z, err := time.LoadLocation("America/New_York"); err == nil {
+		s.zone = z
+	}
 	s.hearthURL, s.opsURL = strings.TrimRight(strings.TrimSpace(o.HearthURL), "/"), strings.TrimRight(strings.TrimSpace(o.OpsURL), "/")
 	if (o.Remove || o.Show) && len(o.Only) == 0 {
 		return rep, errors.New("crmsync: removing or showing needs the company ids to act on, and nothing else")
@@ -601,12 +616,16 @@ func (s *Syncer) Run(ctx context.Context, o Options) (*Report, error) {
 	if !o.Show && !o.Remove {
 		s.leadContacts(ctx, rep, cos, o.Write)
 	}
+	if !o.Show && !o.Remove && len(o.Only) == 0 {
+		s.phoneContacts(ctx, rep, o.Write)
+	}
 	if !o.Remove && len(o.Only) == 0 {
 		s.union(ctx, rep, o.Write)
 		s.fromOps(ctx, rep, o.Companies, o.Write)
 	}
 	if o.Timeline && !o.Show && !o.Remove && len(o.Only) == 0 {
 		s.timeline(ctx, rep, o.Write)
+		s.callLogs(ctx, rep, o.Write)
 	}
 	if o.Write && !o.Show && !o.Remove {
 		s.links(ctx, rep)

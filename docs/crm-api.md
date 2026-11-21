@@ -105,8 +105,17 @@ companies and contacts in EmberOps has no CRM tools, as it has no CRM API.
 
 ### A service's own token
 
-A service (the phone system's caller id bridge) must not borrow a person's token. `hearthctl service-token -as ADMIN -name phone-bridge -team Sales -out FILE`
+A service (the phone system's caller id and call log bridge) must not borrow a person's token. `hearthctl service-token -as ADMIN -name phone-bridge -team Sales -out FILE`
 makes the service its own agent principal, puts it on the Sales team so the CRM's grants show it that team's records and nothing else, and mints it a
-token with the read scope only. A read token cannot write whoever it belongs to. It is idempotent (the agent is found by handle, the team add is a no-op
+token with the write scope, which includes read: a company service reads and writes (the phone system looks callers up, logs each call and keeps
+contacts). `-scope read` makes a read-only token for a service that only looks things up. It is idempotent (the agent is found by handle, the team add is a no-op
 the second time), a new token is minted each run and the old ones are revoked on the Integrations page. The token goes to `-out`, mode 600, and is never
 printed. Only a super admin can run it.
+
+### Calls from the phone system
+
+The phone system logs each call with `POST /v1/activities`: `kind` call, `direction`, `disposition` (answered, missed, no answer), `duration_ms`,
+`occurred_at`, `title`, a `body` whose first line is `Number: +12165550142` and `targets` of the contact and its company, and `source` `phone` with
+the call's id as `external_id`, so a retry is one activity. With `crmSync.timeline` on, the hourly sync sends every activity with source `phone`
+to EmberOps as a Call Log (see crm-sync.md). A caller nobody knows becomes a contact named by their number, made with the same `source` and
+`external_id` (`caller:<number>`), so there is one.

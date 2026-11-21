@@ -47,10 +47,10 @@ func TestServiceTokenMakesAReadOnlyAgentOnTheTeam(t *testing.T) {
 		}
 	})
 
-	if _, _, err := makeServiceToken(ctx, pools, org, plain, "phone-bridge", "Sales", 0); err == nil {
+	if _, _, err := makeServiceToken(ctx, pools, org, plain, "phone-bridge", "Sales", "write", 0); err == nil {
 		t.Fatal("somebody who is not a super admin made a service token")
 	}
-	secret, svc, err := makeServiceToken(ctx, pools, org, admin, "phone-bridge", "Sales", 0)
+	secret, svc, err := makeServiceToken(ctx, pools, org, admin, "phone-bridge", "Sales", "write", 0)
 	if err != nil || secret == "" {
 		t.Fatalf("make: %q %v", secret, err)
 	}
@@ -64,15 +64,24 @@ func TestServiceTokenMakesAReadOnlyAgentOnTheTeam(t *testing.T) {
 		t.Fatalf("service is not on the team: %v", err)
 	}
 	if err := db.QueryRow(ctx, `SELECT scopes FROM api_tokens WHERE principal_id=$1 ORDER BY created_at DESC LIMIT 1`, svc).Scan(&scopes); err != nil ||
-		len(scopes) != 1 || scopes[0] != "read" {
+		len(scopes) != 1 || scopes[0] != "write" {
 		t.Fatalf("token scopes = %v %v", scopes, err)
 	}
+	// -scope read still makes a read-only token, for a service that only looks things up.
+	if _, _, err := makeServiceToken(ctx, pools, org, admin, "lookup-only", "Sales", "read", 0); err != nil {
+		t.Fatal(err)
+	}
+	var rd []string
+	if err := db.QueryRow(ctx, `SELECT t.scopes FROM api_tokens t JOIN principals p ON p.id=t.principal_id WHERE p.org_id=$1 AND p.handle='lookup-only'`, org).Scan(&rd); err != nil ||
+		len(rd) != 1 || rd[0] != "read" {
+		t.Fatalf("read token scopes = %v %v", rd, err)
+	}
 	// Run again: the same service, a new token.
-	_, again, err := makeServiceToken(ctx, pools, org, admin, "phone-bridge", "Sales", 0)
+	_, again, err := makeServiceToken(ctx, pools, org, admin, "phone-bridge", "Sales", "write", 0)
 	if err != nil || again != svc {
 		t.Fatalf("second run: %q vs %q %v", again, svc, err)
 	}
-	if _, _, err := makeServiceToken(ctx, pools, org, admin, "phone-bridge", "No Such Team", 0); err == nil {
+	if _, _, err := makeServiceToken(ctx, pools, org, admin, "phone-bridge", "No Such Team", "write", 0); err == nil {
 		t.Fatal("a team that does not exist was accepted")
 	}
 }

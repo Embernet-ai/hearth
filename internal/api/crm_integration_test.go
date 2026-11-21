@@ -357,3 +357,36 @@ func TestWhoIsCallingFindsTheContactByAnySpellingOfTheNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestThePhoneLogsACallOnceAndKeepsAndRemovesAContact(t *testing.T) {
+	f := crmSetup(t)
+	w, r := f.token(t, f.alice, "write"), f.token(t, f.alice, "read")
+	_, co, _ := f.call(t, w, "POST", "/v1/companies", map[string]any{"name": "Rang Co"})
+	_, ct, _ := f.call(t, w, "POST", "/v1/contacts", map[string]any{"name": "Rae Caller", "phone": "216 555 0142", "company_id": co["id"], "source": "phone", "external_id": "caller:+12165550142"})
+	_, again, _ := f.call(t, w, "POST", "/v1/contacts", map[string]any{"name": "Rae Caller", "phone": "216 555 0142", "source": "phone", "external_id": "caller:+12165550142"})
+	if again["id"] != ct["id"] {
+		t.Errorf("the same caller made a second contact: %v vs %v", again["id"], ct["id"])
+	}
+	body := map[string]any{"kind": "call", "title": "Inbound call from Rae Caller", "body": "Number: +12165550142\nAnswered by Patrick", "direction": "inbound",
+		"disposition": "answered", "duration_ms": 94000, "source": "phone", "external_id": "call-1",
+		"targets": []map[string]any{{"type": "contact", "id": ct["id"]}, {"type": "company", "id": co["id"]}}}
+	code, a1, _ := f.call(t, w, "POST", "/v1/activities", body)
+	code2, a2, _ := f.call(t, w, "POST", "/v1/activities", body)
+	if code != http.StatusCreated || code2 != http.StatusOK || a1["id"] != a2["id"] {
+		t.Errorf("logging a call twice: %d then %d %v %v", code, code2, a1["id"], a2["id"])
+	}
+	_, tl, _ := f.call(t, r, "GET", "/v1/contacts/"+ct["id"].(string)+"/activities", nil)
+	if n := len(tl["activities"].([]any)); n != 1 {
+		t.Errorf("the timeline has %d calls, want 1", n)
+	}
+	// the phone removes a person it made
+	if code, _, _ := f.call(t, r, "DELETE", "/v1/contacts/"+ct["id"].(string), nil); code != http.StatusForbidden {
+		t.Errorf("a read token deleted a contact: %d", code)
+	}
+	if code, _, _ := f.call(t, w, "DELETE", "/v1/contacts/"+ct["id"].(string), nil); code != http.StatusNoContent {
+		t.Errorf("delete = %d", code)
+	}
+	if code, _, _ := f.call(t, r, "GET", "/v1/contacts/"+ct["id"].(string), nil); code != http.StatusNotFound {
+		t.Errorf("a deleted contact still answers: %d", code)
+	}
+}

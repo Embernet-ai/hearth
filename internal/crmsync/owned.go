@@ -47,6 +47,8 @@ var hearthOwned = map[string]map[string]bool{
 		"links", "hearth_deleted_at", "hearth_url", "hearth_owner", "unsubscribed"),
 	"Lead":    set("hearth_id", "lead_name", "first_name", "middle_name", "last_name", "company_name", "email_id", "_tags", "website", "hearth_url", "hearth_owner", "unsubscribed"),
 	"Comment": set("hearth_id", "comment_type", "reference_doctype", "reference_name", "content", "comment_by"),
+	"Call Log": set("hearth_id", "id", "type", "status", "from", "to", "start_time", "end_time", "duration", "medium", "summary",
+		"customer", "links"),
 	"Opportunity": set("hearth_id", "opportunity_from", "party_name", "title", "status", "sales_stage",
 		"expected_closing", "opportunity_amount", "currency", "hearth_url", "hearth_owner"),
 }
