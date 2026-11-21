@@ -68,6 +68,12 @@ func (s *SpaceSync) log() *slog.Logger {
 
 // Sync brings EmberOPS's spaces in line with Hearth's for one org.
 func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
+	// The copy is Hearth's own structure, written as the service account whoever
+	// caused it. Run as the person who made a folder it was refused for anybody
+	// EmberOPS does not let touch a Hearth Space, which is most staff, so a task
+	// filed in the folder a moment later linked a space EmberOPS did not have yet
+	// and failed with "could not create" until the background copy caught up.
+	ctx = emberops.WithUser(ctx, nil)
 	if s.Real != nil {
 		real, err := s.Real(ctx, orgID)
 		if err != nil {
