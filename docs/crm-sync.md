@@ -61,6 +61,15 @@ put back (and reported), and one for an activity removed in Hearth is left. The 
 list and only a new or changed one is sent. If EmberOps refuses the first Comment, because it has not been updated
 to carry a `hearth_id` on Comment (EmberOPS 1.2.2), the pass stops with one line.
 
+## People typed into EmberOps
+
+The way back for people. An EmberOps Contact with no Hearth id, that the sync did not make (EmberOps makes one when it saves a Lead, and those are
+the sync's own), and that holds an email or a number, is looked up in Hearth by email and then by phone (E.164, the rule the phone lookup uses). A match
+by email is linked the way every pre-existing record is: its `hearth_id` is set and nothing else, and it stays EmberOps' own. A match by number alone is left
+as it is, since there is nothing to match the two on. With no match the person is made in Hearth, shared with sales, under the Hearth company of the Customer, Supplier or Lead
+the Contact is linked to when that company has a Hearth id (no company otherwise), and the next run links them by email. A Contact with neither an email nor a
+number is left alone. The dry run says `would create contact` for each. This is what puts a person somebody typed into EmberOps in front of the phone, which reads Hearth.
+
 ## The phone's calls as Call Logs
 
 With `-timeline` on, every call the phone system logged (an activity with `external_refs` source `phone`) also goes to EmberOps as a

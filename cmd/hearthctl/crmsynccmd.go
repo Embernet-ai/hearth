@@ -87,7 +87,8 @@ func runCRMSync(ctx context.Context, args []string) error {
 	}
 	opt := crmsync.Options{Write: *write, Remove: *remove, Show: *show, Deals: *deals, Prospects: *prospects, Timeline: *timeline,
 		HearthURL: os.Getenv("HEARTH_PUBLIC_BASE_URL"), OpsURL: site, TimeZone: os.Getenv("CRM_SYNC_EMBEROPS_TIMEZONE"),
-		Companies: companyMaker{svc: crm.New(pools.Web, az), org: orgID, actor: actor}}
+		Companies: companyMaker{svc: crm.New(pools.Web, az), org: orgID, actor: actor},
+		Contacts:  companyMaker{svc: crm.New(pools.Web, az), org: orgID, actor: actor}}
 	for _, s := range strings.Split(*only, ",") {
 		if s = strings.TrimSpace(s); s != "" {
 			opt.Only = append(opt.Only, s)
@@ -102,6 +103,22 @@ func runCRMSync(ctx context.Context, args []string) error {
 		return errors.New("some records could not be written; run it again, it is safe to repeat")
 	}
 	return nil
+}
+
+// MakeContact makes a person the way the CRM's own form does, shared with sales.
+func (m companyMaker) MakeContact(ctx context.Context, name, email, phone, title, companyID string) (string, error) {
+	in := crm.Contact{Name: name, Email: email, Phone: phone, Title: title}
+	if companyID != "" {
+		in.CompanyID = &companyID
+	}
+	c, err := m.svc.CreateContact(ctx, m.org, m.actor, in)
+	if err != nil {
+		return "", err
+	}
+	if err := m.svc.Share(ctx, m.org, m.actor, c.Ref()); err != nil {
+		return c.ID, fmt.Errorf("share the new contact with sales: %w", err)
+	}
+	return c.ID, nil
 }
 
 // companyMaker makes a company the way the CRM's own form does: its owner, its sales sharing and its created event.
