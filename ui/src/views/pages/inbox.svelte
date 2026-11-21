@@ -18,6 +18,8 @@
   </div>
   {#if F.t(dot?.Message)}<p  class="err">{dot?.Message}</p>{/if}
 
+  <div  class="inboxgrid">
+  <div  class="inboxlist">
   <nav  class="filters">
     <a  class={"chip " + S((F.t(dot?.UnreadOnly) ? ("on") : ""))}  href={("/inbox")}>Unread</a>
     <a  class={"chip " + S((F.t(F.not(dot?.UnreadOnly)) ? ("on") : ""))}  href={("/inbox?all=1")}>Everything</a>
@@ -27,12 +29,12 @@
     <ul  class="hits">
       {#each F.rng(dot?.Notifications) as [k1, d1]}
         <li  data-notification={S(d1?.ID)}  class={S((F.t(F.not(d1?.ReadAt)) ? ("unreadrow") : ""))}>
-          <a  href={(S(d1?.Href))}>{d1?.Sentence}</a>
+          <a  class="hitlink"  href={(S(d1?.Href))}>{d1?.Sentence}</a>
           <span  class="tag">{d1?.Reason}</span>
           {#if F.t(d1?.Excerpt)}<p  class="snippet">{d1?.Excerpt}</p>{/if}
-          <span  class="muted small">{F.ago(d1?.CreatedAt)}</span>
+          <span  class="muted small when">{F.ago(d1?.CreatedAt)}</span>
           {#if F.t(F.not(d1?.ReadAt))}
-            <form  method="post"  action="/inbox/read"  class="inline">
+            <form  method="post"  action="/inbox/read"  class="inline readform">
               <input  type="hidden"  name="id"  value={S(d1?.ID)}>
               <button  type="submit"  class="ghost small">Read</button>
             </form>
@@ -46,6 +48,9 @@
     </p>
   {/if}
 
+  </div>
+
+  <aside  class="inboxprefs">
   <h3  id="notifications">How often you hear from this</h3>
   <p  class="muted small">
     The point of these settings is that nobody has to turn the whole thing off.
@@ -75,6 +80,8 @@
   </form>
 
   <PushSettings />
+  </aside>
+  </div>
 </section>
 {/snippet}
 {@render content(dot)}

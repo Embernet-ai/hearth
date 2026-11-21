@@ -61,7 +61,7 @@
 
   
   <div  class="dashgrid">
-    <div>
+    <div  class="dashwork">
       <h2>Assigned to me</h2>
       {#if F.t(dot?.Dash?.Mine)}
         <table  class="list">
@@ -115,7 +115,7 @@
       {/if}
     </div>
 
-    <div>
+    <div  class="dashtime">
       
       <h2>My time <a  class="chip"  href={("/time")}>All of it</a></h2>
       {#if F.t(dot?.Timer)}

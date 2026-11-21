@@ -5,12 +5,18 @@
   import Topbar from './Topbar.svelte';
   import { view } from '../views';
   import { loadAssets, announce } from '../lib/assets';
+  import { navOpen, setNavOpen } from '../lib/store';
+  import { fills } from '../lib/fill';
   import { tick } from 'svelte';
 
   let { env, epoch, onEnv, onSignOut }: { env: Envelope; epoch: number; onEnv: (e: Envelope, url: string) => void; onSignOut: () => void } = $props();
   let menuOpen = $state(false);
+  // The side panel folds away on a wide screen so the page has the whole width, and comes back with the same button. Remembered per browser.
+  let railHidden = $state(navOpen('rail-hidden', false));
+  const toggleRail = () => { railHidden = !railHidden; setNavOpen('rail-hidden', railHidden); };
   const pg = $derived(env.page);
   const View = $derived(view(env.template));
+  const fill = $derived(fills(env.template));
 
   let mainEl = $state<HTMLElement | null>(null);
   // After each page is drawn, tell the behavior scripts there is new markup to set up.
@@ -38,10 +44,10 @@
   }
 </script>
 
-<div class="app">
+<div class="app" class:railhidden={railHidden}>
   <Rail {pg} bind:open={menuOpen} {onSignOut} />
   <div class="workspace">
-    <Topbar {pg} onMenu={() => (menuOpen = true)} {onSignOut} {onEnv} />
+    <Topbar {pg} onMenu={() => (menuOpen = true)} {onSignOut} {onEnv} {railHidden} onRail={toggleRail} />
     {#if pg.Identity?.ActingFor}
       <div class="playbanner" role="status">
         <span><strong>PLAYGROUND</strong> &middot; your practice company. Nothing here is real, and nobody else sees it.</span>
@@ -49,7 +55,7 @@
         <form class="inline" onsubmit={leavePlayground}><button type="submit" class="small">Back to Hearth</button></form>
       </div>
     {/if}
-    <main class:wide={pg.Wide} bind:this={mainEl}>
+    <main class:wide={pg.Wide || fill} class:fill data-screen={env.template} bind:this={mainEl}>
       {#if pg.NeedsDepartment}
         <p class="notice">Which department are you in? Tell us, and a manager or an admin will confirm it.
           <a class="chip" href={'/departments/request'}>Choose my department</a></p>

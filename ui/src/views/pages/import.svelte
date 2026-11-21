@@ -1,6 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
+  import FilePicker from '../../components/FilePicker.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -34,7 +35,7 @@
 
   <form  method="post"  action="/import/clickup"  enctype="multipart/form-data"  class="stack">
     <label  for="file">Export file</label>
-    <input  id="file"  type="file"  name="file"  accept=".csv,.json,text/csv,application/json"  required>
+    <FilePicker  id="file"  name="file"  accept=".csv,.json,text/csv,application/json"  required  kind="ClickUp export file" />
     <p  class="muted small">
       Either format ClickUp gives you. The CSV from a list view, or the JSON from
       the API or a backup.

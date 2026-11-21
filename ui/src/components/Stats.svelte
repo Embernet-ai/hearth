@@ -36,7 +36,9 @@
       {/if}
     </header>
 
+    <div class="numgrid">
     {#each groups as g (g.Key)}
+      <div class={'numgroup g-' + g.Key}>
       <h3 class="grouptitle">{g.Title}</h3>
       <div class="stats" style:--cols={g.Tiles.length > 4 ? 3 : g.Tiles.length}>
         {#each g.Tiles as t, i (t.Label)}
@@ -53,9 +55,11 @@
           </a>
         {/each}
       </div>
+      </div>
     {/each}
 
     {#if weeks.length}
+      <div class="numgroup numweeks">
       <h3 class="grouptitle">Hours, last eight weeks <span class="muted small">against {stats.WeeksTarget} a week</span></h3>
       <ol class="weeks">
         {#each weeks as w (w.Href)}
@@ -68,9 +72,11 @@
           </li>
         {/each}
       </ol>
+      </div>
     {/if}
 
     {#if stages.length}
+      <div class="numgroup numstages">
       <h3 class="grouptitle">Open pipeline by stage</h3>
       <ul class="stagebars">
         {#each stages as s (s.Label)}
@@ -83,16 +89,20 @@
           </li>
         {/each}
       </ul>
+      </div>
     {/if}
 
     {#if recent.length}
+      <div class="numgroup numrecent">
       <h3 class="grouptitle">Recently closed</h3>
       <ul class="plain recent">
         {#each recent as r (r.Href)}
           <li><span class="tag">{r.Kind}</span> <a href={r.Href}>{r.Title}</a>{#if r.Detail} <span class="muted small">{r.Detail}</span>{/if}{#if r.When} <span class="muted small">{r.When}</span>{/if}</li>
         {/each}
       </ul>
+      </div>
     {/if}
+    </div>
   </section>
 {/if}
 

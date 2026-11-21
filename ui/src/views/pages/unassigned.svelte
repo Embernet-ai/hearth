@@ -10,6 +10,7 @@
 <section>
   <h1>Unassigned</h1>
   <p  class="muted small">Records nobody owns yet. Claim one to make it yours, or hand it to the person who should have it.</p>
+  <div  class="unassignedbar">
   <div  class="row">
     <a  class={"chip" + S((F.t(F.eq(dot?.UnownedType, "company")) ? (" on") : ""))}  href={("/crm/unassigned?type=company")}>Companies ({F.index(dot?.UnownedCounts, "company")})</a>
     <a  class={"chip" + S((F.t(F.eq(dot?.UnownedType, "contact")) ? (" on") : ""))}  href={("/crm/unassigned?type=contact")}>People ({F.index(dot?.UnownedCounts, "contact")})</a>
@@ -20,15 +21,17 @@
     <input  name="q"  value={S(dot?.SearchText)}  placeholder="Name"  aria-label="Search">
     <button  type="submit"  class="ghost small">Search</button>
   </form>
+  </div>
   {#if F.t(dot?.Unowned)}
   <table  class="list"  data-unassigned>
-    <thead><tr><th>Name</th><th>Detail</th><th>Claim or hand off</th></tr></thead>
+    <thead><tr><th>Name</th><th>Detail</th><th class="col-md">Added</th><th>Claim or hand off</th></tr></thead>
     <tbody>
       {#each F.rng(dot?.Unowned) as [k1, d1]}
       <tr  data-record={S(d1?.Ref?.ID)}>
         <td><a  href={(S(d1?.Href))}>{d1?.Name}</a></td>
         <td  class="muted small">{d1?.Subtext}</td>
-        <td>
+        <td  class="muted small col-md">{#if F.t(d1?.CreatedAt)}{F.date(d1?.CreatedAt)}{/if}</td>
+        <td  class="claimcell">
           <form  method="post"  action="/crm/owner"  class="row">
             <input  type="hidden"  name="type"  value={S(d1?.Ref?.Type)}>
             <input  type="hidden"  name="id"  value={S(d1?.Ref?.ID)}>

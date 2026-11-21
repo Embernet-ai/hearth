@@ -117,7 +117,7 @@ func fixtures() map[string]page {
 	cancelled := leave("c1", "cancelled", false)
 	cancelled.DecisionNote = "Cancelled by Yessid: the trip moved"
 
-	return map[string]page{
+	all := map[string]page{
 		"timeoff-decide": {Title: "Time off", TimeOffKinds: timeoff.Kinds,
 			TimeOffToDecide: []*timeoff.Request{leave("t1", "pending", false), leave("t2", "approved", true), cancelled}},
 		"timeoff-own": {Title: "Time off", TimeOffKinds: timeoff.Kinds,
@@ -261,6 +261,10 @@ func fixtures() map[string]page {
 		"setpassword-done": {Title: "Choose a password", Done: true},
 		"mail":             {Title: "Email", InboundReady: true, ScanURL: "https://hearth.example.com/inbound/mail"},
 	}
+	for name, p := range fillFixtures(end) {
+		all[name] = p
+	}
+	return all
 }
 
 func TestViewFixtures(t *testing.T) {
