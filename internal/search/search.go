@@ -115,6 +115,12 @@ type Document struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// verifier is an engine that can say which hits a caller may still open, from
+// the live grants table.
+type verifier interface {
+	Verify(ctx context.Context, subjects core.Subjects, hits []Hit) ([]Hit, error)
+}
+
 // Service answers queries, preferring the better engine and falling back.
 type Service struct {
 	// primary is the richer engine, and may be nil when none is configured.
@@ -157,6 +163,17 @@ func (s *Service) Search(ctx context.Context, orgID string, subjects core.Subjec
 	if s.primary != nil {
 		res, err := s.primary.Search(ctx, orgID, subjects, q)
 		if err == nil {
+			// The cluster answers from the subject list it was given at index
+			// time, so a grant that ended since, or was taken back a moment ago,
+			// still matches there. Ask the database about what came back.
+			if v, ok := s.fallback.(verifier); ok && !subjects.Super() {
+				kept, verr := v.Verify(ctx, subjects, res.Hits)
+				if verr != nil {
+					return nil, fmt.Errorf("search: %w", verr)
+				}
+				res.Total -= len(res.Hits) - len(kept)
+				res.Hits = kept
+			}
 			res.Engine = s.primary.Name()
 			res.Took = time.Since(started)
 			return res, nil

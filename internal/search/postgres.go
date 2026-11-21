@@ -290,3 +290,57 @@ func grantFilter(super bool, entityType, idExpr string) string {
 	return "EXISTS (SELECT 1 FROM grants g WHERE g.entity_type = '" + entityType + "' AND g.entity_id = " + idExpr +
 		" AND g.subject_key = ANY($2) AND (g.expires_at IS NULL OR g.expires_at > now()))"
 }
+
+// Verify keeps the hits the caller may open right now. Documents are asked of
+// their own grants and an attachment of the document it hangs off, the same
+// expressions the search above uses; anything else is left as it came. It is how
+// an answer from the cluster stops showing a document the moment a grant ends or
+// is taken back, before the index has heard.
+func (p *Postgres) Verify(ctx context.Context, subjects core.Subjects, hits []Hit) ([]Hit, error) {
+	var docIDs []string
+	for _, h := range hits {
+		switch h.EntityType {
+		case string(core.EntityDocument):
+			docIDs = append(docIDs, h.EntityID)
+		case string(core.EntityFile):
+			docIDs = append(docIDs, h.ParentID)
+		}
+	}
+	if len(docIDs) == 0 {
+		return hits, nil
+	}
+	rows, err := p.db.Query(ctx, `
+		SELECT d.id::text FROM documents d
+		 WHERE d.id::text = ANY($1) AND `+grantFilter(false, "document", "d.id"),
+		docIDs, subjects.Keys())
+	if err != nil {
+		return nil, fmt.Errorf("verify hits: %w", err)
+	}
+	defer rows.Close()
+	ok := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ok[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	kept := make([]Hit, 0, len(hits))
+	for _, h := range hits {
+		switch h.EntityType {
+		case string(core.EntityDocument):
+			if !ok[h.EntityID] {
+				continue
+			}
+		case string(core.EntityFile):
+			if !ok[h.ParentID] {
+				continue
+			}
+		}
+		kept = append(kept, h)
+	}
+	return kept, nil
+}

@@ -180,7 +180,8 @@ func (s *Service) instantiate(ctx context.Context, orgID string, tmpl *Document,
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by)
 		VALUES (gen_random_uuid(), $1, 'document', $2, $3, 'admin', $4)
-		ON CONFLICT (entity_type, entity_id, subject_key) DO NOTHING`,
+		ON CONFLICT (entity_type, entity_id, subject_key) DO UPDATE
+		   SET level = 'admin', expires_at = NULL, via_space_id = NULL`,
 		orgID, d.ID, core.Subject{Kind: core.SubjectPrincipal, ID: principal}.Key(), principal,
 	); err != nil {
 		return nil, fmt.Errorf("docs: grant instantiated: %w", err)

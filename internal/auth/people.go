@@ -54,6 +54,9 @@ type Person struct {
 	Email       string
 	Status      string
 	IsOwner     bool
+	// Contractor marks an account that reaches what it was given and nothing
+	// else: no department, and not the open daily reports one.
+	Contractor  bool
 	LastLoginAt *time.Time
 	CreatedAt   time.Time
 }
@@ -384,7 +387,7 @@ func (s *Service) People(ctx context.Context, orgID string) ([]Person, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT p.id::text, p.display_name, p.status, p.created_at,
 		       COALESCE(lc.email::text, ui.email::text, ''),
-		       GREATEST(lc.last_login_at, ui.last_seen)
+		       GREATEST(lc.last_login_at, ui.last_seen), p.contractor
 		FROM principals p
 		LEFT JOIN local_credentials lc ON lc.principal_id = p.id
 		LEFT JOIN (
@@ -403,13 +406,66 @@ func (s *Service) People(ctx context.Context, orgID string) ([]Person, error) {
 	for rows.Next() {
 		var p Person
 		if err := rows.Scan(&p.PrincipalID, &p.DisplayName, &p.Status,
-			&p.CreatedAt, &p.Email, &p.LastLoginAt); err != nil {
+			&p.CreatedAt, &p.Email, &p.LastLoginAt, &p.Contractor); err != nil {
 			return nil, fmt.Errorf("auth: scan person: %w", err)
 		}
 		p.IsOwner = p.PrincipalID == owner
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// SetContractor marks an account as a contractor's, or clears it. A contractor
+// account is for somebody outside the company who is given one folder: it is in
+// no department and the open daily reports one does not reach it, so what it
+// sees is what it was granted. Owner or super admin only, and the owner's own
+// account cannot be changed by anybody else.
+func (s *Service) SetContractor(ctx context.Context, orgID, actorID, principalID string, on bool) error {
+	admin, err := s.IsAdmin(ctx, orgID, actorID)
+	if err != nil {
+		return err
+	}
+	if !admin {
+		return ErrNotOwner
+	}
+	owner, err := s.OwnerID(ctx, orgID)
+	if err != nil {
+		return err
+	}
+	if principalID == owner && actorID != owner {
+		return ErrIsOwner
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("auth: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var before bool
+	err = tx.QueryRow(ctx, `
+		SELECT contractor FROM principals
+		 WHERE id = $1::uuid AND org_id = $2 AND kind = 'user' FOR UPDATE`,
+		principalID, orgID).Scan(&before)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoPerson
+	}
+	if err != nil {
+		return fmt.Errorf("auth: read contractor: %w", err)
+	}
+	if before == on {
+		return tx.Commit(ctx)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE principals SET contractor = $3, updated_at = now()
+		 WHERE id = $1::uuid AND org_id = $2`, principalID, orgID, on); err != nil {
+		return fmt.Errorf("auth: set contractor: %w", err)
+	}
+	if err := audit.Record(ctx, tx, audit.Entry{
+		OrgID: orgID, ActorID: actorID, Action: audit.ActionPersonContractor,
+		EntityType: "principal", EntityID: principalID,
+		Before: map[string]any{"contractor": before}, After: map[string]any{"contractor": on},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // SetAvatar puts a picture on somebody's own profile, or takes it off when

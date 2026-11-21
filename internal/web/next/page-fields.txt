@@ -60,6 +60,8 @@ SpaceParent
 ManageableSpaces
 CanAdminSpaces
 SpaceHasChildren
+AccessSpace
+Delegations
 Attachments
 RemovedAttachments
 Filter

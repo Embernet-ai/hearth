@@ -154,7 +154,7 @@ func (s *Service) ServiceHistory(ctx context.Context, orgID string, actor core.S
 		return nil, nil
 	}
 
-	paths, err := s.spacePaths(ctx, orgID)
+	paths, err := s.spacePaths(ctx, orgID, actor)
 	if err != nil {
 		return nil, err
 	}

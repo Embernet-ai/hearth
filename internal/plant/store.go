@@ -21,6 +21,9 @@ type Store interface {
 		assetID string, at time.Time) (*Downtime, error)
 	CreateSpace(ctx context.Context, orgID string, actor core.Subjects,
 		name, kind string, parentID *string) (*Space, error)
+	Delegate(ctx context.Context, orgID string, actor core.Subjects,
+		spaceID, personID string, level core.AccessLevel, expires *time.Time) error
+	Delegations(ctx context.Context, orgID string, actor core.Subjects, spaceID string) ([]Delegation, error)
 	DeleteSpace(ctx context.Context, orgID string, actor core.Subjects, id string) error
 	DowntimeFor(ctx context.Context, orgID string, actor core.Subjects,
 		assetID string, limit int) ([]Downtime, error)
@@ -35,6 +38,8 @@ type Store interface {
 	ManageableSpaces(ctx context.Context, orgID string, actor core.Subjects, tree []*Space) (map[string]bool, error)
 	MayAdminSpaces(ctx context.Context, orgID string, actor core.Subjects) (bool, error)
 	MayManageAnySpace(ctx context.Context, orgID string, actor core.Subjects) (bool, error)
+	PersonByEmail(ctx context.Context, orgID string, actor core.Subjects, email string) (string, string, error)
+	ManagedFolder(ctx context.Context, orgID string, actor core.Subjects, id string) (*Space, error)
 	MoveDocument(ctx context.Context, orgID string, actor core.Subjects,
 		docID string, spaceID *string) error
 	MoveSpace(ctx context.Context, orgID string, actor core.Subjects,
@@ -49,6 +54,7 @@ type Store interface {
 	SpaceChildren(ctx context.Context, orgID string, actor core.Subjects, parentID string) ([]*Space, error)
 	SpaceTree(ctx context.Context, orgID string, actor core.Subjects) ([]*Space, error)
 	Tree(ctx context.Context, orgID string, actor core.Subjects) ([]*Asset, error)
+	Undelegate(ctx context.Context, orgID string, actor core.Subjects, spaceID, personID string) error
 }
 
 var _ Store = (*Service)(nil)

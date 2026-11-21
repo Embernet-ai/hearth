@@ -3,6 +3,7 @@
  "APIScopes": null,
  "APITokens": null,
  "AccessGroups": null,
+ "AccessSpace": null,
  "Activities": null,
  "AgentTokens": null,
  "Agents": null,
@@ -129,6 +130,7 @@
  "Deals": null,
  "Decided": null,
  "DecidedTime": null,
+ "Delegations": null,
  "Departments": null,
  "DeptApplyNow": false,
  "DeptPending": 0,
@@ -240,6 +242,7 @@
  "Peek": false,
  "People": null,
  "Person": {
+  "Contractor": false,
   "CreatedAt": "0001-01-01T00:00:00Z",
   "DisplayName": "David",
   "Email": "david@example.com",
@@ -251,6 +254,7 @@
  "PersonManaged": null,
  "Persons": [
   {
+   "Contractor": false,
    "CreatedAt": "0001-01-01T00:00:00Z",
    "DisplayName": "David",
    "Email": "david@example.com",

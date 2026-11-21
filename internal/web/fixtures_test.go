@@ -23,6 +23,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/authz"
 	"github.com/Embernet-ai/hearth/internal/channels"
+	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
 	"github.com/Embernet-ai/hearth/internal/crm/csvimport"
@@ -152,6 +153,17 @@ func fixtures() map[string]page {
 				{ID: "theirs", Name: "Sales", Kind: "folder", Documents: 1},
 			},
 			ManageableSpaces: map[string]bool{"mine": true}},
+
+		"spaceaccess": {Title: "Access to Alpha",
+			AccessSpace: &plant.Space{ID: "alpha", Name: "Alpha", Path: "Dept / Projects / Alpha"},
+			Delegations: []plant.Delegation{
+				{PersonID: "p1", Name: "Carol", Email: "carol@example.test", Contractor: true, Level: core.AccessEdit, ExpiresAt: &end},
+				{PersonID: "p2", Name: "Dan", Level: core.AccessView, ExpiresAt: &end, Expired: true},
+				{PersonID: "p3", Name: "Eve", Level: core.AccessComment},
+			}},
+		"spaceaccess-empty": {Title: "Access to Alpha",
+			AccessSpace: &plant.Space{ID: "alpha", Name: "Alpha", Path: "Alpha"},
+			Message:     "Nobody here signs in with that address. Ask an admin to add the account first."},
 
 		"dailyreport-form": {Title: "File today's report", RepDay: "2026-10-26", RepSpace: "sp2",
 			RepTree: []*plant.Space{{ID: "sp1", Path: "Engineering"}, {ID: "sp2", Path: "Daily reports"}},

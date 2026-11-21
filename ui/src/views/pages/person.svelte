@@ -288,6 +288,12 @@
         <button  type="submit"  class="ghost small">Reset password</button>
         <span  class="muted small">Makes a link they open to choose a new password. It works once and expires in 24 hours.</span>
       </form>
+      <form  method="post"  action={"/people/" + S(v_id) + "/contractor"}  class="row">
+        <input  type="hidden"  name="back"  value={S(v_back)}>
+        <label  class="small"><input  type="checkbox"  name="contractor" {...(F.t(v_p?.Contractor) ? {"checked": true} : {})}> Contractor account</label>
+        <button  type="submit"  class="ghost small">Save</button>
+        <span  class="muted small">A contractor account reaches only the folders a manager gives it. It is in no department and does not see the daily reports department.</span>
+      </form>
     </div>
   {/if}
 

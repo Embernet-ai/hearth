@@ -371,7 +371,11 @@ type page struct {
 	// SpaceHasChildren marks spaces that have at least one child, for the
 	// collapse caret on the Spaces page.
 	SpaceHasChildren map[string]bool
-	Attachments      []docs.Attachment
+	// AccessSpace is the folder whose Access page this is, and Delegations who
+	// holds a delegation of it. For a manager sharing one folder.
+	AccessSpace *plant.Space
+	Delegations []plant.Delegation
+	Attachments []docs.Attachment
 	// RemovedAttachments are files taken off the document, kept for Restore.
 	RemovedAttachments []docs.Attachment
 
@@ -878,7 +882,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	// The unread count rides on every render, so the badge in the top bar is
 	// never stale by a page load. One count on a partial index.
 	if p.Identity != nil && s.inbox != nil {
-		if n, err := s.inbox.Unread(r.Context(), p.Identity.PrincipalID); err == nil {
+		if n, err := s.inbox.UnreadFor(r.Context(), p.Identity.Subjects); err == nil {
 			p.Unread = n
 		}
 	}
@@ -1106,6 +1110,9 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /spaces/{id}/rename", s.renameSpace)
 	authed.HandleFunc("POST /spaces/{id}/move", s.moveSpace)
 	authed.HandleFunc("POST /spaces/{id}/delete", s.deleteSpace)
+	authed.HandleFunc("GET /spaces/{id}/access", s.getSpaceAccess)
+	authed.HandleFunc("POST /spaces/{id}/access", s.postSpaceDelegate)
+	authed.HandleFunc("POST /spaces/{id}/access/{person}/remove", s.postSpaceUndelegate)
 	authed.HandleFunc("POST /spaces/reorder", s.reorderSpaces)
 	authed.HandleFunc("POST /spaces/save-order", s.saveSpaceOrder)
 	authed.HandleFunc("POST /documents/{id}/space", s.moveDocumentToSpace)
@@ -1291,6 +1298,7 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /people", s.addPerson)
 	authed.HandleFunc("POST /people/{id}/password-link", s.postPasswordLink)
 	authed.HandleFunc("POST /people/{id}/status", s.setPersonStatus)
+	authed.HandleFunc("POST /people/{id}/contractor", s.postContractor)
 	authed.HandleFunc("POST /people/{id}/capability", s.postCapability)
 	authed.HandleFunc("POST /people/{id}/departments", s.postDepartments)
 	authed.HandleFunc("POST /people/{id}/grant-space", s.postGrantSpace)
