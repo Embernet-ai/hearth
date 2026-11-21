@@ -28,6 +28,16 @@ A last day ends access at the end of that day, Eastern time, on every path at on
 
 A person who is not part of the company can hold a folder like anyone else. An owner or super admin can also mark the account a **contractor account** from the person's page. A contractor account is in no department and does not reach the open Daily reports department that every other account does, so what it sees is only what it was given.
 
+## Managers and super admins
+
+Whoever may give a folder (a manager of it, or of any folder above it) can also open it and everything under it, at view level at least, without being a member of the department or holding a grant. It only adds: a level somebody already holds is never lowered. It ends when they stop managing the folder, unless they manage something above it too. This opening is not a grant given from the People page and is not shown there or on a folder's Access page.
+
+A super admin is never narrowed by any of this. They open every folder at every depth, see every parent's full name, see everybody in every list, and can give and take back a folder anywhere, even on an account marked as a contractor's.
+
+## Lists of people for a contractor account
+
+An assignee picker, a filter by person, a mention: for a contractor account each is cut to the person themselves and the people who hold a grant of their own on a folder the account can open (the managers of that folder, whoever made it, and anyone else it was given to). Everybody else gets those lists as they always did. A name is still shown on work the contractor can open, because it is part of that work.
+
 ## What this does not change
 
 - Nothing anybody holds today is taken away. Access given from the People page (a department) is a different grant and is never changed or removed by this one. If a person already holds a folder that way, giving it again here leaves their existing level alone.

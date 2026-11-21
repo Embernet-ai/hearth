@@ -406,7 +406,7 @@ func (s *Service) SpaceGrantsBy(ctx context.Context, orgID string) (map[string][
 		SELECT g.subject_key, s.id::text, s.name
 		  FROM grants g
 		  JOIN spaces s ON s.id = g.entity_id
-		 WHERE g.entity_type = 'space' AND g.org_id = $1
+		 WHERE g.entity_type = 'space' AND g.org_id = $1 AND NOT g.via_manager
 		   -- The top of each granted branch, once. Granting a department also
 		   -- grants everything under it, and listing all of those would bury
 		   -- the one that was actually given; but a part granted on its own
@@ -474,6 +474,7 @@ func (s *Service) RevokeSpace(ctx context.Context, orgID, actorID, principalID, 
 		 WHERE g.entity_type = 'document' AND g.entity_id = d.id
 		   AND d.space_id = subtree.id
 		   AND d.owner_id <> $4::uuid
+		   AND NOT g.via_manager
 		   AND g.org_id = $2 AND g.subject_key = $3`,
 		spaceID, orgID, subject.Key(), principalID); err != nil {
 		return fmt.Errorf("authz: revoke documents: %w", err)
@@ -482,6 +483,7 @@ func (s *Service) RevokeSpace(ctx context.Context, orgID, actorID, principalID, 
 		DELETE FROM grants g
 		 USING subtree
 		 WHERE g.entity_type = 'space' AND g.entity_id = subtree.id
+		   AND NOT g.via_manager
 		   AND g.org_id = $2 AND g.subject_key = $3`,
 		spaceID, orgID, subject.Key()); err != nil {
 		return fmt.Errorf("authz: revoke space: %w", err)
@@ -495,7 +497,8 @@ func (s *Service) SpaceGrantSet(ctx context.Context, orgID, principalID string) 
 	subject := core.Subject{Kind: core.SubjectPrincipal, ID: principalID}
 	rows, err := s.db.Query(ctx, `
 		SELECT entity_id::text FROM grants
-		 WHERE entity_type = 'space' AND org_id = $1 AND subject_key = $2`,
+		 WHERE entity_type = 'space' AND org_id = $1 AND subject_key = $2
+		   AND NOT via_manager`,
 		orgID, subject.Key())
 	if err != nil {
 		return nil, fmt.Errorf("authz: space grant set: %w", err)

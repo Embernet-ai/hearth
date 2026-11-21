@@ -87,7 +87,7 @@ func (s *Server) getChannel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	people, err := s.docs.Assignable(r.Context(), id.OrgID)
+	people, err := s.assignable(r)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "load people", "error", err)
 	}

@@ -419,7 +419,7 @@ func (s *Server) renderList(w http.ResponseWriter, r *http.Request, req listRequ
 		Total:      total,
 		Shown:      len(rows),
 		Statuses:   docs.Statuses,
-		People:     people,
+		People:     s.onlyReachable(r, people),
 		PropDefs:   defs,
 		Columns:    cols,
 		Tabs:       s.viewTabs(req),

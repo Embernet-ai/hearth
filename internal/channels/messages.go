@@ -86,7 +86,7 @@ func (s *Service) Post(ctx context.Context, orgID string, actor core.Subjects, p
 		return nil, fmt.Errorf("channels: post: %w", err)
 	}
 
-	mentions, err := s.recordMentions(ctx, tx, orgID, principal, m.ID, body)
+	mentions, err := s.recordMentions(ctx, tx, orgID, principal, actor, m.ID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +430,7 @@ var (
 )
 
 // recordMentions turns what a message said into real links.
-func (s *Service) recordMentions(ctx context.Context, tx pgx.Tx, orgID, authorID, messageID, body string) ([]Mention, error) {
+func (s *Service) recordMentions(ctx context.Context, tx pgx.Tx, orgID, authorID string, author core.Subjects, messageID, body string) ([]Mention, error) {
 	seen := map[string]bool{}
 	var out []Mention
 
@@ -457,10 +457,18 @@ func (s *Service) recordMentions(ctx context.Context, tx pgx.Tx, orgID, authorID
 	// made a mistake.
 	for _, m := range handlePattern.FindAllStringSubmatch(body, 20) {
 		var id, name string
+		// A contractor account can mention only the people it may be shown
+		// (core.ReachablePeople); a handle outside that is left as plain text,
+		// the same as a handle nobody has, so a mention is not a way to find out
+		// who else is here. A super admin is never narrowed.
 		err := tx.QueryRow(ctx, `
+			WITH RECURSIVE `+core.ReachablePeople("$3", "$4")+`
 			SELECT id::text, COALESCE(NULLIF(display_name,''), handle::text)
-			FROM principals WHERE org_id=$1 AND handle=$2 AND status='active'`,
-			orgID, m[1]).Scan(&id, &name)
+			FROM principals WHERE org_id=$1 AND handle=$2 AND status='active'
+			  AND ($5::boolean
+			       OR NOT EXISTS (SELECT 1 FROM principals a WHERE a.id = $3::uuid AND a.contractor)
+			       OR id IN (SELECT id FROM reachable_people))`,
+			orgID, m[1], authorID, author.Keys(), author.Super()).Scan(&id, &name)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}

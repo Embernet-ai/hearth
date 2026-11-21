@@ -76,7 +76,7 @@ func (s *Service) Delegations(ctx context.Context, orgID string, actor core.Subj
 		  LEFT JOIN local_credentials c ON c.principal_id = p.id
 		  LEFT JOIN principals gb ON gb.id = g.granted_by
 		 WHERE g.entity_type = 'space' AND g.entity_id = $1::uuid AND g.org_id = $2
-		   AND g.via_space_id = $1::uuid
+		   AND g.via_space_id = $1::uuid AND NOT g.via_manager
 		 ORDER BY lower(p.display_name), p.id`, spaceID, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("plant: delegations: %w", err)
@@ -161,7 +161,7 @@ func (s *Service) Delegate(ctx context.Context, orgID string, actor core.Subject
 	if err := tx.QueryRow(ctx, `
 		SELECT EXISTS (SELECT 1 FROM grants
 		                WHERE entity_type = 'space' AND entity_id = $1::uuid AND subject_key = $2
-		                  AND via_space_id IS NOT NULL AND via_space_id <> $1::uuid
+		                  AND via_space_id IS NOT NULL AND via_space_id <> $1::uuid AND NOT via_manager
 		                  AND (expires_at IS NULL OR expires_at > now()))`,
 		spaceID, subject.Key()).Scan(&above); err != nil {
 		return fmt.Errorf("plant: check inherited delegation: %w", err)
@@ -173,8 +173,9 @@ func (s *Service) Delegate(ctx context.Context, orgID string, actor core.Subject
 	const upsert = `
 		ON CONFLICT (entity_type, entity_id, subject_key) DO UPDATE
 		   SET level = EXCLUDED.level, expires_at = EXCLUDED.expires_at,
-		       granted_by = EXCLUDED.granted_by, granted_at = now()
-		 WHERE grants.via_space_id = EXCLUDED.via_space_id`
+		       granted_by = EXCLUDED.granted_by, granted_at = now(),
+		       via_space_id = EXCLUDED.via_space_id, via_manager = false
+		 WHERE grants.via_space_id = EXCLUDED.via_space_id OR grants.via_manager`
 
 	tag, err := tx.Exec(ctx, subtreeCTE+`
 		INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by, expires_at, via_space_id)
@@ -250,10 +251,19 @@ func (s *Service) Undelegate(ctx context.Context, orgID string, actor core.Subje
 
 	tag, err := tx.Exec(ctx, `
 		DELETE FROM grants
-		 WHERE org_id = $1 AND subject_key = $2 AND via_space_id = $3::uuid`,
+		 WHERE org_id = $1 AND subject_key = $2 AND via_space_id = $3::uuid AND NOT via_manager`,
 		orgID, subject.Key(), spaceID)
 	if err != nil {
 		return fmt.Errorf("plant: undelegate: %w", err)
+	}
+	// Somebody who manages this folder, or one above it, still opens it: what
+	// the delegation had taken over goes back to that.
+	if _, err := tx.Exec(ctx, `
+		SELECT hearth_apply_manager(m.space_id, m.principal_id)
+		  FROM space_managers m
+		 WHERE m.principal_id = $1::uuid`,
+		personID); err != nil {
+		return fmt.Errorf("plant: restore manager access: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		// Nothing was delegated, so nothing changed and nothing to record.
@@ -346,4 +356,42 @@ func (s *Service) ManagedFolder(ctx context.Context, orgID string, actor core.Su
 		return nil, err
 	}
 	return sp, nil
+}
+
+// ReachablePeople is who a list of colleagues may name for this actor. For an
+// ordinary account restricted is false and nothing is cut down. For a
+// contractor account it is the person themselves and everybody who holds a
+// grant of their own on a space the account can open, and nobody else.
+func (s *Service) ReachablePeople(ctx context.Context, orgID string, actor core.Subjects) (people map[string]bool, restricted bool, err error) {
+	principal := actor.Principal()
+	// A super admin is never narrowed, whatever their account says.
+	if principal == "" || actor.Super() {
+		return nil, false, nil
+	}
+	if err := s.db.QueryRow(ctx,
+		`SELECT contractor FROM principals WHERE id = $1::uuid AND org_id = $2`,
+		principal, orgID).Scan(&restricted); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("plant: contractor check: %w", err)
+	}
+	if !restricted {
+		return nil, false, nil
+	}
+	rows, err := s.db.Query(ctx, `WITH RECURSIVE `+core.ReachablePeople("$1", "$2")+`
+		SELECT id::text FROM reachable_people`, principal, actor.Keys())
+	if err != nil {
+		return nil, true, fmt.Errorf("plant: reachable people: %w", err)
+	}
+	defer rows.Close()
+	people = map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, true, err
+		}
+		people[id] = true
+	}
+	return people, true, rows.Err()
 }

@@ -47,6 +47,7 @@ type Store interface {
 	RemoveDowntime(ctx context.Context, orgID string, actor core.Subjects, id string) error
 	RenameSpace(ctx context.Context, orgID string, actor core.Subjects,
 		id, name string) error
+	ReachablePeople(ctx context.Context, orgID string, actor core.Subjects) (map[string]bool, bool, error)
 	ReorderSpaces(ctx context.Context, orgID string, actor core.Subjects, parentID string, orderedIDs []string) error
 	SaveSpaceOrder(ctx context.Context, orgID string, actor core.Subjects, orderedIDs []string) error
 	SetFields(ctx context.Context, orgID string, actor core.Subjects,

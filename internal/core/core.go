@@ -263,3 +263,30 @@ func MemberSpaces(principalParam string) string {
 	     WHERE m.depth < 10
 	)`
 }
+
+// ReachablePeople is a WITH RECURSIVE term pair, member_spaces and
+// reachable_people: the people a contractor account may be shown. Themselves,
+// and everybody who holds a live grant of their own on a space the account can
+// open (a grant to it, or a department it is in, with what is beneath). It is
+// what every list of colleagues (an assignee picker, a mention, a filter by
+// person) is cut down to for a contractor account, so being given one folder
+// does not hand over the names of everybody else.
+//
+// principalParam holds the account's id and keysParam its subject keys.
+func ReachablePeople(principalParam, keysParam string) string {
+	return MemberSpaces(principalParam) + `,
+	reachable_people AS (
+	    SELECT ` + principalParam + `::uuid AS id
+	  UNION
+	    SELECT substring(h.subject_key from 11)::uuid
+	      FROM grants h
+	     WHERE h.entity_type = 'space' AND h.subject_key LIKE 'principal:%'
+	       AND (h.expires_at IS NULL OR h.expires_at > now())
+	       AND h.entity_id IN (
+	           SELECT g.entity_id FROM grants g
+	            WHERE g.entity_type = 'space' AND g.subject_key = ANY(` + keysParam + `)
+	              AND (g.expires_at IS NULL OR g.expires_at > now())
+	           UNION
+	           SELECT id FROM member_spaces)
+	)`
+}
