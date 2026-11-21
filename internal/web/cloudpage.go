@@ -36,18 +36,6 @@ type CloudProvider struct{ Key, Label string }
 // CloudDoc is a document that can be chosen to receive a file.
 type CloudDoc struct{ ID, Title string }
 
-func (s *Server) cloudBack(w http.ResponseWriter, r *http.Request, doc, msg string) {
-	if msg != "" && doc != "" {
-		http.Redirect(w, r, "/documents/"+url.PathEscape(doc), http.StatusSeeOther)
-		return
-	}
-	to := "/cloud"
-	if msg != "" {
-		to += "?notice=" + url.QueryEscape(msg)
-	}
-	http.Redirect(w, r, to, http.StatusSeeOther)
-}
-
 func (s *Server) getCloud(w http.ResponseWriter, r *http.Request) {
 	if !s.connectorsOn() {
 		s.fail(w, r, http.StatusNotFound, "the connectors are not set up on this installation")
