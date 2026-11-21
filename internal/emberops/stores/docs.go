@@ -290,7 +290,9 @@ func (s *Docs) Delete(ctx context.Context, orgID string, actor core.Subjects, id
 		// will not delete it (a subtask under it, a timesheet on it), it is
 		// marked deleted instead, as every other kind is.
 		if dt == "Task" || dt == "Hearth Document" {
-			err := s.C.DeleteByHearthID(ctx, dt, id)
+			// As the service account: Hearth has already decided this person may delete it, and
+			// EmberOPS lets a person edit a document or a task but not always delete one.
+			err := s.C.DeleteByHearthID(emberops.WithUser(ctx, nil), dt, id)
 			if err == nil || errors.Is(err, emberops.ErrNotFound) {
 				return nil
 			}

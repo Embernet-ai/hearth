@@ -647,3 +647,21 @@ func TestDeletingATaskOrDocumentRemovesItFromEmberOPS(t *testing.T) {
 		t.Errorf("%d documents still in EmberOPS after the delete", n)
 	}
 }
+
+// Hearth has decided who may delete a document; EmberOPS lets staff edit a Hearth Document but not delete one. The removal is done
+// as the service account, so a person's delete takes the EmberOPS record with it and not only a mark.
+func TestAPersonsDeleteOfADocumentRemovesTheEmberOPSRecordToo(t *testing.T) {
+	e := newEnv(t)
+	s := &stores.Docs{Store: newSpine(), Base: e.base, Dir: e.dir}
+	ctx := e.as("ann-tok")
+	doc, err := s.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindDoc, Title: "Notes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(ctx, org, actor(ann), doc.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.f.All("Hearth Document")); n != 0 {
+		t.Errorf("%d documents left in EmberOPS after a person deleted one", n)
+	}
+}

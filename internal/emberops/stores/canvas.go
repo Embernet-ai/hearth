@@ -6,6 +6,7 @@ import (
 
 	"github.com/Embernet-ai/hearth/internal/canvas"
 	"github.com/Embernet-ai/hearth/internal/core"
+	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/mapping"
 )
 
@@ -133,7 +134,7 @@ func (s *CanvasMirror) Delete(ctx context.Context, orgID string, actor core.Subj
 	if err := s.Store.Delete(ctx, orgID, actor, id); err != nil {
 		return err
 	}
-	if err := s.C.DeleteByHearthID(ctx, "Hearth Document", id); err != nil {
+	if err := s.C.DeleteByHearthID(emberops.WithUser(ctx, nil), "Hearth Document", id); err != nil {
 		s.log().Warn("emberops: could not remove a deleted canvas", "canvas", id, "error", err)
 	}
 	return nil
