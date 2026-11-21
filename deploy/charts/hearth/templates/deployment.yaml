@@ -121,6 +121,22 @@ spec:
                   name: {{ .Values.existingSecret }}
                   key: {{ .Values.secretKeys.googleClientSecret }}
             {{- end }}
+            {{- if .Values.microsoft.enabled }}
+            - name: HEARTH_MICROSOFT_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.microsoftClientID }}
+            - name: HEARTH_MICROSOFT_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.microsoftClientSecret }}
+            {{- end }}
+            {{- if .Values.connectors.interval }}
+            - name: HEARTH_CONNECTORS_INTERVAL
+              value: {{ .Values.connectors.interval | quote }}
+            {{- end }}
             {{- if .Values.mail.inbound.enabled }}
             # The shared secret the mailbox reader presents on /inbound/mail,
             # which is the one endpoint here that a machine talks to rather than
@@ -142,8 +158,23 @@ spec:
             - name: HEARTH_OPENSEARCH_URL
               value: http://{{ include "hearth.opensearch.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:9200
             {{- end }}
+            {{- if .Values.oidc.provider }}
+            - name: HEARTH_OIDC_PROVIDER
+              value: {{ .Values.oidc.provider | quote }}
+            - name: HEARTH_MICROSOFT_TENANT
+              value: {{ .Values.oidc.microsoftTenant | default "" | quote }}
+            - name: HEARTH_MICROSOFT_ALLOWED_TENANTS
+              value: {{ .Values.oidc.microsoftAllowedTenants | default "" | quote }}
+            - name: HEARTH_GOOGLE_HOSTED_DOMAIN
+              value: {{ .Values.oidc.googleHostedDomain | default "" | quote }}
+            {{- else }}
             - name: HEARTH_OIDC_ISSUER
               value: {{ .Values.oidc.issuer | quote }}
+            {{- end }}
+            {{- if .Values.oidc.roleMap }}
+            - name: HEARTH_OIDC_ROLE_MAP
+              value: {{ .Values.oidc.roleMap | quote }}
+            {{- end }}
             - name: HEARTH_OIDC_CLIENT_ID
               value: {{ .Values.oidc.clientId | quote }}
             - name: HEARTH_OIDC_CLIENT_SECRET

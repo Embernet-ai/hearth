@@ -474,6 +474,26 @@
       </div>
       {/if}
 
+      {#if F.t(dot?.CloudOn) || F.t(dot?.CloudLinks)}
+        <h3>Cloud files</h3>
+        {#if F.t(dot?.CloudLinks)}
+          <ul  class="files"  data-cloud-links>
+            {#each dot.CloudLinks as l}
+              <li>
+                <a  href={l.WebURL}  target="_blank"  rel="noopener">{l.Name}</a>
+                <span  class="muted small">{l.Provider === 'google' ? 'Google Drive' : 'OneDrive or SharePoint'}{l.Imported ? ', a copy is attached' : ''}</span>
+                <form  method="post"  action="/cloud/unlink"  class="inline">
+                  <input  type="hidden"  name="link"  value={l.ID}>
+                  <input  type="hidden"  name="doc"  value={dot?.Doc?.ID}>
+                  <button  type="submit"  class="ghost small">Remove link</button>
+                </form>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        {#if F.t(dot?.CloudOn)}<p><a  href={"/cloud?doc=" + S(dot?.Doc?.ID)}>Add from OneDrive, SharePoint or Drive</a></p>{/if}
+      {/if}
+
       <h3>Attachments</h3>
       {#if F.t(dot?.Attachments)}
         

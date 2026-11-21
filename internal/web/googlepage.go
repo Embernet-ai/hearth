@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
+	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/google"
 )
 
@@ -50,6 +51,16 @@ func (s *Server) startGoogle(w http.ResponseWriter, r *http.Request) {
 			scopes = append(scopes, v)
 		}
 	}
+	// The connectors: what an administrator has turned on and the person ticked. The scopes come from the
+	// provider's own list for each, so they are only ever the ones that connector needs.
+	if kinds := r.Form["connector"]; len(kinds) > 0 && s.connect != nil {
+		more, err := s.kindScopes(r, connect.Google, kinds)
+		if err != nil {
+			s.fail(w, r, http.StatusBadRequest, "unknown connector")
+			return
+		}
+		scopes = append(scopes, more...)
+	}
 	if len(scopes) == 0 {
 		s.fail(w, r, http.StatusBadRequest,
 			"choose at least one thing to connect, or there is nothing to grant")
@@ -71,7 +82,7 @@ func (s *Server) startGoogle(w http.ResponseWriter, r *http.Request) {
 		Expires: time.Now().Add(10 * time.Minute),
 	})
 
-	http.Redirect(w, r, s.google.AuthURL(state, scopes), http.StatusFound)
+	http.Redirect(w, r, s.google.AuthURLFor(state, scopes, s.googleDomain(r.Context(), auth.From(r.Context()).OrgID)), http.StatusFound)
 }
 
 // googleCallback finishes the exchange.
@@ -113,9 +124,18 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.google.Connect(r.Context(), id.OrgID, id.PrincipalID, code); err != nil {
+	if _, err := s.google.ConnectIn(r.Context(), id.OrgID, id.PrincipalID, code, s.googleDomain(r.Context(), id.OrgID)); err != nil {
+		if errors.Is(err, connect.ErrWrongTenant) {
+			s.fail(w, r, http.StatusBadRequest, "that Google account is not in the connected Workspace domain")
+			return
+		}
 		s.log.WarnContext(r.Context(), "google connect", "error", err)
 		s.fail(w, r, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "google: "))
+		return
+	}
+	if s.connect != nil {
+		s.firstSync(r, id.OrgID, id.PrincipalID, connect.Google)
+		http.Redirect(w, r, "/settings/connectors", http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/account", http.StatusSeeOther)

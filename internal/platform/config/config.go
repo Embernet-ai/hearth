@@ -152,6 +152,23 @@ type Config struct {
 	// not the same question.
 	OIDCRequiredRoles []string
 
+	// A business identity provider as a preset on the same sign-in: "microsoft" (Entra ID) or "google"
+	// (Workspace). Empty is the generic path. See auth.OIDCConfig.
+	OIDCProvider string
+	// OIDCRoleMap gives a capability for a group or role in the token: claim=capability.
+	OIDCRoleMap map[string]string
+	// MicrosoftTenant is the Entra directory id, or "organizations". MicrosoftAllowedTenants narrows a
+	// multi-tenant sign-in. GoogleHostedDomain is the Workspace domain.
+	MicrosoftTenant         string
+	MicrosoftAllowedTenants []string
+	GoogleHostedDomain      string
+
+	// The Microsoft 365 connectors' Entra app registration, delegated and per person. Empty disables them.
+	MicrosoftClientID     string
+	MicrosoftClientSecret string
+	// ConnectorsEvery is how often the connectors pull. Zero means every ten minutes.
+	ConnectorsEvery time.Duration
+
 	// The assistant connector: people connecting an assistant to Hearth sign in with Vord
 	// (internal/mcpserver). MCPAudience is the audience their access token
 	// must carry -- the Vord client scope "hearth-mcp" -- and empty turns
@@ -359,18 +376,71 @@ func Load() (*Config, error) {
 	cfg.OIDCScopes = splitList(os.Getenv("HEARTH_OIDC_SCOPES"))
 	cfg.OIDCAllowedDomains = splitList(os.Getenv("HEARTH_OIDC_ALLOWED_DOMAINS"))
 	cfg.OIDCRequiredRoles = splitList(os.Getenv("HEARTH_OIDC_REQUIRED_ROLES"))
+	cfg.OIDCProvider = strings.ToLower(strings.TrimSpace(os.Getenv("HEARTH_OIDC_PROVIDER")))
+	cfg.MicrosoftTenant = strings.TrimSpace(os.Getenv("HEARTH_MICROSOFT_TENANT"))
+	cfg.MicrosoftAllowedTenants = splitList(os.Getenv("HEARTH_MICROSOFT_ALLOWED_TENANTS"))
+	cfg.GoogleHostedDomain = strings.ToLower(strings.TrimSpace(os.Getenv("HEARTH_GOOGLE_HOSTED_DOMAIN")))
+	cfg.MicrosoftClientID = strings.TrimSpace(os.Getenv("HEARTH_MICROSOFT_CLIENT_ID"))
+	cfg.MicrosoftClientSecret = os.Getenv("HEARTH_MICROSOFT_CLIENT_SECRET")
+	if v := strings.TrimSpace(os.Getenv("HEARTH_CONNECTORS_INTERVAL")); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Minute {
+			fail("HEARTH_CONNECTORS_INTERVAL must be a duration of at least a minute, like 10m, got %q", v)
+		}
+		cfg.ConnectorsEvery = d
+	}
+	cfg.OIDCRoleMap = map[string]string{}
+	for _, pair := range splitList(os.Getenv("HEARTH_OIDC_ROLE_MAP")) {
+		k, v, ok := strings.Cut(pair, "=")
+		if k, v = strings.TrimSpace(k), strings.TrimSpace(v); !ok || k == "" || v == "" {
+			fail("HEARTH_OIDC_ROLE_MAP entries are claim=capability, got %q", pair)
+			continue
+		}
+		cfg.OIDCRoleMap[k] = v
+	}
+	switch cfg.OIDCProvider {
+	case "":
+	case "microsoft", "google":
+		// One app registration serves the sign-in and the connectors, so a sign-in with no client of its own uses it.
+		id, secret := cfg.MicrosoftClientID, cfg.MicrosoftClientSecret
+		if cfg.OIDCProvider == "google" {
+			id, secret = cfg.GoogleClientID, cfg.GoogleClientSecret
+		}
+		if cfg.OIDCClientID == "" && cfg.OIDCClientSecret == "" {
+			cfg.OIDCClientID, cfg.OIDCClientSecret = id, secret
+		}
+		if cfg.OIDCProvider == "microsoft" && cfg.MicrosoftTenant == "" {
+			fail("HEARTH_OIDC_PROVIDER=microsoft needs HEARTH_MICROSOFT_TENANT, a directory id or \"organizations\"")
+		}
+		if cfg.OIDCProvider == "google" && cfg.GoogleHostedDomain == "" {
+			fail("HEARTH_OIDC_PROVIDER=google needs HEARTH_GOOGLE_HOSTED_DOMAIN, the Workspace domain people sign in from")
+		}
+	default:
+		fail("HEARTH_OIDC_PROVIDER must be microsoft or google, got %q", cfg.OIDCProvider)
+	}
+	if cfg.OIDCProvider != "" && (cfg.OIDCClientID == "" || cfg.OIDCClientSecret == "") {
+		fail("HEARTH_OIDC_PROVIDER=%s needs a client id and secret: HEARTH_%s_CLIENT_ID and HEARTH_%s_CLIENT_SECRET, or HEARTH_OIDC_CLIENT_ID and HEARTH_OIDC_CLIENT_SECRET",
+			cfg.OIDCProvider, strings.ToUpper(cfg.OIDCProvider), strings.ToUpper(cfg.OIDCProvider))
+	}
 
 	// All three together, or none. A PARTIAL configuration is rejected rather
 	// than half-applied: a half-configured provider fails at login time rather
 	// than at startup, and "SSO is set up and every login fails" is a far worse
 	// place to discover a typo than "SSO is not set up".
-	set := 0
+	set, need := 0, 3
 	for _, v := range []string{cfg.OIDCIssuer, cfg.OIDCClientID, cfg.OIDCClientSecret} {
 		if v != "" {
 			set++
 		}
 	}
-	if set > 0 && set < 3 {
+	if cfg.OIDCProvider != "" {
+		// A preset derives the issuer, so the client id and secret are the two that have to come together.
+		need = 2
+		if cfg.OIDCIssuer != "" {
+			set--
+		}
+	}
+	if set > 0 && set < need {
 		fail("HEARTH_OIDC_ISSUER, HEARTH_OIDC_CLIENT_ID and HEARTH_OIDC_CLIENT_SECRET " +
 			"must all be set together, or none of them")
 	}
@@ -518,7 +588,7 @@ func (c *Config) SearchClusterEnabled() bool { return c.OpenSearchURL != "" }
 
 // SSOEnabled reports whether single sign-on is configured.
 func (c *Config) SSOEnabled() bool {
-	return c.OIDCIssuer != "" && c.OIDCClientID != "" && c.OIDCClientSecret != ""
+	return (c.OIDCIssuer != "" || c.OIDCProvider != "") && c.OIDCClientID != "" && c.OIDCClientSecret != ""
 }
 
 // splitList parses a comma separated setting, ignoring blanks and spacing.

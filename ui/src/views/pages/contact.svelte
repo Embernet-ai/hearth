@@ -108,6 +108,20 @@
     <button  type="submit">Attach</button>
   </form>
 
+  {#if F.t(dot?.LinkedMail)}
+    <h3>Mail</h3>
+    <p  class="muted small">Messages from your own mailbox that name this person. Only you see these.</p>
+    <ul  class="list"  data-linked-mail>
+      {#each dot.LinkedMail as m}
+        <li>
+          <a  href={m.WebLink}  target="_blank"  rel="noopener">{m.Subject || '(no subject)'}</a>
+          <span  class="muted small">{m.From} · {F.date(m.Received)}</span>
+          {#if m.Snippet}<div  class="muted small">{m.Snippet}</div>{/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+
   <h3>Calls</h3>
   {#if F.t(dot?.Calls)}
     <ul  class="files"  data-calls>

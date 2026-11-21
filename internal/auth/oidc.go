@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -55,6 +57,82 @@ type OIDCConfig struct {
 	// roles in realm_access.roles and groups in a groups claim; Entra uses
 	// roles. All are accepted, any one match is enough.
 	RequiredRoles []string
+
+	// Provider selects a preset for a business identity provider: "microsoft" (Entra ID) or "google" (Workspace).
+	// Empty is the generic path above, unchanged. A preset does not add a second sign-in: it fills in the issuer,
+	// adds the checks that provider needs and the claims it puts things in, and everything after that is this code.
+	Provider string
+
+	// Tenant is Entra's directory id, or "organizations" to accept work accounts from any tenant (with
+	// AllowedTenants naming which). Microsoft only; with it set, Issuer is derived and need not be given.
+	Tenant string
+	// AllowedTenants limits a multi-tenant sign-in to these directory ids. Empty with Tenant "organizations"
+	// accepts any work or school account, which is logged loudly at startup.
+	AllowedTenants []string
+
+	// HostedDomain is the Workspace domain every Google account must belong to. Checked against the id token's hd
+	// claim, which Google sets only for a Workspace account: a request parameter restricts nothing, a claim in a
+	// signed token does. Google only, and required for it.
+	HostedDomain string
+
+	// RoleMap gives a capability to anybody whose token carries a group or role, and takes it back at the next
+	// sign-in when they no longer do: claim value to capability name (people, agents, audit, finance, time_all).
+	// Never super_admin, and never applied to the person who claimed the installation.
+	RoleMap map[string]string
+
+	// graphBase and authorityBase are overridden by the tests.
+	graphBase     string
+	authorityBase string
+}
+
+// authority is Entra's sign-in host.
+func (c OIDCConfig) authority() string {
+	if c.authorityBase != "" {
+		return c.authorityBase
+	}
+	return entraBase
+}
+
+// Microsoft and Google issuers.
+const (
+	entraBase    = "https://login.microsoftonline.com"
+	googleIssuer = "https://accounts.google.com"
+)
+
+// multiTenant reports a Microsoft sign-in that is not pinned to one directory.
+func (c OIDCConfig) multiTenant() bool {
+	t := strings.ToLower(c.Tenant)
+	return c.Provider == "microsoft" && (t == "organizations" || t == "common")
+}
+
+// Resolve fills in what a preset implies. It is called once, before Enabled, so a preset needs only a client id and
+// secret and the one fact about the organisation.
+func (c OIDCConfig) Resolve() (OIDCConfig, error) {
+	switch c.Provider {
+	case "":
+		return c, nil
+	case "microsoft":
+		if c.Tenant == "" {
+			return c, errors.New("auth: the Microsoft preset needs HEARTH_MICROSOFT_TENANT, a directory id or \"organizations\"")
+		}
+		if c.Issuer == "" {
+			c.Issuer = c.authority() + "/" + strings.ToLower(c.Tenant) + "/v2.0"
+		}
+		if len(c.Scopes) == 0 {
+			// User.Read lets Hearth ask Microsoft for a person's groups when there are too many to fit in the token.
+			c.Scopes = []string{oidc.ScopeOpenID, "profile", "email", "User.Read"}
+		}
+	case "google":
+		if c.HostedDomain == "" {
+			return c, errors.New("auth: the Google preset needs HEARTH_GOOGLE_HOSTED_DOMAIN, the Workspace domain people sign in from")
+		}
+		if c.Issuer == "" {
+			c.Issuer = googleIssuer
+		}
+	default:
+		return c, fmt.Errorf("auth: HEARTH_OIDC_PROVIDER %q is not microsoft or google", c.Provider)
+	}
+	return c, nil
 }
 
 // Enabled reports whether SSO is configured.
@@ -86,13 +164,23 @@ type OIDC struct {
 // Discovery happens at startup so a wrong issuer fails there, loudly, rather
 // than on the first person's first login attempt.
 func NewOIDC(ctx context.Context, svc *Service, cfg OIDCConfig, secure bool) (*OIDC, error) {
+	cfg, err := cfg.Resolve()
+	if err != nil {
+		return nil, err
+	}
 	if !cfg.Enabled() {
 		return nil, errors.New("auth: OIDC is not fully configured")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	provider, err := oidc.NewProvider(ctx, strings.TrimSuffix(cfg.Issuer, "/"))
+	// A multi-tenant Entra authority publishes a templated issuer ({tenantid}), which the discovery check refuses
+	// unless told it is expected. Each token's own issuer is then checked by hand against its tid claim.
+	discoverCtx := ctx
+	if cfg.multiTenant() {
+		discoverCtx = oidc.InsecureIssuerURLContext(ctx, cfg.authority()+"/{tenantid}/v2.0")
+	}
+	provider, err := oidc.NewProvider(discoverCtx, strings.TrimSuffix(cfg.Issuer, "/"))
 	if err != nil {
 		return nil, fmt.Errorf("auth: OIDC discovery against %s: %w", cfg.Issuer, err)
 	}
@@ -114,7 +202,7 @@ func NewOIDC(ctx context.Context, svc *Service, cfg OIDCConfig, secure bool) (*O
 			Endpoint:     provider.Endpoint(),
 			Scopes:       scopes,
 		},
-		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
+		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.ClientID, SkipIssuerCheck: cfg.multiTenant()}),
 	}, nil
 }
 
@@ -145,10 +233,12 @@ func (o *OIDC) Start(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(stateTTL),
 	})
 
-	http.Redirect(w, r, o.oauth.AuthCodeURL(state,
-		oidc.Nonce(nonce),
-		oauth2.S256ChallengeOption(verifier),
-	), http.StatusFound)
+	opts := []oauth2.AuthCodeOption{oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)}
+	if o.cfg.Provider == "google" {
+		// Narrows Google's account chooser to the domain. A hint for the person; the claim is checked on return.
+		opts = append(opts, oauth2.SetAuthURLParam("hd", o.cfg.HostedDomain))
+	}
+	http.Redirect(w, r, o.oauth.AuthCodeURL(state, opts...), http.StatusFound)
 }
 
 // Callback completes the flow and starts a session.
@@ -218,6 +308,16 @@ func (o *OIDC) Callback(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		} `json:"resource_access"`
 		Groups []string `json:"groups"`
 		Roles  []string `json:"roles"`
+
+		// Entra: the directory the account signed in from, the username Entra always sends (email is optional
+		// there), and the marker that says the group list was too long to fit and has to be asked for.
+		TenantID   string `json:"tid"`
+		Username   string `json:"preferred_username"`
+		ClaimNames struct {
+			Groups string `json:"groups"`
+		} `json:"_claim_names"`
+		// Google: the Workspace domain, set only for a Workspace account.
+		HostedDomain string `json:"hd"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		return fmt.Errorf("auth: read claims: %w", err)
@@ -232,17 +332,40 @@ func (o *OIDC) Callback(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	email := strings.ToLower(strings.TrimSpace(claims.Email))
+	if email == "" && o.cfg.Provider == "microsoft" {
+		email = strings.ToLower(strings.TrimSpace(claims.Username))
+	}
+	if err := o.checkProvider(idToken.Issuer, claims.TenantID, claims.HostedDomain, claims.Verified); err != nil {
+		return err
+	}
 	if err := o.checkDomain(email); err != nil {
 		return err
 	}
 
-	if err := o.checkRoles(claims.RealmAccess.Roles, claims.ResourceAccess, claims.Groups, claims.Roles); err != nil {
+	groups := claims.Groups
+	if claims.ClaimNames.Groups != "" && o.cfg.Provider == "microsoft" {
+		more, err := o.overageGroups(ctx, token)
+		if err != nil {
+			// A required role or a mapping cannot be judged without the list, so this fails the sign-in rather than
+			// quietly treating a person with many groups as having none.
+			return err
+		}
+		groups = append(groups, more...)
+	}
+
+	if err := o.checkRoles(claims.RealmAccess.Roles, claims.ResourceAccess, groups, claims.Roles); err != nil {
 		return err
 	}
 
 	principalID, orgID, err := o.link(ctx, idToken.Issuer, subject, email, claims.Name)
 	if err != nil {
 		return err
+	}
+	if len(o.cfg.RoleMap) > 0 {
+		held := heldValues(claims.RealmAccess.Roles, claims.ResourceAccess, groups, claims.Roles)
+		if err := o.svc.ApplyIdPRoles(ctx, orgID, principalID, wantedCapabilities(o.cfg.RoleMap, held)); err != nil {
+			return err
+		}
 	}
 	if o.OnSignIn != nil {
 		o.OnSignIn(ctx, orgID, principalID)
@@ -389,25 +512,7 @@ func (o *OIDC) checkRoles(realm []string, resource map[string]struct {
 		return nil
 	}
 
-	held := make(map[string]bool)
-	add := func(vs []string) {
-		for _, v := range vs {
-			v = strings.TrimSpace(v)
-			if v == "" {
-				continue
-			}
-			held[strings.ToLower(v)] = true
-			if i := strings.LastIndex(v, "/"); i >= 0 && i+1 < len(v) {
-				held[strings.ToLower(v[i+1:])] = true
-			}
-		}
-	}
-	add(realm)
-	add(groups)
-	add(roles)
-	for _, r := range resource {
-		add(r.Roles)
-	}
+	held := heldValues(realm, resource, groups, roles)
 
 	for _, want := range o.cfg.RequiredRoles {
 		if held[strings.ToLower(strings.TrimSpace(want))] {
@@ -494,4 +599,115 @@ func (s *Service) ResolveByEmail(ctx context.Context, issuer, email string) (pri
 		return "", "", "", ErrNotBound
 	}
 	return principalID, orgID, name, nil
+}
+
+// heldValues gathers every place a provider might have put a role or group into one lowercase set, with a group
+// path also matched on its last segment.
+func heldValues(realm []string, resource map[string]struct {
+	Roles []string `json:"roles"`
+}, groups, roles []string) map[string]bool {
+	held := make(map[string]bool)
+	add := func(vs []string) {
+		for _, v := range vs {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			held[strings.ToLower(v)] = true
+			if i := strings.LastIndex(v, "/"); i >= 0 && i+1 < len(v) {
+				held[strings.ToLower(v[i+1:])] = true
+			}
+		}
+	}
+	add(realm)
+	add(groups)
+	add(roles)
+	for _, r := range resource {
+		add(r.Roles)
+	}
+	return held
+}
+
+// wantedCapabilities is the set of capabilities the role map gives to somebody holding these values.
+func wantedCapabilities(m map[string]string, held map[string]bool) []string {
+	seen := map[string]bool{}
+	var out []string
+	for claim, capability := range m {
+		if held[strings.ToLower(strings.TrimSpace(claim))] && !seen[capability] {
+			seen[capability] = true
+			out = append(out, capability)
+		}
+	}
+	return out
+}
+
+// checkProvider enforces what a business preset adds to the generic checks.
+func (o *OIDC) checkProvider(issuer, tid, hd string, verified *bool) error {
+	switch o.cfg.Provider {
+	case "microsoft":
+		if tid == "" {
+			return errors.New("auth: the token carries no tenant")
+		}
+		// The issuer is checked by hand for a multi-tenant sign-in, against the tenant the token says it came from.
+		if want := o.cfg.authority() + "/" + tid + "/v2.0"; issuer != want {
+			return errors.New("auth: the token's issuer does not match its tenant")
+		}
+		if o.cfg.multiTenant() {
+			if len(o.cfg.AllowedTenants) > 0 && !containsFold(o.cfg.AllowedTenants, tid) {
+				return errors.New("auth: this account is not permitted to sign in")
+			}
+		} else if !strings.EqualFold(tid, o.cfg.Tenant) {
+			return errors.New("auth: this account is not permitted to sign in")
+		}
+	case "google":
+		if verified != nil && !*verified {
+			return errors.New("auth: the identity provider has not verified that address")
+		}
+		if !strings.EqualFold(hd, o.cfg.HostedDomain) {
+			// Vague to the person, specific in the log, like the other refusals. A personal Gmail account has no hd.
+			return errors.New("auth: this account is not permitted to sign in")
+		}
+	}
+	return nil
+}
+
+func containsFold(list []string, v string) bool {
+	for _, x := range list {
+		if strings.EqualFold(strings.TrimSpace(x), v) {
+			return true
+		}
+	}
+	return false
+}
+
+// overageGroups asks Microsoft Graph for a person's groups when the token could not carry them: an account in
+// more than 200 groups gets a pointer instead of a list. Done as the person, with the access token this sign-in
+// just produced.
+func (o *OIDC) overageGroups(ctx context.Context, token *oauth2.Token) ([]string, error) {
+	base := o.cfg.graphBase
+	if base == "" {
+		base = "https://graph.microsoft.com/v1.0"
+	}
+	body := strings.NewReader(`{"securityEnabledOnly":true}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/me/getMemberObjects", body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("auth: ask Microsoft for the account's groups: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("auth: Microsoft would not list the account's groups (%d)", resp.StatusCode)
+	}
+	var out struct {
+		Value []string `json:"value"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("auth: read the account's groups: %w", err)
+	}
+	return out.Value, nil
 }

@@ -210,6 +210,12 @@ func (s *Server) getContact(w http.ResponseWriter, r *http.Request) {
 		Companies: companies, Assignable: assignable,
 		Calls: history, CallOutcomes: calls.Outcomes,
 	}
+	if s.connect != nil {
+		// Messages from this person's own mailbox that name this contact. Only they see them.
+		if lm, err := s.connect.MailFor(r.Context(), id.OrgID, id.PrincipalID, contactID, 25); err == nil {
+			pg.LinkedMail = lm
+		}
+	}
 	s.salesFor(r, c.Ref(), &pg)
 	s.render(w, r, "contact", pg)
 }

@@ -8,5 +8,5 @@ package web
 import "net/http"
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "settings", page{Title: "Settings"})
+	s.render(w, r, "settings", page{Title: "Settings", ConnectorsOn: s.connect != nil})
 }

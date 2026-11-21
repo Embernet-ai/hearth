@@ -1,0 +1,9 @@
+{
+  "value": [
+    {"id": "AAMkCON1", "changeKey": "ck1", "displayName": "Priya Shah", "givenName": "Priya", "surname": "Shah",
+     "jobTitle": "Buyer", "companyName": "Acme", "mobilePhone": "+1 555 0100", "businessPhones": ["+1 555 0111"],
+     "emailAddresses": [{"name": "Priya Shah", "address": "priya@acme.test"}]},
+    {"id": "AAMkCON2", "changeKey": "ck2", "displayName": "", "givenName": "Marcus", "surname": "Lee",
+     "businessPhones": ["+1 555 0122"], "emailAddresses": []}
+  ]
+}
