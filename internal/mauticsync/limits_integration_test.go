@@ -52,12 +52,26 @@ func (l limited) UpsertCompany(ctx context.Context, id int64, fl mautic.Fields) 
 	if v, _ := fl["companystate"].(string); v != "" && v != "Ohio" {
 		return 0, &mautic.APIError{Status: 400, Method: "POST", Path: "/companies/new", Body: `{"errors":[{"code":400,"message":"companystate: The selected choice is invalid."}]}`}
 	}
-	if id == 0 {
-		if found, _ := l.fake.FindCompany(ctx, fl["companyname"].(string)); found != 0 {
-			return 0, &mautic.APIError{Status: 400, Method: "POST", Path: "/companies/new", Body: `{"errors":[{"code":400,"message":"companyname: This field must be unique."}]}`}
+	if name, ok := fl["companyname"].(string); ok && l.nameHeldByAnother(id, name) {
+		// Mautic checks a name against every other company, so where it holds the same name twice, an edit that repeats it is refused.
+		code := 400
+		if id != 0 {
+			code = 422
 		}
+		return 0, &mautic.APIError{Status: code, Method: "POST", Path: "/companies/new", Body: `{"errors":[{"code":422,"message":"companyname: This field must be unique."}]}`}
 	}
 	return l.fake.UpsertCompany(ctx, id, fl)
+}
+
+func (l limited) nameHeldByAnother(id int64, name string) bool {
+	l.fake.mu.Lock()
+	defer l.fake.mu.Unlock()
+	for other, c := range l.fake.companies {
+		if n, _ := c["companyname"].(string); other != id && strings.EqualFold(n, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFieldLimitsComeFromMauticAndATakenCompanyNameIsAdopted(t *testing.T) {
@@ -100,6 +114,7 @@ func TestFieldLimitsComeFromMauticAndATakenCompanyNameIsAdopted(t *testing.T) {
 
 	f := newFake()
 	f.companies[7] = mautic.Fields{"companyname": "already in mautic"} // somebody made it in Mautic by hand
+	f.companies[8] = mautic.Fields{"companyname": "Already In Mautic"} // and Mautic made a second one from a contact's company text
 	text := func(n int) mautic.FieldDef { return mautic.FieldDef{Type: "text", Limit: n} }
 	m := limited{fake: f, defs: map[string]map[string]mautic.FieldDef{
 		"contact": {"position": text(64), "firstname": text(64), "lastname": text(64), "company": text(64), "email": {Type: "email", Limit: 64}, "hearth_id": text(64)},
@@ -122,14 +137,14 @@ func TestFieldLimitsComeFromMauticAndATakenCompanyNameIsAdopted(t *testing.T) {
 	if len(f.contacts) != 3 {
 		t.Errorf("Mautic got %d contacts, want 3 (the long address is skipped)", len(f.contacts))
 	}
-	if len(f.companies) != 2 {
-		t.Errorf("Mautic has %d companies, want 2: the one it had and Plain Co", len(f.companies))
-	}
-	if got, _ := f.companies[7]["hearth_company_id"].(string); got != taken {
-		t.Errorf("the Mautic company that already had the name did not take the Hearth id: %q", got)
+	if len(f.companies) != 3 {
+		t.Errorf("Mautic has %d companies, want 3: the two it had and Plain Co", len(f.companies))
 	}
 	var mid int64
-	if err := pools.Web.QueryRow(ctx, `SELECT mautic_id FROM mautic_company_links WHERE company_id=$1`, taken).Scan(&mid); err != nil || mid != 7 {
-		t.Errorf("Hearth's company is linked to Mautic company %d (%v), want 7", mid, err)
+	if err := pools.Web.QueryRow(ctx, `SELECT mautic_id FROM mautic_company_links WHERE company_id=$1`, taken).Scan(&mid); err != nil || (mid != 7 && mid != 8) {
+		t.Fatalf("Hearth's company is linked to Mautic company %d (%v), want 7 or 8", mid, err)
+	}
+	if got, _ := f.companies[mid]["hearth_company_id"].(string); got != taken {
+		t.Errorf("the Mautic company that already had the name did not take the Hearth id: %q", got)
 	}
 }

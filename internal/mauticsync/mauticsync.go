@@ -569,8 +569,11 @@ func (s *Syncer) pushOne(ctx context.Context, c contact, l *link, types [][2]str
 	sort.Strings(keys)
 
 	first, last := splitName(c.Name)
+	// The company is linked by id (LinkCompany, below) and never sent as text. Mautic makes a company out of a contact's company
+	// text when it holds none of that name, and contacts sent at once each make their own, so the same name ended up on several
+	// companies. Linked by id, a contact joins the one company this sync made or adopted.
 	f := mautic.Fields{"firstname": first, "lastname": last, "email": strings.TrimSpace(c.Email), "phone": c.Phone,
-		"position": c.Title, "company": c.CompanyName, contactIDField: c.ID}
+		"position": c.Title, contactIDField: c.ID}
 	if why := s.fit(ctx, "contact", f); why != "" {
 		s.rep.add("skip", "contact", c.ID, c.Name, why)
 		return
@@ -877,6 +880,13 @@ func (s *Syncer) upsertCompany(ctx context.Context, mid int64, f mautic.Fields) 
 				return 0, err
 			}
 			mid = found
+			// The name is already that company's own, so it is not sent again: Mautic checks a name for uniqueness against every
+			// other company, and where it holds the same name twice (it makes one for a contact's company text) an edit that
+			// repeats the name is refused however it is spelled.
+			delete(f, "companyname")
+			nid, err = s.mc.UpsertCompany(ctx, mid, f)
+		case mid != 0 && nameTaken(err) && f["companyname"] != nil:
+			delete(f, "companyname")
 			nid, err = s.mc.UpsertCompany(ctx, mid, f)
 		default:
 			return nid, err
