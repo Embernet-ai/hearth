@@ -151,7 +151,8 @@ main[data-screen='channels'] .chnew h3 { margin: 0 0 var(--s-3); }
   main[data-screen='channels'] .chnew { position: sticky; top: calc(3.25rem + var(--s-4)); }
   /* the table becomes a card for each channel: its name, topic, size, what it grants, what is unread, and the one button */
   main[data-screen='channels'] table.list, main[data-screen='channels'] table.list > tbody { display: block; width: 100%; }
-  main[data-screen='channels'] table.list > thead { display: none; }
+  /* the header row folds into each card as a label above its field; it stays in the page, out of sight, for screen readers */
+  main[data-screen='channels'] table.list > thead { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   main[data-screen='channels'] table.list > tbody { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr)); gap: var(--s-3); }
   main[data-screen='channels'] table.list > tbody > tr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-4); padding: var(--s-3) var(--s-4); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
   main[data-screen='channels'] table.list > tbody > tr:hover { background: var(--panel); border-color: var(--edge); }
@@ -162,8 +163,25 @@ main[data-screen='channels'] .chnew h3 { margin: 0 0 var(--s-3); }
   main[data-screen='channels'] table.list > tbody > tr > td:nth-child(3) { order: 4; flex: 0 0 auto; }
   main[data-screen='channels'] table.list > tbody > tr > td:nth-child(4) { order: 5; flex: 0 0 auto; }
   main[data-screen='channels'] table.list > tbody > tr > td:nth-child(6) { order: 6; flex: 0 0 auto; margin-left: auto; }
-  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(3)::before, main[data-screen='channels'] table.list > tbody > tr > td:nth-child(4)::before { content: attr(data-label) ' '; color: var(--muted); font-size: var(--t-xs); }
-  main[data-screen='channels'] table.list > tbody > tr > td:empty { display: none; }
+  /* a label above every field of the card, the same words as the column heads */
+  main[data-screen='channels'] table.list > tbody > tr > td::before { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--t-2xs); font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.3; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(1)::before { content: 'Channel'; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(2)::before { content: 'Topic'; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(3)::before { content: 'People'; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(4)::before { content: 'Grants'; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(5)::before { content: 'Unread'; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(6)::before { content: none; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(6) { align-self: end; }
+}
+
+/* a channel with nothing unread says 0 where the card has room for its Unread label; a phone's stacked row leaves it out, as it always did */
+main[data-screen='channels'] .nounread { display: none; }
+@media (min-width: 1100px) { main[data-screen='channels'] .nounread { display: inline; } }
+
+@media (max-width: 40rem) {
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(5):not(:has(> .unread)) { display: none; }
+  /* the phone's stacked card names every field too: the first one, which the app's own phone rule leaves bare, says Channel */
+  main[data-screen='channels'] table.list > tbody > tr > td:first-child::before { content: 'Channel'; display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--t-2xs); font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; }
 }
 
 /* ---- Contacts ------------------------------------------------------------------------------------------------------------------------- */

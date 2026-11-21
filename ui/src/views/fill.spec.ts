@@ -47,6 +47,9 @@ describe('screens that fill the width keep everything', () => {
     expect(d.querySelectorAll('form[action$="/join"]').length).toBe(1);
     expect(d.querySelector('form[action="/channels"] input[name="name"]')).not.toBeNull();
     expect(d.querySelector('form[action="/channels"] select[name="visibility"]')).not.toBeNull();
+    // the five headings stay on the page for every width; that they are drawn in words at 1280, 1440, 1920, 2560 and 390 is ui/layout/fill.mjs
+    expect([...d.querySelectorAll('thead th')].map((t) => t.textContent?.trim())).toEqual(['Channel', 'Topic', 'People', 'Grants', 'Unread', '']);
+    expect([...d.querySelectorAll('tbody tr')].every((r) => r.children.length === 6)).toBe(true); // every field is there, so every one gets its label
   });
   test('contacts: the old columns, the new ones, the add form', () => {
     const d = draw('contacts', fixture('contacts-full'));
