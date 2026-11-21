@@ -92,38 +92,10 @@ func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
 		return err
 	}
 	z := mapping.TZ{Loc: s.Loc}
-	mails := func(ids []string) []string {
-		var out []string
-		for _, id := range ids {
-			if e := emails[id]; e != "" {
-				out = append(out, e)
-			}
-		}
-		sort.Strings(out)
-		return out
-	}
 	items := make([]emberops.BulkItem, 0, len(spaces))
 	want := map[string]bool{}
 	for _, sp := range spaces {
-		rec := mapping.Rec{"id": sp.ID, "name": sp.Name, "kind": sp.Kind, "position": float64(sp.Position)}
-		if sp.ParentID != nil {
-			rec["parent_id"] = *sp.ParentID
-		}
-		var grants []mapping.Rec
-		for _, g := range sp.Grants {
-			gr := mapping.Rec{"kind": string(g.Kind), "level": string(g.Level), "team_id": g.SubjectID}
-			if g.Kind == core.SubjectPrincipal {
-				gr["email"] = emails[g.SubjectID]
-			}
-			if g.ExpiresAt != nil {
-				gr["expires_at"] = g.ExpiresAt.UTC().Format(time.RFC3339)
-			}
-			grants = append(grants, gr)
-		}
-		doc := z.SpaceAccessDoc(rec, mails(sp.Managers), mails(sp.Members), grants, sp.ParentID == nil)
-		delete(doc, "doctype")
-		delete(doc, "hearth_id")
-		items = append(items, emberops.BulkItem{Doctype: "Hearth Space", HearthID: sp.ID, Values: doc})
+		items = append(items, spaceItem(sp, emails, z))
 		want[strings.ToLower(sp.ID)] = true
 	}
 	sum := sha256.New()
@@ -191,6 +163,121 @@ func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
 	return nil
 }
 
+// spaceItem is one space as EmberOPS holds it: its place in the tree, its managers and members, and its grants.
+func spaceItem(sp *plant.SpaceAccess, emails map[string]string, z mapping.TZ) emberops.BulkItem {
+	mails := func(ids []string) []string {
+		var out []string
+		for _, id := range ids {
+			if e := emails[id]; e != "" {
+				out = append(out, e)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	rec := mapping.Rec{"id": sp.ID, "name": sp.Name, "kind": sp.Kind, "position": float64(sp.Position)}
+	if sp.ParentID != nil {
+		rec["parent_id"] = *sp.ParentID
+	}
+	var grants []mapping.Rec
+	for _, g := range sp.Grants {
+		gr := mapping.Rec{"kind": string(g.Kind), "level": string(g.Level), "team_id": g.SubjectID}
+		if g.Kind == core.SubjectPrincipal {
+			gr["email"] = emails[g.SubjectID]
+		}
+		if g.ExpiresAt != nil {
+			gr["expires_at"] = g.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+		grants = append(grants, gr)
+	}
+	doc := z.SpaceAccessDoc(rec, mails(sp.Managers), mails(sp.Members), grants, sp.ParentID == nil)
+	delete(doc, "doctype")
+	delete(doc, "hearth_id")
+	return emberops.BulkItem{Doctype: "Hearth Space", HearthID: sp.ID, Values: doc}
+}
+
+// SpaceOneSource is a source that can read one space, which is all a single create, rename or removal needs to send.
+// *plant.Service provides it; a source without it falls back to the whole copy.
+type SpaceOneSource interface {
+	SpaceAccessOne(ctx context.Context, orgID, id string) (*plant.SpaceAccess, error)
+}
+
+// SyncOne copies one space into EmberOPS, as the service account, and sends nothing else. A folder made, renamed or moved used
+// to send every folder again, about ten seconds with 171 of them in the request. The whole copy is the scheduled job's.
+func (s *SpaceSync) SyncOne(ctx context.Context, orgID, id string) error {
+	ctx = emberops.WithUser(ctx, nil)
+	one, ok := s.Source.(SpaceOneSource)
+	if !ok {
+		return s.Sync(ctx, orgID)
+	}
+	if s.Real != nil {
+		real, err := s.Real(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		if !real {
+			return nil
+		}
+	}
+	sp, err := one.SpaceAccessOne(ctx, orgID, id)
+	if err != nil {
+		return err
+	}
+	if sp == nil {
+		return nil
+	}
+	emails, err := s.Dir.Emails(ctx)
+	if err != nil {
+		return err
+	}
+	res, err := s.C.BulkUpsert(ctx, []emberops.BulkItem{spaceItem(sp, emails, mapping.TZ{Loc: s.Loc})})
+	if err != nil {
+		return err
+	}
+	if len(res.Failed) > 0 {
+		return fmt.Errorf("emberops: space %s refused: %s", res.Failed[0].HearthID, res.Failed[0].Error)
+	}
+	return nil
+}
+
+// RemoveOne takes one deleted space out of EmberOPS, as the service account, and touches no other. Work Hearth deleted that
+// EmberOPS still links to it goes first (EmberOPS will not delete a space something links); a space that still will not go
+// is marked to be tried again on the next full copy and the error returned.
+func (s *SpaceSync) RemoveOne(ctx context.Context, orgID, id string) error {
+	svc := emberops.WithUser(ctx, nil)
+	if s.Real != nil {
+		real, err := s.Real(svc, orgID)
+		if err != nil {
+			return err
+		}
+		if !real {
+			return nil
+		}
+	}
+	name, err := s.C.Resolve(svc, "Hearth Space", id)
+	if err != nil && !errors.Is(err, emberops.ErrNotFound) {
+		return err
+	}
+	if name == "" {
+		return nil
+	}
+	err = s.C.Delete(svc, "Hearth Space", name)
+	if err != nil && !errors.Is(err, emberops.ErrNotFound) && strings.Contains(err.Error(), "LinkExistsError") {
+		s.removeDeletedWorkIn(svc, name)
+		err = s.C.Delete(svc, "Hearth Space", name)
+	}
+	if err != nil && !errors.Is(err, emberops.ErrNotFound) {
+		s.mu.Lock()
+		if s.retry == nil {
+			s.retry = map[string]bool{}
+		}
+		s.retry[orgID] = true
+		s.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
 // Kick asks for a background Sync of the org shortly (debounced: a burst of
 // edits is one copy). It never blocks and never fails the request that caused
 // it; the timer catches whatever it misses.
@@ -247,13 +334,21 @@ var failureFields = []string{"name", "hearth_id", "asset", "downtime_start", "do
 
 // ---- spaces: Hearth decides, EmberOPS keeps a copy ----
 
-func (s *Plant) sync(ctx context.Context, orgID string) {
+// syncOne copies just this space into EmberOPS. If that fails the change is still made in Hearth, and the background copy
+// (the whole set, which is not in any request) catches up.
+func (s *Plant) syncOne(ctx context.Context, orgID, id string) {
 	if s.Spaces == nil {
 		return
 	}
-	if err := s.Spaces.Sync(ctx, orgID); err != nil {
-		// The change is made in Hearth; EmberOPS catches up on the next sync.
-		slog.Default().Warn("emberops: space sync failed", "org", orgID, "error", err)
+	if err := s.Spaces.SyncOne(ctx, orgID, id); err != nil {
+		slog.Default().Warn("emberops: space copy failed", "org", orgID, "space", id, "error", err)
+		s.Spaces.Kick(orgID)
+	}
+}
+
+// syncSoon asks for the whole copy in the background, for the changes that touch many spaces at once.
+func (s *Plant) syncSoon(orgID string) {
+	if s.Spaces != nil {
 		s.Spaces.Kick(orgID)
 	}
 }
@@ -261,7 +356,7 @@ func (s *Plant) sync(ctx context.Context, orgID string) {
 func (s *Plant) CreateSpace(ctx context.Context, orgID string, actor core.Subjects, name, kind string, parentID *string) (*plant.Space, error) {
 	sp, err := s.Store.CreateSpace(ctx, orgID, actor, name, kind, parentID)
 	if err == nil {
-		s.sync(ctx, orgID)
+		s.syncOne(ctx, orgID, sp.ID)
 	}
 	return sp, err
 }
@@ -269,23 +364,28 @@ func (s *Plant) CreateSpace(ctx context.Context, orgID string, actor core.Subjec
 func (s *Plant) RenameSpace(ctx context.Context, orgID string, actor core.Subjects, id, name string) error {
 	err := s.Store.RenameSpace(ctx, orgID, actor, id, name)
 	if err == nil {
-		s.sync(ctx, orgID)
+		s.syncOne(ctx, orgID, id)
 	}
 	return err
 }
 
+// MoveSpace copies the moved space at once and the rest in the background: moving it changes who reaches everything under it.
 func (s *Plant) MoveSpace(ctx context.Context, orgID string, actor core.Subjects, id string, parentID *string) error {
 	err := s.Store.MoveSpace(ctx, orgID, actor, id, parentID)
 	if err == nil {
-		s.sync(ctx, orgID)
+		s.syncOne(ctx, orgID, id)
+		s.syncSoon(orgID)
 	}
 	return err
 }
 
 func (s *Plant) DeleteSpace(ctx context.Context, orgID string, actor core.Subjects, id string) error {
 	err := s.Store.DeleteSpace(ctx, orgID, actor, id)
-	if err == nil {
-		s.sync(ctx, orgID)
+	if err == nil && s.Spaces != nil {
+		if rerr := s.Spaces.RemoveOne(ctx, orgID, id); rerr != nil {
+			slog.Default().Warn("emberops: could not remove a deleted space", "org", orgID, "space", id, "error", rerr)
+			s.Spaces.Kick(orgID)
+		}
 	}
 	return err
 }
@@ -293,7 +393,7 @@ func (s *Plant) DeleteSpace(ctx context.Context, orgID string, actor core.Subjec
 func (s *Plant) ReorderSpaces(ctx context.Context, orgID string, actor core.Subjects, parentID string, ids []string) error {
 	err := s.Store.ReorderSpaces(ctx, orgID, actor, parentID, ids)
 	if err == nil {
-		s.sync(ctx, orgID)
+		s.syncSoon(orgID)
 	}
 	return err
 }
@@ -301,7 +401,7 @@ func (s *Plant) ReorderSpaces(ctx context.Context, orgID string, actor core.Subj
 func (s *Plant) SaveSpaceOrder(ctx context.Context, orgID string, actor core.Subjects, ids []string) error {
 	err := s.Store.SaveSpaceOrder(ctx, orgID, actor, ids)
 	if err == nil {
-		s.sync(ctx, orgID)
+		s.syncSoon(orgID)
 	}
 	return err
 }

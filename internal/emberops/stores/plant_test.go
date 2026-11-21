@@ -44,6 +44,22 @@ func (p *pgPlant) DeleteSpace(_ context.Context, _ string, _ core.Subjects, id s
 func (p *pgPlant) SpaceAccessAll(context.Context, string) ([]*plant.SpaceAccess, error) {
 	return p.spaces, nil
 }
+func (p *pgPlant) SpaceAccessOne(_ context.Context, _, id string) (*plant.SpaceAccess, error) {
+	for _, s := range p.spaces {
+		if s.ID == id {
+			return s, nil
+		}
+	}
+	return nil, nil
+}
+func (p *pgPlant) RenameSpace(_ context.Context, _ string, _ core.Subjects, id, name string) error {
+	for _, s := range p.spaces {
+		if s.ID == id {
+			s.Name = name
+		}
+	}
+	return nil
+}
 
 const pressID, lineID = assetID, "99999999-9999-9999-9999-999999999999"
 
@@ -429,5 +445,64 @@ func TestATaskFiledRightAfterItsFolderWasMadeLands(t *testing.T) {
 	}
 	if len(e.f.All("Task")) != 1 || len(e.f.All("Hearth Document")) != 1 || d.ID == "" || doc.ID == "" {
 		t.Errorf("tasks %d, documents %d in EmberOPS", len(e.f.All("Task")), len(e.f.All("Hearth Document")))
+	}
+}
+
+// A folder made, renamed or removed sends only that folder to EmberOPS. Each used to send every folder again (171 of them on
+// live, about ten seconds in the request); the whole copy belongs to the scheduled job.
+func TestACreateRenameOrDeleteSendsOnlyThatFolder(t *testing.T) {
+	e, s, _ := newPlant(t)
+	ctx := e.as("ann-tok")
+	for _, n := range []string{"One", "Two", "Three", "Four", "Five"} {
+		if _, err := s.CreateSpace(ctx, org, actor(ann), n, "folder", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	have := func() map[string]bool {
+		out := map[string]bool{}
+		for _, sp := range e.f.All("Hearth Space") {
+			out[sp["space_name"].(string)] = true
+		}
+		return out
+	}
+	if len(have()) != 5 {
+		t.Fatalf("baseline: %v", have())
+	}
+
+	before := e.f.BulkItems()
+	six, err := s.CreateSpace(ctx, org, actor(ann), "Six", "folder", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := e.f.BulkItems() - before; n != 1 {
+		t.Errorf("a create sent %d spaces, want only its own", n)
+	}
+	if !have()["Six"] || len(have()) != 6 {
+		t.Errorf("after the create: %v", have())
+	}
+
+	before = e.f.BulkItems()
+	if err := s.RenameSpace(ctx, org, actor(ann), six.ID, "Sixth"); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.f.BulkItems() - before; n != 1 {
+		t.Errorf("a rename sent %d spaces, want only its own", n)
+	}
+	if !have()["Sixth"] || have()["Six"] {
+		t.Errorf("after the rename: %v", have())
+	}
+
+	before = e.f.BulkItems()
+	if err := s.DeleteSpace(ctx, org, actor(ann), six.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.f.BulkItems() - before; n != 0 {
+		t.Errorf("a delete sent %d spaces, want none", n)
+	}
+	if have()["Sixth"] || len(have()) != 5 {
+		t.Errorf("after the delete: %v", have())
 	}
 }

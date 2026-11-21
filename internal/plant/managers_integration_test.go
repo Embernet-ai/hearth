@@ -266,3 +266,35 @@ func TestContractorPeopleAreCutToWhatItMayBeShown(t *testing.T) {
 		t.Errorf("an ordinary account is restricted: %v %v %v", all, restricted, err)
 	}
 }
+
+// One space's access read alone is exactly what the whole read gives for that space, so a copy of one folder into EmberOps
+// carries the same managers, members and grants the whole copy would.
+func TestOneSpacesAccessIsWhatTheWholeReadGivesForIt(t *testing.T) {
+	d := newDelegateFx(t)
+	ctx := context.Background()
+	d.give(t, d.t.alpha, core.AccessEdit, nil)
+	all, err := d.svc.SpaceAccessAll(ctx, d.org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{d.t.dept, d.t.alpha, d.t.deepest} {
+		one, err := d.svc.SpaceAccessOne(ctx, d.org, id)
+		if err != nil || one == nil {
+			t.Fatalf("one %s: %v %v", id, one, err)
+		}
+		var want *plant.SpaceAccess
+		for _, a := range all {
+			if a.ID == id {
+				want = a
+			}
+		}
+		if want == nil || one.Name != want.Name || len(one.Managers) != len(want.Managers) ||
+			len(one.Members) != len(want.Members) || len(one.Grants) != len(want.Grants) ||
+			(one.ParentID == nil) != (want.ParentID == nil) {
+			t.Errorf("space %s alone = %+v, whole read = %+v", id, one, want)
+		}
+	}
+	if one, err := d.svc.SpaceAccessOne(ctx, d.org, uuid.NewString()); err != nil || one != nil {
+		t.Errorf("an unknown space = %v, %v, want nothing", one, err)
+	}
+}
