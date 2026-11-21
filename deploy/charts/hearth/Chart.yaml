@@ -7,8 +7,8 @@ type: application
 # with no tag and no published image between them. A chart-only change now
 # republishes an identical image, and that is cheaper than the ambiguity was.
 # RELEASING.md has the rest.
-version: 2.22.10
-appVersion: "2.22.10"
+version: 2.22.11
+appVersion: "2.22.11"
 home: https://embernet.ai/hearth.html
 icon: https://embernet-ai.github.io/hearth/icon.png
 sources:
