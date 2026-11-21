@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -108,8 +109,10 @@ func TestPersonSuspendFindsAnAccountByPrincipalID(t *testing.T) {
 	}
 	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1,$2,'Suspend A')`, org, "sa-"+org[:8])
 	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1,$2,'Suspend B')`, other, "sb-"+other[:8])
-	for id, n := range map[string]string{admin: "Admin", one: "One", two: "Two"} {
-		exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1,$2,'user',$3)`, id, org, n)
+	// The admin is the earliest person, so the owner: the others are not.
+	for i, p := range [][2]string{{admin, "Admin"}, {one, "One"}, {two, "Two"}} {
+		exec(`INSERT INTO principals (id, org_id, kind, display_name, created_at) VALUES ($1,$2,'user',$3, now() + ($4 || ' seconds')::interval)`,
+			p[0], org, p[1], fmt.Sprint(i))
 	}
 	exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1,$2,'user','Stranger')`, stranger, other)
 	exec(`INSERT INTO local_credentials (principal_id, org_id, email, password_hash) VALUES ($1,$2,$3,'x')`, admin, org, "admin-"+org[:8]+"@example.test")
