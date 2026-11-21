@@ -14,7 +14,7 @@ export interface OrgNode {
 export interface Page {
   Title: string;
   Path: string;
-  Identity: null | { PrincipalID: string; DisplayName: string; ActingFor?: string; MustChangePassword?: boolean };
+  Identity: null | { PrincipalID: string; DisplayName: string; ActingFor?: string; MustChangePassword?: boolean; Contractor?: boolean };
   Build: { Revision: string; Profile: string };
   Version: string;
   Message?: string;

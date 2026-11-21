@@ -82,6 +82,10 @@ type Identity struct {
 	// somebody else chose. The web layer sends such a person to their account
 	// page before anything else.
 	MustChangePassword bool
+	// Contractor marks an account that reaches only what it was given: a
+	// folder, and the work in it. The web layer refuses it every page that is
+	// not about that work.
+	Contractor bool
 	// ActingFor is the real person behind an impersonated session -- the one
 	// a playground session belongs to, and the one "Back to Hearth" returns
 	// to. Empty for an ordinary session.
@@ -239,7 +243,7 @@ func (s *Service) resolve(ctx context.Context, r *http.Request) (*Identity, erro
 	var principalID, orgID, displayName string
 	var lastSeen, createdAt time.Time
 	var impersonatedBy *string
-	var mustChange bool
+	var mustChange, contractor bool
 	// Joined to principals for the display name. One query still, and the top
 	// bar can say who somebody is rather than showing them eight characters of
 	// their own uuid.
@@ -247,12 +251,12 @@ func (s *Service) resolve(ctx context.Context, r *http.Request) (*Identity, erro
 		SELECT s.principal_id::text, s.org_id::text, s.last_seen_at, s.created_at,
 		       s.impersonated_by::text,
 		       COALESCE(NULLIF(p.display_name, ''), ''),
-		       COALESCE(lc.must_change_password, false)
+		       COALESCE(lc.must_change_password, false), p.contractor
 		FROM sessions s
 		JOIN principals p ON p.id = s.principal_id
 		LEFT JOIN local_credentials lc ON lc.principal_id = s.principal_id
 		WHERE s.id = $1 AND s.expires_at > now()`, sum[:]).
-		Scan(&principalID, &orgID, &lastSeen, &createdAt, &impersonatedBy, &displayName, &mustChange)
+		Scan(&principalID, &orgID, &lastSeen, &createdAt, &impersonatedBy, &displayName, &mustChange, &contractor)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrNoSession
@@ -291,10 +295,12 @@ func (s *Service) resolve(ctx context.Context, r *http.Request) (*Identity, erro
 		// An administrator viewing as somebody else is not that person and
 		// cannot change their password, so the gate leaves it alone.
 		MustChangePassword: mustChange && impersonatedBy == nil,
-		ActingFor:          deref(impersonatedBy),
-		token:              c.Value,
-		renewedUntil:       renewed,
-		sessionID:          sum[:],
+		// A super admin is never narrowed, whatever the account says.
+		Contractor:   contractor && !subjects.Super(),
+		ActingFor:    deref(impersonatedBy),
+		token:        c.Value,
+		renewedUntil: renewed,
+		sessionID:    sum[:],
 	}, nil
 }
 

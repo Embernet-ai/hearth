@@ -149,7 +149,16 @@ func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
 	}
 	for _, h := range have {
 		if !want[strings.ToLower(h.S("hearth_id"))] {
-			if err := s.C.Delete(ctx, "Hearth Space", h.S("name")); err != nil && !errors.Is(err, emberops.ErrNotFound) {
+			err := s.C.Delete(ctx, "Hearth Space", h.S("name"))
+			if err != nil && !errors.Is(err, emberops.ErrNotFound) && strings.Contains(err.Error(), "LinkExistsError") {
+				// Work Hearth soft deleted that EmberOPS still holds links the
+				// space, and EmberOPS will not delete a space something links.
+				// Take those records out and ask again; a record that is still
+				// live is never touched, and the space then stays, loudly.
+				s.removeDeletedWorkIn(ctx, h.S("name"))
+				err = s.C.Delete(ctx, "Hearth Space", h.S("name"))
+			}
+			if err != nil && !errors.Is(err, emberops.ErrNotFound) {
 				s.log().Warn("emberops: could not remove a deleted space", "space", h.S("hearth_id"), "error", err)
 			}
 		}
@@ -622,4 +631,29 @@ func (s *Plant) AvailabilityFor(ctx context.Context, orgID string, actor core.Su
 		}
 	}
 	return av, nil
+}
+
+// deletedWork is where Hearth's soft deleted work can still sit in EmberOPS, and
+// the field that says it was deleted.
+var deletedWork = []struct{ doctype, field string }{
+	{"Task", "hearth_deleted_at"},
+	{"Maintenance Work Order", "hearth_deleted_at"},
+	{"Hearth Document", "deleted_at"},
+}
+
+// removeDeletedWorkIn deletes the records in a space that Hearth has deleted.
+func (s *SpaceSync) removeDeletedWorkIn(ctx context.Context, spaceName string) {
+	for _, d := range deletedWork {
+		rows, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: d.doctype, Fields: []string{"name"},
+			Filters: []emberops.Filter{emberops.F("hearth_space", spaceName), {Field: d.field, Op: "is", Value: "set"}}}, 0)
+		if err != nil {
+			s.log().Warn("emberops: could not list deleted work in a deleted space", "doctype", d.doctype, "error", err)
+			continue
+		}
+		for _, r := range rows {
+			if err := s.C.Delete(ctx, d.doctype, r.S("name")); err != nil && !errors.Is(err, emberops.ErrNotFound) {
+				s.log().Warn("emberops: could not remove deleted work", "doctype", d.doctype, "name", r.S("name"), "error", err)
+			}
+		}
+	}
 }

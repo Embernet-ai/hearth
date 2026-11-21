@@ -215,6 +215,18 @@ func (f *Frappe) resource(w http.ResponseWriter, r *http.Request, rest, user str
 				}
 			}
 		}
+		if doctype == "Hearth Space" {
+			// Live EmberOPS will not delete a space something links (found 2026-11-21: a deleted Hearth space whose tasks
+			// were only marked deleted could never be removed).
+			for _, linked := range []string{"Task", "Maintenance Work Order", "Hearth Document"} {
+				for _, rec := range f.docs[linked] {
+					if fmt.Sprint(rec["hearth_space"]) == name {
+						fail(w, 417, "LinkExistsError", "Cannot delete Hearth Space "+name+": it is linked with "+linked)
+						return
+					}
+				}
+			}
+		}
 		delete(f.docs[doctype], name)
 		reply(w, "message", "ok")
 	default:

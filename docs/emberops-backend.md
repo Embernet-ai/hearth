@@ -93,6 +93,8 @@ Hearth's own authorization still gates its UI as today. In this mode the permiss
 
 Hearth's access control stays a query on its own tables (grants, space managers, department membership). EmberOps gets a copy so the addon's `permission_query_conditions` and `has_permission` hooks decide on the same facts. `stores.SpaceSync` writes every space with its parent, kind, order, `is_department`, its managers and department members (`members` rows) and its grants (`grants` rows: a person becomes a `User` row, a team an `Employee Group`, "everyone in the org" the `Employee` role; a grant to a channel has no EmberOps subject and is left out). It runs inline after a space edit, in the background (debounced to 2 seconds) after any other write by a signed-in person, since people are moved between departments and grants made from many pages, and every five minutes. A copy that has not changed since the last send costs no call. A space deleted in Hearth is deleted in EmberOps. The migration builds spaces with the same function.
 
+Deleting a task or a document in Hearth deletes its record in EmberOps too (a work order is still only marked deleted). If EmberOps refuses (a subtask under the task, a timesheet on it) the record is marked deleted instead. A deleted space is removed from EmberOps on the next copy; when records Hearth deleted are still linked to it, those go first and the space follows. A space whose linked work is still live stays, and the log says so on every copy until the work is dealt with.
+
 Differences to know about: Frappe has no comment-only level, and the addon collapses levels to read and write; an expiring grant is sent with its expiry and dropped from the copy once it has expired, at the next sync.
 
 ## Performance

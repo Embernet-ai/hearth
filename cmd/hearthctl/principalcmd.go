@@ -4,6 +4,7 @@ package main
 //
 //	hearthctl person-suspend -as ADMIN -email A,B -reason WHY            who would be suspended, nothing changed
 //	hearthctl person-suspend -as ADMIN -email A,B -reason WHY -apply     suspend them
+//	hearthctl person-suspend -as ADMIN -id UUID,UUID -reason WHY -apply  the same, by principal id (an account whose sign-in identity is gone)
 //	hearthctl channel-remove -as ADMIN -channel ID -reason WHY [-apply]  archive a channel
 //
 // person-suspend goes through auth.SetPersonStatus, the same call the People page makes: the admin check, the owner and
@@ -17,11 +18,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Embernet-ai/hearth/internal/audit"
 	"github.com/Embernet-ai/hearth/internal/auth"
@@ -33,14 +36,15 @@ func runPersonSuspend(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("person-suspend", flag.ExitOnError)
 	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin suspending them (required)")
-	emails := fs.String("email", "", "the accounts to suspend, emails separated by commas (required)")
+	emails := fs.String("email", "", "the accounts to suspend, emails separated by commas")
+	ids := fs.String("id", "", "the accounts to suspend by principal id, separated by commas: for an account whose sign-in identity is gone")
 	reason := fs.String("reason", "", "why, printed with the result (required)")
 	apply := fs.Bool("apply", false, "suspend them. Without this nothing changes")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *as == "" || *emails == "" || strings.TrimSpace(*reason) == "" {
-		return errors.New("-as, -email and -reason are required")
+	if *as == "" || (*emails == "" && *ids == "") || strings.TrimSpace(*reason) == "" {
+		return errors.New("-as, -reason and at least one of -email or -id are required")
 	}
 	if strings.TrimSpace(*dsn) == "" {
 		return errors.New("a database is required: -dsn or HEARTH_DATABASE_URL")
@@ -58,35 +62,85 @@ func runPersonSuspend(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	type target struct{ email, id, name string }
+	n, err := suspendPeople(ctx, pools, orgID, actor, splitList(*emails), splitList(*ids), *apply, os.Stdout)
+	if err != nil {
+		return err
+	}
+	if *apply {
+		fmt.Printf("suspended %d accounts, one audit row each, reason: %s\n", n, strings.TrimSpace(*reason))
+	} else {
+		fmt.Printf("would suspend %d accounts; nothing changed, add -apply\n", n)
+	}
+	return nil
+}
+
+func splitList(v string) []string {
+	var out []string
+	for _, x := range strings.Split(v, ",") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// personByID is an account of this organisation by principal id, active or not
+// yet suspended, for an account whose sign-in identity has been deleted and which
+// personByEmail can no longer find. It must be a person: a bot or an agent is
+// never suspended from here.
+func personByID(ctx context.Context, db *pgxpool.Pool, orgID, id string) (string, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return "", fmt.Errorf("%q is not a principal id", id)
+	}
+	var found string
+	err := db.QueryRow(ctx, `
+		SELECT id::text FROM principals
+		 WHERE id = $1::uuid AND org_id = $2 AND kind = 'user' AND status = 'active'`, id, orgID).Scan(&found)
+	if err != nil {
+		return "", fmt.Errorf("find principal %s: %w", id, err)
+	}
+	return found, nil
+}
+
+// suspendPeople finds every named account first (by email or by principal id) and
+// stops before any change if one is not an active person, then suspends each
+// through the call the People page makes. It returns how many.
+func suspendPeople(ctx context.Context, pools *pg.Pools, orgID, actor string, emails, ids []string, apply bool, w io.Writer) (int, error) {
+	type target struct{ label, id, name string }
 	var targets []target
 	seen := map[string]bool{}
-	for _, e := range strings.Split(*emails, ",") {
-		e = strings.TrimSpace(e)
-		if e == "" {
-			continue
-		}
-		id, err := personByEmail(ctx, pools.Web, orgID, e)
-		if err != nil {
-			return fmt.Errorf("%w (nothing was changed)", err)
-		}
+	add := func(label, id string) {
 		if seen[id] {
-			continue
+			return
 		}
 		seen[id] = true
 		var name string
 		_ = pools.Web.QueryRow(ctx, `SELECT COALESCE(NULLIF(display_name,''), id::text) FROM principals WHERE id = $1`, id).Scan(&name)
-		targets = append(targets, target{e, id, name})
+		targets = append(targets, target{label, id, name})
+	}
+	for _, e := range emails {
+		id, err := personByEmail(ctx, pools.Web, orgID, e)
+		if err != nil {
+			return 0, fmt.Errorf("%w (nothing was changed)", err)
+		}
+		add(e, id)
+	}
+	for _, raw := range ids {
+		id, err := personByID(ctx, pools.Web, orgID, raw)
+		if err != nil {
+			return 0, fmt.Errorf("%w (nothing was changed)", err)
+		}
+		add("id "+raw, id)
 	}
 	if len(targets) == 0 {
-		return errors.New("-email names nobody")
+		return 0, errors.New("-email and -id name nobody")
 	}
 	svc := auth.New(pools.Web, authz.New(pools.Web), false)
 	for _, t := range targets {
 		var teams []string
 		rows, err := pools.Web.Query(ctx, `SELECT t.name FROM team_members m JOIN teams t ON t.id = m.team_id WHERE m.principal_id = $1 ORDER BY 1`, t.id)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		for rows.Next() {
 			var n string
@@ -95,20 +149,15 @@ func runPersonSuspend(ctx context.Context, args []string) error {
 		}
 		rows.Close()
 		verb := "would suspend"
-		if *apply {
+		if apply {
 			if err := svc.SetPersonStatus(ctx, orgID, actor, t.id, "suspended"); err != nil {
-				return fmt.Errorf("%s: %w", t.email, err)
+				return 0, fmt.Errorf("%s: %w", t.label, err)
 			}
 			verb = "suspended"
 		}
-		fmt.Printf("%-14s %s  %s  %s  teams: %s\n", verb, t.id, t.email, t.name, strings.Join(teams, ", "))
+		fmt.Fprintf(w, "%-14s %s  %s  %s  teams: %s\n", verb, t.id, t.label, t.name, strings.Join(teams, ", "))
 	}
-	if *apply {
-		fmt.Printf("suspended %d accounts, one audit row each, reason: %s\n", len(targets), strings.TrimSpace(*reason))
-	} else {
-		fmt.Printf("would suspend %d accounts; nothing changed, add -apply\n", len(targets))
-	}
-	return nil
+	return len(targets), nil
 }
 
 func runChannelRemove(ctx context.Context, args []string) error {

@@ -104,3 +104,16 @@ export const tail: RailItem[] = [
 export function isOn(item: RailItem, path: string): boolean {
   return item.on ? item.on(path) : path === item.href;
 }
+
+/**
+ * What a contractor account's rail offers: the work in the folder it was given, and nothing about the company. The server
+ * refuses every other address to such an account (internal/web/contractorgate.go), so this is only the rail not offering
+ * what would answer "no such page".
+ */
+export const contractorHrefs = new Set(['/inbox', '/tasks', '/work-orders', '/documents', '/projects', '/spaces', '/views']);
+
+/** The items of a group this page's reader is offered: a contractor account only the work, everybody else by their capabilities. */
+export function visibleItems(items: RailItem[], pg: Page): RailItem[] {
+  const contractor = !!pg.Identity?.Contractor;
+  return items.filter((i) => (!contractor || contractorHrefs.has(i.href)) && (!i.show || i.show(pg)));
+}
