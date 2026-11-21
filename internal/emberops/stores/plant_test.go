@@ -506,3 +506,72 @@ func TestACreateRenameOrDeleteSendsOnlyThatFolder(t *testing.T) {
 		t.Errorf("after the delete: %v", have())
 	}
 }
+
+// Once a folder's own copy has been accepted, the whole copy has nothing left to send for it: it sends only what changed since
+// EmberOPS last accepted each space, and writes nothing when nothing did. Every write by a signed in person asks for a whole
+// copy shortly after, so this is what keeps those from resending every folder each time.
+func TestTheWholeCopyAfterAFolderCopySendsNothing(t *testing.T) {
+	e, s, pg := newPlant(t)
+	ctx := e.as("ann-tok")
+	for _, n := range []string{"A", "B", "C"} {
+		if _, err := s.CreateSpace(ctx, org, actor(ann), n, "folder", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := e.f.BulkItems()
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.f.BulkItems() - before; n != 0 {
+		t.Errorf("a whole copy right after each folder's own copy sent %d spaces, want none", n)
+	}
+	// A real change to one space sends that space and no other.
+	pg.spaces[1].Name = "B renamed elsewhere"
+	before = e.f.BulkItems()
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.f.BulkItems() - before; n != 1 {
+		t.Errorf("one changed space sent %d, want 1", n)
+	}
+	// A space Hearth no longer has is removed, though no request said so.
+	pg.spaces = pg.spaces[:2]
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.f.All("Hearth Space")); n != 2 {
+		t.Errorf("%d spaces in EmberOPS, want 2 after one was removed from Hearth", n)
+	}
+}
+
+// Copies of one space and the whole copy never overlap: EmberOPS refuses both when they do ("Document has been modified after you
+// have opened it"), which is what made a rename fail and a task filed right after a folder return 500 on live 2.22.9. Run
+// together under -race they leave EmberOPS holding exactly Hearth's spaces.
+func TestCopiesOfOneSpaceAndTheWholeCopyDoNotOverlap(t *testing.T) {
+	e, s, _ := newPlant(t)
+	ctx := e.as("ann-tok")
+	var made []*plant.Space
+	for _, n := range []string{"P", "Q", "R", "S"} {
+		sp, err := s.CreateSpace(ctx, org, actor(ann), n, "folder", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		made = append(made, sp)
+	}
+	done := make(chan error, 40)
+	for i := 0; i < 10; i++ {
+		go func() { done <- s.Spaces.Sync(ctx, org) }()
+		for _, sp := range made {
+			sp := sp
+			go func() { done <- s.Spaces.SyncOne(ctx, org, sp.ID) }()
+		}
+	}
+	for i := 0; i < 50; i++ {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(e.f.All("Hearth Space")); n != 4 {
+		t.Errorf("%d spaces in EmberOPS, want 4", n)
+	}
+}
