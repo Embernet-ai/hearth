@@ -54,6 +54,7 @@ type SpaceSync struct {
 
 	mu     sync.Mutex
 	digest map[string]string // org -> digest of what was last sent
+	retry  map[string]bool   // org -> a deleted space would not go and is tried again
 	timer  *time.Timer
 	orgs   map[string]bool
 }
@@ -129,11 +130,12 @@ func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
 		s.digest = map[string]string{}
 	}
 	same := s.digest[orgID] == d
+	retry := s.retry[orgID]
 	s.mu.Unlock()
-	if same {
+	if same && !retry {
 		return nil
 	}
-	if len(items) > 0 {
+	if !same && len(items) > 0 {
 		res, err := s.C.BulkUpsert(ctx, items)
 		if err != nil {
 			return err
@@ -148,24 +150,37 @@ func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
 	if err != nil {
 		return err
 	}
+	// Taking a deleted space out is Hearth's own decision, already made, so it
+	// is done as the service account: whoever happened to trigger this copy may
+	// be a person EmberOPS lets edit a document but not delete one.
+	svc := emberops.WithUser(ctx, nil)
+	failed := false
 	for _, h := range have {
 		if !want[strings.ToLower(h.S("hearth_id"))] {
-			err := s.C.Delete(ctx, "Hearth Space", h.S("name"))
+			err := s.C.Delete(svc, "Hearth Space", h.S("name"))
 			if err != nil && !errors.Is(err, emberops.ErrNotFound) && strings.Contains(err.Error(), "LinkExistsError") {
 				// Work Hearth soft deleted that EmberOPS still holds links the
 				// space, and EmberOPS will not delete a space something links.
 				// Take those records out and ask again; a record that is still
 				// live is never touched, and the space then stays, loudly.
-				s.removeDeletedWorkIn(ctx, h.S("name"))
-				err = s.C.Delete(ctx, "Hearth Space", h.S("name"))
+				s.removeDeletedWorkIn(svc, h.S("name"))
+				err = s.C.Delete(svc, "Hearth Space", h.S("name"))
 			}
 			if err != nil && !errors.Is(err, emberops.ErrNotFound) {
+				failed = true
 				s.log().Warn("emberops: could not remove a deleted space", "space", h.S("hearth_id"), "error", err)
 			}
 		}
 	}
 	s.mu.Lock()
 	s.digest[orgID] = d
+	// A space that would not go is tried again on the next copy even though
+	// nothing else changed: the copy used to stop at "nothing changed" and so
+	// never came back for it (found live 2.22.7, a deleted space stayed for good).
+	if s.retry == nil {
+		s.retry = map[string]bool{}
+	}
+	s.retry[orgID] = failed
 	s.mu.Unlock()
 	return nil
 }

@@ -215,6 +215,11 @@ func (f *Frappe) resource(w http.ResponseWriter, r *http.Request, rest, user str
 				}
 			}
 		}
+		if doctype == "Hearth Document" && user != "svc@example.com" {
+			// Live (found 2.22.7): staff may edit a Hearth Document, and only the Hearth Admin service account may delete one.
+			fail(w, 403, "PermissionError", "User not allowed to delete Hearth Document: "+name)
+			return
+		}
 		if doctype == "Hearth Space" {
 			// Live EmberOPS will not delete a space something links (found 2026-11-21: a deleted Hearth space whose tasks
 			// were only marked deleted could never be removed).

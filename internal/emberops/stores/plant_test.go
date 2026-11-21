@@ -377,3 +377,30 @@ func TestMovingADocumentMovesItsEmberOPSLink(t *testing.T) {
 	}
 	_ = a
 }
+
+// A space that would not go (live work still linked it) is tried again on the next copy, though nothing else changed. The copy
+// used to stop at "nothing changed" and never came back for it, so a deleted space stayed in EmberOPS for good.
+func TestADeletedSpaceThatWouldNotGoIsTriedAgain(t *testing.T) {
+	e, s, _ := newPlant(t)
+	ctx := e.as("ann-tok")
+	sp, _ := s.CreateSpace(ctx, org, actor(ann), "Stuck", "folder", nil)
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	name := e.f.All("Hearth Space")[0]["name"].(string)
+	e.f.Put("Task", map[string]any{"name": "TASK-LIVE", "hearth_space": name})
+	if err := s.DeleteSpace(ctx, org, actor(ann), sp.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.f.All("Hearth Space")) != 1 {
+		t.Fatalf("a space with live work linked was deleted: %d left", len(e.f.All("Hearth Space")))
+	}
+	// The work goes (the person moved it, or finished with it), and nothing about the spaces has changed.
+	e.f.Put("Task", map[string]any{"name": "TASK-LIVE", "hearth_space": nil})
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.f.All("Hearth Space")); n != 0 {
+		t.Errorf("%d spaces left: the deleted space was never tried again", n)
+	}
+}
