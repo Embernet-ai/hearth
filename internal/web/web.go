@@ -34,6 +34,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/calls"
 	"github.com/Embernet-ai/hearth/internal/canvas"
 	"github.com/Embernet-ai/hearth/internal/channels"
+	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
@@ -44,6 +45,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/importer"
 	"github.com/Embernet-ai/hearth/internal/importer/clickup"
 	"github.com/Embernet-ai/hearth/internal/jobs"
+	"github.com/Embernet-ai/hearth/internal/m365"
 	"github.com/Embernet-ai/hearth/internal/mailint"
 	"github.com/Embernet-ai/hearth/internal/mailsettings"
 	"github.com/Embernet-ai/hearth/internal/maint"
@@ -122,7 +124,12 @@ type Server struct {
 	// feed handler is registered outside the authenticated mux.
 	calendar cal.Store
 	// google is per-person, and nil when the integration is unconfigured.
-	google     *google.Service
+	google *google.Service
+	// microsoft and connect are the Microsoft 365 connection and the connectors that run on both providers. Nil
+	// when a deployment has not set them up.
+	microsoft  *m365.Service
+	connect    *connect.Service
+	box        connect.Sealer
 	scim       *scim.Service
 	search     *search.Service
 	playground *playground.Service
@@ -196,6 +203,9 @@ type Deps struct {
 	Authz        *authz.Service
 	Calendar     cal.Store
 	Google       *google.Service
+	Microsoft    *m365.Service
+	Connect      *connect.Service
+	Box          connect.Sealer
 	SCIM         *scim.Service
 	Search       *search.Service
 	// Playground is Settings -> Tutorial's personal practice organisation.
@@ -242,6 +252,9 @@ func New(d Deps) (*Server, error) {
 		az:         d.Authz,
 		calendar:   d.Calendar,
 		google:     d.Google,
+		microsoft:  d.Microsoft,
+		connect:    d.Connect,
+		box:        d.Box,
 		scim:       d.SCIM,
 		inboundKey: d.InboundKey, mailReady: d.MailReady, baseURL: d.BaseURL,
 		version: d.Version,
@@ -558,6 +571,16 @@ type page struct {
 	// Google is the connection this person has, or nil.
 	GoogleOn bool
 	Google   *google.Connection
+
+	// The Microsoft 365 and Google Workspace connectors: the Connectors page, the cloud files browser, the cloud
+	// files linked to a document, and the messages linked to a contact.
+	Connectors *ConnectorsView `json:",omitempty"`
+	Cloud      *CloudView      `json:",omitempty"`
+	CloudOn    bool            `json:",omitempty"`
+	// ConnectorsOn is whether the Settings page links to the Connectors page.
+	ConnectorsOn bool                 `json:",omitempty"`
+	CloudLinks   []connect.FileLink   `json:",omitempty"`
+	LinkedMail   []connect.LinkedMail `json:",omitempty"`
 
 	// MyTime is one person's own entries, and the totals beside them.
 	// ShowRemoved is whether removed entries are mixed into MyTime rather
@@ -1210,6 +1233,20 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("GET /time", s.getMyTime)
 	authed.HandleFunc("POST /time", s.postMyTime)
 	authed.HandleFunc("POST /time/start", s.startMyTimer)
+	authed.HandleFunc("GET /settings/connectors", s.getConnectors)
+	authed.HandleFunc("POST /settings/connectors/tenant", s.postConnectorTenant)
+	authed.HandleFunc("POST /settings/connectors/toggle", s.postConnectorToggle)
+	authed.HandleFunc("POST /settings/connectors/remove", s.postConnectorRemovePerson)
+	authed.HandleFunc("POST /settings/connectors/disconnect", s.postConnectorDisconnect)
+	authed.HandleFunc("POST /settings/connectors/sync", s.postConnectorSync)
+	authed.HandleFunc("POST /settings/connectors/calendar", s.postConnectorCalendar)
+	authed.HandleFunc("POST /settings/connectors/chat", s.postConnectorChat)
+	authed.HandleFunc("POST /integrations/microsoft/connect", s.startMicrosoft)
+	authed.HandleFunc("GET /integrations/microsoft/callback", s.microsoftCallback)
+	authed.HandleFunc("GET /cloud", s.getCloud)
+	authed.HandleFunc("POST /cloud/link", s.postCloudLink)
+	authed.HandleFunc("POST /cloud/import", s.postCloudImport)
+	authed.HandleFunc("POST /cloud/unlink", s.postCloudUnlink)
 	authed.HandleFunc("POST /integrations/google/connect", s.startGoogle)
 	authed.HandleFunc("GET /integrations/google/callback", s.googleCallback)
 	authed.HandleFunc("POST /integrations/google/disconnect", s.disconnectGoogle)
@@ -1904,7 +1941,16 @@ func (s *Server) showDocument(w http.ResponseWriter, r *http.Request, docID stri
 		}
 		w.WriteHeader(refusal.Status)
 	}
+	// Cloud files linked to this document, and whether this person can add one: Files is on for a provider and
+	// their connection covers it.
+	var cloudLinks []connect.FileLink
+	cloudOn := false
+	if s.connect != nil {
+		cloudLinks, _ = s.connect.LinksFor(r.Context(), id.OrgID, id.PrincipalID, d.ID)
+		cloudOn = s.connect.CanBrowse(r.Context(), id.OrgID, id.PrincipalID)
+	}
 	s.render(w, r, "document", page{
+		CloudOn: cloudOn, CloudLinks: cloudLinks,
 		Title: d.Title, Doc: d, Attachments: atts, RemovedAttachments: removedAtts, Links: linked,
 		Subtasks: subtasks, ParentDoc: parentDoc,
 		CanAssign: canAssign, AssigneeIDs: assigneeIDs, AssigneePrimary: assigneePrimary, Guests: pageGuests,

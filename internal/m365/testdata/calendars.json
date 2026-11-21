@@ -1,0 +1,6 @@
+{
+  "value": [
+    {"id": "AAMkCAL1", "name": "Calendar", "isDefaultCalendar": true, "canEdit": true},
+    {"id": "AAMkCAL2", "name": "Plant 3 shifts", "isDefaultCalendar": false, "canEdit": false}
+  ]
+}

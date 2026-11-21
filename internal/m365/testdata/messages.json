@@ -1,0 +1,8 @@
+{
+  "value": [
+    {"id": "AAMkMSG1", "subject": "Quote 118", "bodyPreview": "Please find the quote attached",
+     "receivedDateTime": "2026-12-01T08:15:00Z", "webLink": "https://outlook.office365.com/owa/?ItemID=AAMkMSG1",
+     "from": {"emailAddress": {"name": "Priya Shah", "address": "priya@acme.test"}},
+     "toRecipients": [{"emailAddress": {"name": "Dana", "address": "dana@contoso.test"}}]}
+  ]
+}

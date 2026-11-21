@@ -17,6 +17,13 @@
       <a  class="settinglink"  href={("/account")}><span  class="sl-title">Password and sign-in</span><span  class="sl-note">Your password and your picture.</span></a>
       <a  class="settinglink"  href={("/departments/request")}><span  class="sl-title">My departments</span><span  class="sl-note">Which departments you belong in. They decide who approves your hours.</span></a>
     </div>
+    {#if F.t(dot?.ConnectorsOn)}
+    <div  class="card">
+      <h3>Connections</h3>
+      <a  class="settinglink"  href={("/settings/connectors")}><span  class="sl-title">Microsoft 365 and Google Workspace</span><span  class="sl-note">Connect your own account for calendar, contacts, mail and files.</span></a>
+      <a  class="settinglink"  href={("/cloud")}><span  class="sl-title">Cloud files</span><span  class="sl-note">Browse OneDrive, SharePoint and Drive, and add files to documents.</span></a>
+    </div>
+    {/if}
     <div  class="card">
       <h3>Notifications</h3>
       <a  class="settinglink"  href={("/inbox#notifications")}><span  class="sl-title">Email, digest and quiet hours</span><span  class="sl-note">How often email reaches you, and when it stays quiet.</span></a>
@@ -48,6 +55,7 @@
           <a  class="settinglink"  href={("/agents")}><span  class="sl-title">Agents</span><span  class="sl-note">Accounts for automation, with only the grants they were given.</span></a>
           <a  class="settinglink"  href={("/settings/mail")}><span  class="sl-title">Email</span><span  class="sl-note">How notifications leave Hearth by email.</span></a>
           <a  class="settinglink"  href={("/integrations")}><span  class="sl-title">API</span><span  class="sl-note">Tokens that let other systems act as a person.</span></a>
+          <a  class="settinglink"  href={("/settings/connectors")}><span  class="sl-title">Connectors</span><span  class="sl-note">Microsoft 365 and Google Workspace: which are on, and who is connected.</span></a>
         </div>
       {/if}
 

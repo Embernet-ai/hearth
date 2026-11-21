@@ -1,0 +1,8 @@
+{
+  "id": "AAMkNEW=", "changeKey": "ck-new", "subject": "Safety walk", "isAllDay": false,
+  "body": {"contentType": "text", "content": ""},
+  "start": {"dateTime": "2026-12-04T13:00:00.0000000", "timeZone": "UTC"},
+  "end": {"dateTime": "2026-12-04T14:00:00.0000000", "timeZone": "UTC"},
+  "location": {"displayName": ""},
+  "onlineMeeting": {"joinUrl": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_new"}
+}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/calls"
 	"github.com/Embernet-ai/hearth/internal/canvas"
 	"github.com/Embernet-ai/hearth/internal/channels"
+	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
@@ -34,6 +36,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/files"
 	"github.com/Embernet-ai/hearth/internal/google"
 	"github.com/Embernet-ai/hearth/internal/jobs"
+	"github.com/Embernet-ai/hearth/internal/m365"
 	"github.com/Embernet-ai/hearth/internal/mailint"
 	"github.com/Embernet-ai/hearth/internal/mailsettings"
 	"github.com/Embernet-ai/hearth/internal/maint"
@@ -156,6 +159,22 @@ func run() error {
 		googleSvc = google.New(pools.Web, googleCfg, box)
 		log.Info("google enabled", "redirect", googleCfg.RedirectURL)
 	}
+	// Microsoft 365, per person, on the same footing as Google above.
+	var msSvc *m365.Service
+	msCfg := m365.Config{
+		ClientID: cfg.MicrosoftClientID, ClientSecret: cfg.MicrosoftClientSecret,
+		RedirectURL: cfg.PublicBaseURL.String() + "/integrations/microsoft/callback",
+	}
+	switch {
+	case !msCfg.Enabled():
+		log.Info("microsoft 365 is not configured; its connectors are off")
+	case box == nil:
+		log.Warn("microsoft 365 is configured but HEARTH_ENCRYPTION_KEY is not, so a refresh token could not be " +
+			"stored safely. Its connectors stay off")
+	default:
+		msSvc = m365.New(pools.Web, msCfg, box)
+		log.Info("microsoft 365 enabled", "redirect", msCfg.RedirectURL)
+	}
 	docsSvc := docs.New(pools.Web, azSvc)
 	authSvc := auth.New(pools.Web, azSvc, cfg.PublicBaseURL.Scheme == "https")
 
@@ -169,6 +188,12 @@ func run() error {
 	// Single sign-on is optional. Discovery happens HERE, at startup, so a
 	// wrong issuer fails loudly now rather than on somebody's first login.
 	var oidcRP *auth.OIDC
+	for claim, c := range cfg.OIDCRoleMap {
+		if !slices.Contains(auth.MappableCapabilities, c) {
+			return fmt.Errorf("HEARTH_OIDC_ROLE_MAP: %q maps to %q, which is not one of %s", claim, c,
+				strings.Join(auth.MappableCapabilities, ", "))
+		}
+	}
 	if cfg.SSOEnabled() {
 		oidcRP, err = auth.NewOIDC(ctx0, authSvc, auth.OIDCConfig{
 			Issuer:         cfg.OIDCIssuer,
@@ -178,6 +203,8 @@ func run() error {
 			Scopes:         oidcScopes(cfg),
 			AllowedDomains: cfg.OIDCAllowedDomains,
 			RequiredRoles:  cfg.OIDCRequiredRoles,
+			Provider:       cfg.OIDCProvider, Tenant: cfg.MicrosoftTenant, AllowedTenants: cfg.MicrosoftAllowedTenants,
+			HostedDomain: cfg.GoogleHostedDomain, RoleMap: cfg.OIDCRoleMap,
 		}, cfg.PublicBaseURL.Scheme == "https")
 		if err != nil {
 			return fmt.Errorf("single sign-on: %w", err)
@@ -340,6 +367,27 @@ func run() error {
 	// the same search, which is why this line is the whole wiring.
 	crmSvc := crm.New(pools.Web, azSvc)
 
+	// The Microsoft 365 and Google Workspace connectors. They write to Hearth's own tables, so they run only on
+	// the standalone back end; with EmberOPS holding the records there is nothing here for them to write to.
+	var connectSvc *connect.Service
+	if ops == nil && (googleSvc != nil || msSvc != nil) {
+		var backends []connect.Backend
+		if googleSvc != nil {
+			backends = append(backends, googleSvc)
+		}
+		if msSvc != nil {
+			backends = append(backends, msSvc)
+		}
+		connectSvc = connect.New(connect.Deps{DB: pools.Web, Authz: azSvc, CRM: crmSvc, Docs: docsSvc, Files: filesSvc, Log: log}, backends...)
+		var next interface {
+			Notify(context.Context, push.Message)
+		}
+		if pushSvc != nil {
+			next = pushSvc
+		}
+		notifySvc.SetPusher(connectSvc.NewChatNotifier(sealerOf(box), cfg.PublicBaseURL.String(), next))
+	}
+
 	// Email in and out, and the phone log. The domain on a generated
 	// Message-ID has to resolve or half the world files the reply as spam, so
 	// it comes from the public base URL rather than from a guess.
@@ -453,7 +501,7 @@ func run() error {
 		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
-		Calendar: set.Calendar, Google: googleSvc,
+		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
 		NotifyDB: pools.Web, WorkerOn: cfg.WorkerEnabled,
 		Version:    cfg.Version,
@@ -622,6 +670,17 @@ func run() error {
 		// update silently piles up.
 		log.Warn("background work is DISABLED on this replica; " +
 			"jobs will queue and nothing here will run them")
+	}
+
+	// The connectors pull on a timer, after the worker so a slow provider never delays a job. One replica at a time
+	// holds the database lock for a pass.
+	if connectSvc != nil && cfg.WorkerEnabled {
+		every := cfg.ConnectorsEvery
+		if every == 0 {
+			every = 10 * time.Minute
+		}
+		go connectSvc.Run(ctx, every)
+		log.Info("connectors scheduled", "every", every.String())
 	}
 
 	// Schedule the recurring work: the due-soon sweep and everybody's digest.
@@ -834,4 +893,13 @@ func salesFor(postgres bool, svc *crm.Service) crm.Sales {
 		return nil
 	}
 	return svc
+}
+
+// sealerOf hands the web layer the secret box, or a true nil when there is none: a nil *secret.Box inside an
+// interface is not nil, and the chat webhook code tests for nil before storing anything.
+func sealerOf(b *secret.Box) connect.Sealer {
+	if b == nil {
+		return nil
+	}
+	return b
 }

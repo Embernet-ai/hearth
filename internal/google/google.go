@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/platform/secret"
 )
 
@@ -40,12 +41,12 @@ const (
 
 var (
 	// ErrNotConnected means this person has never connected, or has revoked.
-	ErrNotConnected = errors.New("google: this account is not connected")
+	ErrNotConnected = fmt.Errorf("google: this account is not connected: %w", connect.ErrNotConnected)
 	// ErrReconnect means the refresh token no longer works. The person revoked
 	// Hearth in their Google account, or an admin did, and the only way back is
 	// for them to connect again. It is distinct from a transient failure
 	// because the answer is different: one is "try later", this is "ask them".
-	ErrReconnect = errors.New("google: the connection has been revoked and must be made again")
+	ErrReconnect = fmt.Errorf("google: the connection has been revoked and must be made again: %w", connect.ErrReconnect)
 	// ErrNoKey means no encryption key is configured, so nothing can be stored.
 	ErrNoKey = errors.New("google: no encryption key is configured, so a refresh token cannot be stored safely")
 )
@@ -78,15 +79,20 @@ type Service struct {
 	authURL  string
 	tokenURL string
 	apiBase  string
+	// revokeURL is where a refused grant is withdrawn.
+	revokeURL string
+	// api points the official clients somewhere else in a test. Empty means Google.
+	api apiEndpoints
 }
 
 func New(db *pgxpool.Pool, cfg Config, box *secret.Box) *Service {
 	return &Service{
 		db: db, cfg: cfg, box: box,
-		http:     &http.Client{Timeout: 30 * time.Second},
-		authURL:  "https://accounts.google.com/o/oauth2/v2/auth",
-		tokenURL: "https://oauth2.googleapis.com/token",
-		apiBase:  "https://www.googleapis.com",
+		http:      &http.Client{Timeout: 30 * time.Second},
+		authURL:   "https://accounts.google.com/o/oauth2/v2/auth",
+		tokenURL:  "https://oauth2.googleapis.com/token",
+		apiBase:   "https://www.googleapis.com",
+		revokeURL: "https://oauth2.googleapis.com/revoke",
 	}
 }
 
@@ -130,7 +136,17 @@ func (c *Connection) Live() bool { return c != nil && c.RevokedAt == nil }
 //
 // state is the caller's, and must be verified on the way back.
 func (s *Service) AuthURL(state string, scopes []string) string {
+	return s.AuthURLFor(state, scopes, "")
+}
+
+// AuthURLFor is AuthURL for a Workspace domain: hd narrows Google's account chooser to that domain. It is only a
+// hint to the person, and the domain is checked again on the way back (ConnectIn), because a request parameter
+// restricts nothing.
+func (s *Service) AuthURLFor(state string, scopes []string, domain string) string {
 	v := url.Values{}
+	if domain != "" {
+		v.Set("hd", domain)
+	}
 	v.Set("client_id", s.cfg.ClientID)
 	v.Set("redirect_uri", s.cfg.RedirectURL)
 	v.Set("response_type", "code")
@@ -212,8 +228,49 @@ func claims(idToken string) (sub, email string) {
 	return c.Sub, c.Email
 }
 
+// hostedDomain reads the hd claim of an id token that came straight from the token endpoint.
+func hostedDomain(idToken string) string {
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	raw, err := base64URLDecode(parts[1])
+	if err != nil {
+		return ""
+	}
+	var c struct {
+		HD string `json:"hd"`
+	}
+	_ = json.Unmarshal(raw, &c)
+	return c.HD
+}
+
+// revokeToken tells Google to drop a grant Hearth has decided not to keep, best effort. Refusing an account and
+// leaving its grant alive at Google would be refusing it halfway.
+func (s *Service) revokeToken(ctx context.Context, token string) {
+	if token == "" {
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.revokeURL,
+		strings.NewReader(url.Values{"token": {token}}.Encode()))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if resp, err := s.http.Do(req); err == nil {
+		resp.Body.Close()
+	}
+}
+
 // Connect exchanges the code and stores the connection.
 func (s *Service) Connect(ctx context.Context, orgID, principalID, code string) (*Connection, error) {
+	return s.ConnectIn(ctx, orgID, principalID, code, "")
+}
+
+// ConnectIn is Connect for an account that has to belong to one Workspace domain. The domain is read from the id
+// token's hd claim, which Google sets only for a Workspace account and sets to its primary domain; a personal Gmail
+// account has none, so it is refused.
+func (s *Service) ConnectIn(ctx context.Context, orgID, principalID, code, domain string) (*Connection, error) {
 	if s.box == nil {
 		return nil, ErrNoKey
 	}
@@ -238,6 +295,10 @@ func (s *Service) Connect(ctx context.Context, orgID, principalID, code string) 
 	sub, email := claims(tr.IDToken)
 	if sub == "" {
 		return nil, errors.New("google: the response carried no account id")
+	}
+	if domain != "" && !strings.EqualFold(hostedDomain(tr.IDToken), domain) {
+		s.revokeToken(ctx, tr.RefreshToken)
+		return nil, connect.ErrWrongTenant
 	}
 
 	ctxKey := "google:" + principalID
