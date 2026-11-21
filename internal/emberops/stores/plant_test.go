@@ -404,3 +404,30 @@ func TestADeletedSpaceThatWouldNotGoIsTriedAgain(t *testing.T) {
 		t.Errorf("%d spaces left: the deleted space was never tried again", n)
 	}
 }
+
+// Filing a task in a folder made a moment ago works. The folder's copy into EmberOPS was run as the person who made the folder,
+// which EmberOPS refuses for staff, so the folder was not there when the task linked it and the create failed ("could not
+// create") until the background copy caught up a few seconds later.
+func TestATaskFiledRightAfterItsFolderWasMadeLands(t *testing.T) {
+	e, s, _ := newPlant(t)
+	ctx := e.as("ann-tok") // a person: EmberOPS lets only the service account write a Hearth Space
+	folder, err := s.CreateSpace(ctx, org, actor(ann), "Fresh folder", "folder", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.f.All("Hearth Space")) != 1 {
+		t.Fatalf("the folder was not copied into EmberOPS by the time CreateSpace returned: %d spaces", len(e.f.All("Hearth Space")))
+	}
+	ds := &stores.Docs{Store: newSpine(), Base: e.base, Dir: e.dir}
+	d, err := ds.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindTask, Title: "first task", SpaceID: &folder.ID})
+	if err != nil {
+		t.Fatalf("a task filed right after its folder was made failed: %v", err)
+	}
+	doc, err := ds.Create(ctx, org, actor(ann), docs.CreateParams{Kind: docs.KindDoc, Title: "first note", SpaceID: &folder.ID})
+	if err != nil {
+		t.Fatalf("a document filed right after its folder was made failed: %v", err)
+	}
+	if len(e.f.All("Task")) != 1 || len(e.f.All("Hearth Document")) != 1 || d.ID == "" || doc.ID == "" {
+		t.Errorf("tasks %d, documents %d in EmberOPS", len(e.f.All("Task")), len(e.f.All("Hearth Document")))
+	}
+}

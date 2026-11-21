@@ -543,6 +543,23 @@ func (f *Frappe) upsert(doctype, hid string, vals map[string]any, user string) (
 		vals = map[string]any{}
 	}
 	delete(vals, "doctype")
+	if doctype == "Hearth Space" && user != "svc@example.com" {
+		// Live (found 2.22.7): the space copy is Hearth Admin's. A person's token is refused, "does not have access to this
+		// document: Hearth Space".
+		return nil, invalid("Not allowed via controller permission check: User " + user + " does not have access to this document: Hearth Space")
+	}
+	if ref, ok := vals["hearth_space"].(string); ok && strings.HasPrefix(ref, "hearth:") {
+		// And a record that links a space EmberOPS does not hold yet is refused, as Frappe refuses a Link to nothing.
+		found := false
+		for _, sp := range f.docs["Hearth Space"] {
+			if s, _ := sp["hearth_id"].(string); strings.EqualFold(s, strings.TrimPrefix(ref, "hearth:")) {
+				found = true
+			}
+		}
+		if !found {
+			return nil, invalid("Could not find Hearth Space: " + strings.TrimPrefix(ref, "hearth:"))
+		}
+	}
 	f.resolveRefs(vals)
 	vals["hearth_id"] = strings.ToLower(hid)
 	d := f.byHearthID(doctype, hid)
