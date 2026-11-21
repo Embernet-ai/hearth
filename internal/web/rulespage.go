@@ -28,7 +28,7 @@ func (s *Server) listRules(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "rule runs", "error", err)
 	}
-	people, err := s.docs.Assignable(r.Context(), id.OrgID)
+	people, err := s.assignable(r)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "load people", "error", err)
 	}
@@ -82,7 +82,7 @@ func (s *Server) saveRule(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := s.rules.Save(r.Context(), id.OrgID, id.PrincipalID, rule); err != nil {
 		list, _ := s.rules.List(r.Context(), id.OrgID)
-		people, _ := s.docs.Assignable(r.Context(), id.OrgID)
+		people, _ := s.assignable(r)
 		w.WriteHeader(http.StatusBadRequest)
 		s.render(w, r, "rules", page{
 			Title: "Automations", IsAdmin: true, Rules: list, People: people,

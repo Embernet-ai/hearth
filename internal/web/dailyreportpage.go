@@ -284,7 +284,7 @@ func (s *Server) getDailyReports(w http.ResponseWriter, r *http.Request) {
 	if tree, err := s.plant.SpaceTree(r.Context(), id.OrgID, id.Subjects); err == nil {
 		p.RepTree = tree
 	}
-	if people, err := s.docs.Assignable(r.Context(), id.OrgID); err == nil {
+	if people, err := s.assignable(r); err == nil {
 		p.RepPeople = people
 	}
 	if mine, err := s.docs.ReportOn(r.Context(), id.OrgID, id.PrincipalID, docs.ReportDay(time.Now())); err == nil {

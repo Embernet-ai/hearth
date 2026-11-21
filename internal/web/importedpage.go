@@ -57,7 +57,7 @@ func (s *Server) getImported(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(byPerson, func(i, j int) bool { return byPerson[i].PersonName < byPerson[j].PersonName })
 
-	people, err := s.docs.Assignable(r.Context(), id.OrgID)
+	people, err := s.assignable(r)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "imported hours people", "error", err)
 	}

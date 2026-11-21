@@ -1518,7 +1518,7 @@ func (s *Server) newDocument(w http.ResponseWriter, r *http.Request) {
 	var people []docs.People
 	if docs.HasTaskFields(kind) {
 		var err error
-		if people, err = s.docs.Assignable(r.Context(), auth.From(r.Context()).OrgID); err != nil {
+		if people, err = s.assignable(r); err != nil {
 			s.log.ErrorContext(r.Context(), "load assignable", "error", err)
 		}
 	}
@@ -1664,7 +1664,13 @@ func (s *Server) showDocument(w http.ResponseWriter, r *http.Request, docID stri
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "load links", "error", err)
 	}
-	people, err := s.docs.Assignable(r.Context(), id.OrgID)
+	// The people already on this document stay in its picker, so what is
+	// assigned never drops off its own page for an account whose lists are cut.
+	onIt := []string{d.OwnerID}
+	if assigned, _, aerr := s.docs.AssignedTo(r.Context(), d.ID); aerr == nil {
+		onIt = append(onIt, assigned...)
+	}
+	people, err := s.assignable(r, onIt...)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "load assignable", "error", err)
 	}

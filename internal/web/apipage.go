@@ -31,7 +31,7 @@ func (s *Server) getIntegrations(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "list webhooks", "error", err)
 	}
-	people, err := s.docs.Assignable(r.Context(), id.OrgID)
+	people, err := s.assignable(r)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "load people", "error", err)
 	}
