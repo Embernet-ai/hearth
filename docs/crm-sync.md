@@ -61,6 +61,17 @@ put back (and reported), and one for an activity removed in Hearth is left. The 
 list and only a new or changed one is sent. If EmberOps refuses the first Comment, because it has not been updated
 to carry a `hearth_id` on Comment (EmberOPS 1.2.2), the pass stops with one line.
 
+## The phone's calls as Call Logs
+
+With `-timeline` on, every call the phone system logged (an activity with `external_refs` source `phone`) also goes to EmberOps as a
+Call Log, ERPNext's own telephony document, keyed on the activity id (`hearth_id`, and `id` is `hearth-<activity id>`). Type is Incoming or
+Outgoing, status is Completed for an answered call and No Answer for any other, `from` or `to` is the number on the first line of the activity body
+(`Number: +12165550142`), duration is in seconds, and it is linked to the Contact and to the company's Customer, Supplier or Lead, as far
+as EmberOps has them. The start and end are written in the EmberOps site's time zone, `CRM_SYNC_EMBEROPS_TIMEZONE` (America/New_York when unset), since
+a Frappe Datetime has none. Hearth owns the text, a Call Log is never deleted, and a call a person wrote on the timeline by hand stays a Comment only.
+The EmberOps addon (`emberops_hearth`, release 1.2.5 or later) must carry `hearth_id` on Call Log and let the `Hearth CRM Sync` role write it, or the
+pass stops with one line.
+
 ## Suppliers need a tax ID
 
 EmberOps runs the US compliance pack: it will not save a Supplier without `us_ein`

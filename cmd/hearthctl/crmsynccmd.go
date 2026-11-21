@@ -86,7 +86,7 @@ func runCRMSync(ctx context.Context, args []string) error {
 		return fmt.Errorf("the acting principal for companies made from EmberOps: %w", err)
 	}
 	opt := crmsync.Options{Write: *write, Remove: *remove, Show: *show, Deals: *deals, Prospects: *prospects, Timeline: *timeline,
-		HearthURL: os.Getenv("HEARTH_PUBLIC_BASE_URL"), OpsURL: site,
+		HearthURL: os.Getenv("HEARTH_PUBLIC_BASE_URL"), OpsURL: site, TimeZone: os.Getenv("CRM_SYNC_EMBEROPS_TIMEZONE"),
 		Companies: companyMaker{svc: crm.New(pools.Web, az), org: orgID, actor: actor}}
 	for _, s := range strings.Split(*only, ",") {
 		if s = strings.TrimSpace(s); s != "" {

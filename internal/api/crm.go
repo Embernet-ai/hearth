@@ -58,6 +58,7 @@ func (s *Service) crmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/contacts", s.crm(s.createContact))
 	mux.HandleFunc("GET /v1/contacts/{id}", s.crm(s.getContact))
 	mux.HandleFunc("PATCH /v1/contacts/{id}", s.crm(s.patchContact))
+	mux.HandleFunc("DELETE /v1/contacts/{id}", s.crm(s.deleteContact))
 	mux.HandleFunc("GET /v1/contacts/{id}/activities", s.crm(s.activitiesOf(core.EntityContact)))
 
 	mux.HandleFunc("GET /v1/deals", s.crm(s.listDeals))
@@ -687,6 +688,20 @@ func (s *Service) patchContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// deleteContact removes a person from the CRM (a soft delete, as on the page). 204 when it is gone.
+func (s *Service) deleteContact(w http.ResponseWriter, r *http.Request) {
+	c := from(r)
+	if err := s.crmStore.DeleteContact(r.Context(), c.OrgID, c.Subjects, r.PathValue("id")); err != nil {
+		if errors.Is(err, crm.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "no such contact")
+			return
+		}
+		writeErr(w, http.StatusNotFound, "no such contact")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // -----------------------------------------------------------------------------

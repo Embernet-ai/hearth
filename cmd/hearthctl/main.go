@@ -139,7 +139,7 @@ func usage() {
   reassign -csv PLAN [-apply -reverse-out FILE]  put work on its assignees from a plan
   daily-report -as EMAIL (-date D [-file F] | -dir DIR) [-apply]  file a past day's report as that person (dry run by default)
   time-import -as EMAIL -file F.csv [-apply]  put a person's past time in as reconstructed entries, once (dry run by default)
-  service-token -as ADMIN -name NAME [-team Sales] [-days N] -out FILE  make a service its own agent principal on a team with a read-only API token
+  service-token -as ADMIN -name NAME [-team Sales] [-scope write|read] [-days N] -out FILE  make a service its own agent principal on a team with an API token (write by default, -scope read for read only)
   person-time -as ADMIN -person EMAIL [-approver EMAIL|none] [-auto-approve on|off]  set who signs off a person's time, and whether it approves itself
   time-remove -as EMAIL -file IDS -reason WHY [-apply]  remove time entries as a super admin, audited, dry run by default
   time-approve -person EMAIL -reason WHY [-apply] [-limit N]  approve a salaried person's waiting time by their auto-approve, audited, dry run by default

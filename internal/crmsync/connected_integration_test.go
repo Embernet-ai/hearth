@@ -5,6 +5,7 @@ package crmsync_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -364,5 +365,86 @@ func TestNotesAndCallsBecomeCommentsOnTheMatchingRecordOneWay(t *testing.T) {
 	y.activity("note", "x", "y", [2]string{"company", c2})
 	if rep, err = y.sync.Run(y.ctx, opts()); err != nil || len(y.f.All("Comment")) != 0 {
 		t.Errorf("the timeline was sent without being asked: %v", err)
+	}
+}
+
+func TestAPhoneCallBecomesACallLogOnTheContactAndCompanyAndOnlyThePhonesDo(t *testing.T) {
+	x := newSyncFixture(t)
+	co := x.mkCo("Rang Us Client", "ru.example", "client")
+	ct := x.person(co, "Rae Caller", "rae@ru.example", "216 555 0142")
+	in := x.activity("call", "Inbound call from Rae Caller", "Number: +12165550142\nAnswered by Patrick on extension 1003", [2]string{"company", co}, [2]string{"contact", ct})
+	x.exec(`UPDATE crm_activities SET direction='inbound', disposition='answered', duration_ms=94000 WHERE id=$1`, in)
+	x.exec(`INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id) VALUES ($1,'phone','call-1','activity',$2)`, x.org, in)
+	miss := x.activity("call", "Missed call from Rae Caller", "Number: +12165550142\nRang 2001, nobody answered", [2]string{"contact", ct})
+	x.exec(`UPDATE crm_activities SET direction='inbound', disposition='missed', duration_ms=0 WHERE id=$1`, miss)
+	x.exec(`INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id) VALUES ($1,'phone','call-2','activity',$2)`, x.org, miss)
+	// a call a person logged by hand is a Comment and never a Call Log
+	x.activity("call", "", "Talked at the show", [2]string{"company", co})
+
+	o := opts()
+	o.Timeline = true
+	o.TimeZone = "America/New_York"
+	rep, err := x.sync.Run(x.ctx, o)
+	if err != nil || rep.Failed() {
+		t.Fatalf("run: %v %+v", err, rep.Actions)
+	}
+	logs := x.f.All("Call Log")
+	if len(logs) != 2 || rep.Count("calllog", "create") != 2 {
+		t.Fatalf("%d Call Logs, want the two phone calls: %+v", len(logs), rep.Actions)
+	}
+	if n := len(x.f.All("Comment")); n != 4 {
+		t.Errorf("the timeline still sends every call and note as a Comment: %d Comments", n)
+	}
+	var answered, missed map[string]any
+	for _, l := range logs {
+		switch l["hearth_id"] {
+		case in:
+			answered = l
+		case miss:
+			missed = l
+		}
+	}
+	if answered == nil || answered["type"] != "Incoming" || answered["status"] != "Completed" || answered["from"] != "+12165550142" ||
+		fmt.Sprint(answered["duration"]) != "94" || answered["customer"] != byHearth(t, x, "Customer", co)["name"] ||
+		answered["id"] != "hearth-"+in || !strings.Contains(fmt.Sprint(answered["summary"]), "Answered by Patrick on extension 1003") {
+		t.Errorf("the answered call: %v", answered)
+	}
+	if links, _ := answered["links"].([]any); len(links) != 2 {
+		t.Errorf("the call is linked to the company's Customer and the person's Contact: %v", answered["links"])
+	}
+	if missed == nil || missed["status"] != "No Answer" || fmt.Sprint(missed["duration"]) != "0" {
+		t.Errorf("the missed call: %v", missed)
+	}
+	// Again: nothing is sent.
+	before := x.f.CallCount(upsertCalls)
+	if rep, err = x.sync.Run(x.ctx, o); err != nil || rep.Failed() {
+		t.Fatalf("second run: %v %+v", err, rep.Actions)
+	}
+	if n := x.f.CallCount(upsertCalls) - before; n != 0 || len(x.f.All("Call Log")) != 2 {
+		t.Errorf("settled Call Logs were sent again: %d upserts %+v", n, rep.Actions)
+	}
+}
+
+func TestAPersonTheCallerMadeWithNoCompanyStillReachesEmberOps(t *testing.T) {
+	x := newSyncFixture(t)
+	id := uuid.NewString()
+	x.exec(`INSERT INTO contacts (id, org_id, name, phone, created_by) VALUES ($1,$2,'+12165550177','+12165550177',$3)`, id, x.org, x.who)
+	x.exec(`INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id) VALUES ($1,'phone','caller:+12165550177','contact',$2)`, x.org, id)
+	// a person with no company who did not come from the phone stays in Hearth, as before
+	x.exec(`INSERT INTO contacts (id, org_id, name, phone, created_by) VALUES (gen_random_uuid(),$1,'Loose Lou','216 555 0111',$2)`, x.org, x.who)
+	rep, err := x.sync.Run(x.ctx, opts())
+	if err != nil || rep.Failed() {
+		t.Fatalf("run: %v %+v", err, rep.Actions)
+	}
+	cs := x.f.All("Contact")
+	if len(cs) != 1 || cs[0]["hearth_id"] != id {
+		t.Fatalf("EmberOps has %d Contacts, want only the one the phone made: %+v", len(cs), rep.Actions)
+	}
+	if links, _ := cs[0]["links"].([]any); len(links) != 0 {
+		t.Errorf("a person with no company was linked to %v", links)
+	}
+	before := x.f.CallCount(upsertCalls)
+	if rep, err = x.sync.Run(x.ctx, opts()); err != nil || rep.Failed() || x.f.CallCount(upsertCalls) != before {
+		t.Errorf("a settled contact was sent again: %v %+v", err, rep.Actions)
 	}
 }
