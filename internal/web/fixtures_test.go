@@ -23,6 +23,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/authz"
 	"github.com/Embernet-ai/hearth/internal/channels"
+	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
@@ -35,6 +36,30 @@ import (
 )
 
 var updateFixtures = flag.Bool("update-fixtures", false, "write ui/src/views/fixtures")
+
+// connectorsFixture is the Connectors page for an administrator or an ordinary member: Microsoft 365 set up, with
+// the calendar on and the person connected, and Google Workspace not set up on this installation.
+func connectorsFixture(admin bool) *ConnectorsView {
+	v := &ConnectorsView{Admin: admin, Providers: []ProviderView{
+		{Key: "microsoft", Label: "Microsoft 365", Configured: true, Tenant: "8f1c2b7e-0000-4a1d-9c3e-5d2f7a6b1c90",
+			TenantHelp: "The Microsoft Entra directory (tenant) ID.",
+			Connectors: []ConnectorView{
+				{Key: "calendar", Label: "Calendar", Describes: "Two-way.", Enabled: true, MeetLinks: true, Connections: 3, Covered: true},
+				{Key: "contacts", Label: "Contacts", Describes: "Imports.", Enabled: false},
+				{Key: "chat", Label: "Chat notifications", Describes: "Copies notifications.", Enabled: true},
+			},
+			Mine:      &MineView{Email: "dana@contoso.test", Live: true},
+			Calendars: []connect.CalendarChoice{{ID: "primary", Name: "Calendar", Primary: true, Synced: true}, {ID: "c2", Name: "Plant 3 shifts"}},
+			Spaces:    []connect.Space{{ID: "s1", Name: "Plant 3"}},
+		},
+		{Key: "google", Label: "Google Workspace", Configured: false},
+	}}
+	if admin {
+		v.Providers[0].People = []PersonConnView{{PrincipalID: "p1", Name: "Dana", Email: "dana@contoso.test",
+			Statuses: []StatusView{{Label: "Calendar", Items: 12}}}}
+	}
+	return v
+}
 
 func fixtures() map[string]page {
 	// A fixed clock, so the files do not change from one run to the next.
@@ -122,9 +147,19 @@ func fixtures() map[string]page {
 			TimeOffToDecide: []*timeoff.Request{leave("t1", "pending", false), leave("t2", "approved", true), cancelled}},
 		"timeoff-own": {Title: "Time off", TimeOffKinds: timeoff.Kinds,
 			TimeOff: []*timeoff.Request{leave("t2", "approved", true), cancelled}},
-		"settings-nobody":  {Title: "Settings"},
-		"settings-finance": {Title: "Settings", Can: authz.Held{authz.Finance: true}},
-		"settings-owner":   {Title: "Settings", IsAdmin: true},
+		"settings-nobody":     {Title: "Settings"},
+		"settings-finance":    {Title: "Settings", Can: authz.Held{authz.Finance: true}},
+		"settings-owner":      {Title: "Settings", IsAdmin: true},
+		"settings-connectors": {Title: "Settings", ConnectorsOn: true},
+
+		"connectors-admin":  {Title: "Connectors", Connectors: connectorsFixture(true)},
+		"connectors-member": {Title: "Connectors", Connectors: connectorsFixture(false)},
+		"cloud-browse": {Title: "Cloud files", Cloud: &CloudView{
+			Providers: []CloudProvider{{Key: "microsoft", Label: "Microsoft 365"}}, Provider: "microsoft", Label: "Microsoft 365",
+			Drives: []connect.Drive{{ID: "d1", Name: "OneDrive", Kind: "personal"}}, DriveID: "d1",
+			Items: []connect.FileItem{{ID: "fo", Name: "Quotes", Folder: true}, {ID: "fi", Name: "quote-118.pdf", WebURL: "https://files.example/fi"}},
+			DocID: "doc1", DocTitle: "Quote 118"}},
+		"cloud-none": {Title: "Cloud files", Cloud: &CloudView{}},
 
 		"person-everything":   everything,
 		"person-not-admin":    notAdmin,

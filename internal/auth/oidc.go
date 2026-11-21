@@ -80,15 +80,23 @@ type OIDCConfig struct {
 	// Never super_admin, and never applied to the person who claimed the installation.
 	RoleMap map[string]string
 
-	// graphBase is overridden by the tests.
-	graphBase string
+	// graphBase and authorityBase are overridden by the tests.
+	graphBase     string
+	authorityBase string
+}
+
+// authority is Entra's sign-in host.
+func (c OIDCConfig) authority() string {
+	if c.authorityBase != "" {
+		return c.authorityBase
+	}
+	return entraBase
 }
 
 // Microsoft and Google issuers.
 const (
-	entraBase       = "https://login.microsoftonline.com"
-	googleIssuer    = "https://accounts.google.com"
-	entraTemplateIs = entraBase + "/{tenantid}/v2.0"
+	entraBase    = "https://login.microsoftonline.com"
+	googleIssuer = "https://accounts.google.com"
 )
 
 // multiTenant reports a Microsoft sign-in that is not pinned to one directory.
@@ -108,7 +116,7 @@ func (c OIDCConfig) Resolve() (OIDCConfig, error) {
 			return c, errors.New("auth: the Microsoft preset needs HEARTH_MICROSOFT_TENANT, a directory id or \"organizations\"")
 		}
 		if c.Issuer == "" {
-			c.Issuer = entraBase + "/" + strings.ToLower(c.Tenant) + "/v2.0"
+			c.Issuer = c.authority() + "/" + strings.ToLower(c.Tenant) + "/v2.0"
 		}
 		if len(c.Scopes) == 0 {
 			// User.Read lets Hearth ask Microsoft for a person's groups when there are too many to fit in the token.
@@ -170,7 +178,7 @@ func NewOIDC(ctx context.Context, svc *Service, cfg OIDCConfig, secure bool) (*O
 	// unless told it is expected. Each token's own issuer is then checked by hand against its tid claim.
 	discoverCtx := ctx
 	if cfg.multiTenant() {
-		discoverCtx = oidc.InsecureIssuerURLContext(ctx, entraTemplateIs)
+		discoverCtx = oidc.InsecureIssuerURLContext(ctx, cfg.authority()+"/{tenantid}/v2.0")
 	}
 	provider, err := oidc.NewProvider(discoverCtx, strings.TrimSuffix(cfg.Issuer, "/"))
 	if err != nil {
@@ -641,7 +649,7 @@ func (o *OIDC) checkProvider(issuer, tid, hd string, verified *bool) error {
 			return errors.New("auth: the token carries no tenant")
 		}
 		// The issuer is checked by hand for a multi-tenant sign-in, against the tenant the token says it came from.
-		if want := entraBase + "/" + tid + "/v2.0"; issuer != want {
+		if want := o.cfg.authority() + "/" + tid + "/v2.0"; issuer != want {
 			return errors.New("auth: the token's issuer does not match its tenant")
 		}
 		if o.cfg.multiTenant() {
