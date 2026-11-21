@@ -5,6 +5,32 @@ entries:
       catalog.cattle.io/display-name: Hearth
       catalog.cattle.io/type: cluster-template
     apiVersion: v2
+    appVersion: 2.23.0
+    created: "2026-11-21T19:59:54.810440013Z"
+    dependencies:
+    - condition: garage.enabled
+      name: garage
+      repository: https://embernet-ai.github.io/garage/
+      version: 0.1.6
+    description: Hearth, a self-hosted all-in-one workspace. Work orders, assets,
+      tasks, and documents on one entity spine.
+    digest: 9f48b6f9e2f1a0b9a71f3896305e9720684e15594b1ce4c11a10c56030bd29fd
+    home: https://embernet.ai/hearth.html
+    icon: https://embernet-ai.github.io/hearth/icon.png
+    maintainers:
+    - email: patrick@fireballz.ai
+      name: Patrick Ryan
+    name: hearth
+    sources:
+    - https://github.com/Embernet-ai/hearth
+    type: application
+    urls:
+    - https://embernet-ai.github.io/hearth/hearth-2.23.0.tgz
+    version: 2.23.0
+  - annotations:
+      catalog.cattle.io/display-name: Hearth
+      catalog.cattle.io/type: cluster-template
+    apiVersion: v2
     appVersion: 2.22.12
     created: "2026-11-21T17:45:18.192082552Z"
     dependencies:
@@ -313,4 +339,4 @@ entries:
     urls:
     - https://embernet-ai.github.io/hearth/hearth-2.22.1.tgz
     version: 2.22.1
-generated: "2026-11-21T17:45:18.186654982Z"
+generated: "2026-11-21T19:59:54.80769421Z"
