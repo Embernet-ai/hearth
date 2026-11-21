@@ -28,6 +28,6 @@ annotations:
 # pins its digest.
 dependencies:
   - name: garage
-    version: 0.1.5
+    version: 0.1.6
     repository: https://embernet-ai.github.io/garage/
     condition: garage.enabled

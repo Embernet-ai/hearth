@@ -1,6 +1,6 @@
 dependencies:
 - name: garage
   repository: https://embernet-ai.github.io/garage/
-  version: 0.1.5
-digest: sha256:ff362c7c9e335eec0c1611301e448757d09496d83185349352421d80c0290b36
-generated: "2026-11-20T05:52:25.849154513-05:00"
+  version: 0.1.6
+digest: sha256:5efd9dbaabf54d7dce803d50bd7ae4a3f7794589171b1d2a2ac4b213b17e0a49
+generated: "2026-11-20T21:41:55.062978825-05:00"
