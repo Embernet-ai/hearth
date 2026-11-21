@@ -16,6 +16,8 @@
     </form>
   </div>
 
+  <div  class="cpage">
+  <div  class="clist">
   {#if F.t(dot?.SalesOn)}
     <form  class="row wrap"  method="get"  action="/contacts"  data-contact-filters>
       <input  type="hidden"  name="q"  value={S(dot?.SearchText)}>
@@ -41,10 +43,13 @@
         <th><a  href={(S(F.index(dot?.SortLinks, "email")))}>Email</a></th>
         <th>Phone</th>
         <th><a  href={(S(F.index(dot?.SortLinks, "owner")))}>Owner</a></th>
+        <th class="col-md">Updated</th>
+        <th class="col-lg">LinkedIn</th>
+        <th class="col-lg">Notes</th>
       </tr></thead>
       <tbody>
         {#each F.rng(dot?.ContactRows) as [k2, d2]}
-          {@render grouprow(dot, k2, 6)}
+          {@render grouprow(dot, k2, 9)}
           <tr  data-contact={S(d2?.ID)}>
             <td><a  href={("/contacts/" + S(d2?.ID))}>{d2?.Name}</a></td>
             <td  class="muted small">{#if F.t(d2?.CompanyID)}<a  href={("/companies/" + S(F.deref_s(d2?.CompanyID)))}>{d2?.CompanyName}</a>{/if}</td>
@@ -52,6 +57,9 @@
             <td  class="muted small">{#if F.t(d2?.Email)}<a  href={("mailto:" + S(d2?.Email))}>{d2?.Email}</a>{/if}</td>
             <td  class="muted small">{d2?.Phone}</td>
             <td  class="muted small">{d2?.OwnerName}</td>
+            <td  class="muted small col-md">{#if F.t(d2?.UpdatedAt)}{F.date(d2?.UpdatedAt)}{/if}</td>
+            <td  class="muted small col-lg">{#if /^https?:\/\//i.test(S(d2?.LinkedIn))}<a  href={(S(d2?.LinkedIn))}  rel="noopener noreferrer">LinkedIn</a>{:else}{d2?.LinkedIn}{/if}</td>
+            <td  class="muted small col-lg notecell"  title={S(d2?.Notes)}>{d2?.Notes}</td>
           </tr>
         {/each}
       </tbody>
@@ -62,7 +70,7 @@
     {/if}
   {:else if F.t(dot?.Contacts)}
     <table  class="list">
-      <thead><tr><th>Name</th><th>Company</th><th>Title</th><th>Email</th><th>Phone</th></tr></thead>
+      <thead><tr><th>Name</th><th>Company</th><th>Title</th><th>Email</th><th>Phone</th><th class="col-md">Updated</th><th class="col-lg">Notes</th></tr></thead>
       <tbody>
         {#each F.rng(dot?.Contacts) as [k3, d3]}
           <tr  data-contact={S(d3?.ID)}>
@@ -73,6 +81,8 @@
             <td  class="muted small">{d3?.Title}</td>
             <td  class="muted small">{#if F.t(d3?.Email)}<a  href={("mailto:" + S(d3?.Email))}>{d3?.Email}</a>{/if}</td>
             <td  class="muted small">{d3?.Phone}</td>
+            <td  class="muted small col-md">{#if F.t(d3?.UpdatedAt)}{F.date(d3?.UpdatedAt)}{/if}</td>
+            <td  class="muted small col-lg notecell"  title={S(d3?.Notes)}>{d3?.Notes}</td>
           </tr>
         {/each}
       </tbody>
@@ -81,6 +91,9 @@
     <p  class="muted">Nobody on file yet.</p>
   {/if}
 
+  </div>
+
+  <aside  class="cadd card">
   <h2>Add a contact</h2>
   <form  method="post"  action="/contacts"  class="row wrap">
     <input  name="name"  placeholder="Name"  required aria-label="Name">
@@ -98,6 +111,8 @@
     is a person and not a firm, and inventing a one-person company for him
     produces a directory full of rows nobody wanted.
   </p>
+  </aside>
+  </div>
 </section>
 {/snippet}
 {@render content(dot)}

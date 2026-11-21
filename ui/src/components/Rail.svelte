@@ -25,7 +25,7 @@
   </details>
 {/snippet}
 
-<aside class="sidenav" class:open>
+<aside class="sidenav" id="sidepanel" class:open>
   <a class="brand" href={'/'}><svg class="mark" viewBox="0 0 64 64" width="24" height="24" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#D92D20"/><rect x="14" y="14" width="9" height="36" rx="3" fill="#fff"/><rect x="41" y="14" width="9" height="36" rx="3" fill="#fff"/><rect x="22" y="33" width="20" height="7" fill="#fff"/><path transform="translate(32 32) scale(.5) translate(-32 -46)" d="M32 46C25 46 20 41 20 34.5 20 28 24 24.5 26.5 20.5 27.7 24 29.5 25.5 31.5 26 30 20 31.5 13 37 8 37.5 14.5 44 20 44 31 44 39.5 38.5 46 32 46Z" fill="#fff"/></svg><span>Hearth</span></a>
   {#if !contractor}<a class="navitem scanlink" class:on={pg.Path === '/scan'} href={scan.href}>Scan</a>{/if}
 

@@ -18,6 +18,8 @@
 </p>
 
 
+<div  class="outgrid">
+<section  class="outcol">
 <h2>On this phone</h2>
 <ul  class="files touchlist"  data-queue></ul>
 <p  class="muted small"  data-queue-empty>
@@ -25,6 +27,9 @@
 </p>
 
 
+</section>
+
+<section  class="outcol">
 <h2>Waiting on you</h2>
 {#if F.t(dot?.Outbox)}
   <ul  class="files touchlist"  data-undecided>
@@ -71,7 +76,10 @@
   <p  class="muted small">Nothing needs a decision.</p>
 {/if}
 
+</section>
+
 {#if F.t(dot?.OutboxRecent)}
+<section  class="outcol">
   <h2>Lately</h2>
   <p  class="muted small">
     What has come off a phone recently, so the question "did my morning
@@ -97,6 +105,8 @@
       </li>
     {/each}
   </ul>
+</section>
 {/if}
+</div>
 {/snippet}
 {@render content(dot)}

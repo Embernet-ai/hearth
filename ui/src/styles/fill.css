@@ -1,0 +1,197 @@
+/* Screens that fill the width of the window.
+
+   The app keeps its centered column everywhere except on the screens named here (the dashboard, inbox, outbox, settings,
+   unassigned, channels and contacts). On those, Shell.svelte marks <main class="fill" data-screen="...">, and this file lays the
+   page out across whatever width the window has: more columns, more cards and more fields as it widens, one column on a phone.
+   Nothing here removes a section, a control or a link; a rule that hides something only hides a column the narrower layout
+   has no room for. Loaded last, after finish.css, so it wins by order. Checked at 1280, 1440, 1920 and 2560 by ui/layout/fill.mjs. */
+
+/* ---- the side panel folds away on a wide screen, and comes back with the same button ---------------------------------------- */
+.railbtn { display: inline-flex; align-items: center; gap: var(--s-2); flex: none; }
+@media (max-width: 860px) { .railbtn { display: none; } }
+@media (min-width: 861px) {
+  .app.railhidden { grid-template-columns: minmax(0, 1fr); background-image: none; }
+  .app.railhidden .sidenav { display: none; }
+}
+.railbtn:focus-visible { outline: 2px solid var(--en-focus); outline-offset: 2px; }
+
+/* ---- the page: the whole width of the workspace, with an even gutter ---------------------------------------------------------- */
+main.fill { max-width: none; margin: 0; padding-inline: clamp(var(--s-4), 2vw, var(--s-6)); }
+.workspace:has(> main.fill) > footer { max-width: none; margin: auto 0 0; padding-inline: clamp(var(--s-4), 2vw, var(--s-6)); }
+main.fill > section { min-width: 0; }
+
+/* a panel that sits beside a list: the house card, as tall as what is in it */
+main.fill .sidecard, main.fill .inboxprefs, main.fill .chnew, main.fill .cadd {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--en-r-card, 16px); box-shadow: var(--shadow); padding: var(--s-4) var(--s-5); margin: 0; min-width: 0;
+}
+main.fill .inboxprefs > :first-child, main.fill .chnew > :first-child, main.fill .cadd > :first-child { margin-top: 0; }
+
+/* columns a wide screen has room for (and a narrow one hides): extra fields of the same record */
+table.list th.col-md, table.list td.col-md, table.list th.col-lg, table.list td.col-lg { display: none; }
+@media (min-width: 1100px) { table.list th.col-md, table.list td.col-md { display: table-cell; } }
+@media (min-width: 1500px) { table.list th.col-lg, table.list td.col-lg { display: table-cell; } }
+.notecell { max-width: 26rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Dashboard ------------------------------------------------------------------------------------------------------------------- */
+main[data-screen='dashboard'] .dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4) var(--s-5); align-items: start; }
+main[data-screen='dashboard'] .dash > * { min-width: 0; margin: 0; }
+main[data-screen='dashboard'] .dash > .notice { margin: 0; }
+main[data-screen='dashboard'] .dashgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+main[data-screen='dashboard'] .dashgrid > * { min-width: 0; }
+main[data-screen='dashboard'] .dashfollow { grid-column: auto; }
+main[data-screen='dashboard'] .dashgrid h2 { margin: 0 0 var(--s-2); }
+main[data-screen='dashboard'] .dashwork h2:not(:first-child) { margin-top: var(--s-5); }
+main[data-screen='dashboard'] .numbers { margin: 0; container-type: inline-size; }
+main[data-screen='dashboard'] .numbers .numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--s-4) var(--s-5); align-items: start; grid-auto-flow: row dense; }
+main[data-screen='dashboard'] .numbers .numgroup { min-width: 0; }
+main[data-screen='dashboard'] .numbers .numgroup .grouptitle { margin-top: 0; }
+main[data-screen='dashboard'] .numbers .stats { grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); margin: 0; }
+@container (min-width: 46rem) {
+  /* a group with six tiles (or the eight weeks) takes two columns; one with a tile or two stays one */
+  .numbers .numgroup:has(> .stats > .stat:nth-child(5)), .numbers .numgroup.numweeks { grid-column: span 2; }
+}
+@media (min-width: 1200px) {
+  main[data-screen='dashboard'] .dash { grid-template-columns: minmax(0, 1fr) minmax(22rem, 27rem); grid-template-areas: 'daily daily' 'week week' 'numbers side'; }
+  main[data-screen='dashboard'] .dash > .dailycard { grid-area: daily; }
+  main[data-screen='dashboard'] .dash > .weekstrip { grid-area: week; }
+  main[data-screen='dashboard'] .dash > .numbers { grid-area: numbers; }
+  main[data-screen='dashboard'] .dash > .dashgrid { grid-area: side; }
+}
+@media (min-width: 1800px) {
+  main[data-screen='dashboard'] .dash { grid-template-columns: minmax(0, 1fr) minmax(40rem, 48rem); }
+  main[data-screen='dashboard'] .dashgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'work time' 'work follow'; gap: var(--s-4) var(--s-5); }
+  main[data-screen='dashboard'] .dashwork { grid-area: work; }
+  main[data-screen='dashboard'] .dashtime { grid-area: time; }
+  main[data-screen='dashboard'] .dashfollow { grid-area: follow; }
+}
+/* the week strip: seven days across wherever there is room for them */
+@media (min-width: 1024px) {
+  /* seven equal days; the open one grows downward inside its own day instead of taking a row to itself */
+  main[data-screen='dashboard'] .weekstrip { grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: start; }
+  main[data-screen='dashboard'] .weekstrip > .weekday[open] { grid-column: auto; }
+}
+
+/* ---- Inbox ------------------------------------------------------------------------------------------------------------------------ */
+main[data-screen='inbox'] .inboxgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+main[data-screen='inbox'] .inboxlist { min-width: 0; }
+main[data-screen='inbox'] ul.hits { margin: 0; }
+main[data-screen='inbox'] ul.hits li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'title tag' 'excerpt excerpt' 'when read'; column-gap: var(--s-4); row-gap: var(--s-1); align-items: center; padding: var(--s-3) var(--s-3); }
+main[data-screen='inbox'] ul.hits li > .hitlink { grid-area: title; min-width: 0; overflow-wrap: anywhere; }
+main[data-screen='inbox'] ul.hits li > .tag { grid-area: tag; justify-self: end; }
+main[data-screen='inbox'] ul.hits li > .snippet { grid-area: excerpt; margin: 0; }
+main[data-screen='inbox'] ul.hits li > .when { grid-area: when; }
+main[data-screen='inbox'] ul.hits li > .readform { grid-area: read; justify-self: end; margin: 0; }
+main[data-screen='inbox'] ul.hits li.unreadrow > .hitlink { font-weight: 650; }
+main[data-screen='inbox'] ul.hits li.unreadrow { border-left: 3px solid var(--accent-dim); padding-left: var(--s-3); background: var(--tint); }
+main[data-screen='inbox'] .inboxprefs h3 { margin: 0 0 var(--s-2); }
+main[data-screen='inbox'] .inboxprefs .fields { max-width: none; }
+@media (min-width: 1000px) {
+  main[data-screen='inbox'] .inboxgrid { grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem); }
+  main[data-screen='inbox'] .inboxprefs { position: sticky; top: calc(3.25rem + var(--s-4)); }
+  main[data-screen='inbox'] ul.hits li { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto auto; grid-template-areas: 'title excerpt tag when read'; }
+  main[data-screen='inbox'] ul.hits li:not(:has(> .snippet)) { grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-areas: 'title tag when read'; }
+  main[data-screen='inbox'] ul.hits li > .readform { min-width: 4.5rem; }
+}
+@media (min-width: 1800px) { main[data-screen='inbox'] .inboxgrid { grid-template-columns: minmax(0, 1fr) minmax(40rem, 48rem); } }
+
+/* ---- Outbox ------------------------------------------------------------------------------------------------------------------------ */
+/* Three bands down the page, each with its name beside it on a wide screen: an empty one is a line, a full one has the whole width. */
+main[data-screen='outbox'] .outgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+main[data-screen='outbox'] .outcol { padding: var(--s-4) 0; border-top: 1px solid var(--line); min-width: 0; }
+main[data-screen='outbox'] .outcol > ul { margin: 0; }
+main[data-screen='outbox'] .outcol h2 { margin: 0 0 var(--s-2); }
+main[data-screen='outbox'] ul.files li:last-child { border-bottom: 0; }
+@media (min-width: 1000px) {
+  main[data-screen='outbox'] .outcol { display: grid; grid-template-columns: 14rem minmax(0, 1fr); column-gap: var(--s-5); align-items: start; }
+  main[data-screen='outbox'] .outcol > h2 { grid-column: 1; grid-row: 1 / span 4; margin: 0; }
+  main[data-screen='outbox'] .outcol > :not(h2) { grid-column: 2; }
+  main[data-screen='outbox'] .outcol > p { margin: 0 0 var(--s-2); }
+}
+
+/* ---- Settings ---------------------------------------------------------------------------------------------------------------------- */
+main[data-screen='settings'] .settingspage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4) var(--s-6); align-items: start; }
+main[data-screen='settings'] .settingspage > h1 { grid-column: 1 / -1; margin: 0; }
+main[data-screen='settings'] .settingsgroup { min-width: 0; }
+main[data-screen='settings'] .settingsgroup > h2 { margin: 0 0 var(--s-2); }
+main[data-screen='settings'] .settingsgroup > p { margin: 0 0 var(--s-3); max-width: none; }
+main[data-screen='settings'] .settingsgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: var(--s-3); align-items: start; }
+main[data-screen='settings'] .settingsgrid .card { container-type: inline-size; display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-4); }
+main[data-screen='settings'] .settingsgrid .card h3 { margin: 0 0 var(--s-2); font-size: var(--t-2xs); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+main[data-screen='settings'] .settingsgrid .card a.settinglink { position: relative; display: grid; gap: 2px; padding: var(--s-2) var(--s-6) var(--s-2) var(--s-3); margin: 0 calc(-1 * var(--s-2)); border-radius: 8px; color: var(--fg); text-decoration: none; }
+main[data-screen='settings'] .settingsgrid .card a.settinglink:hover { background: var(--hover); }
+main[data-screen='settings'] .settingsgrid .card a.settinglink::after { content: '\203A'; position: absolute; right: var(--s-3); top: 50%; transform: translateY(-50%); color: var(--muted); font-size: var(--t-md); }
+main[data-screen='settings'] .sl-title { color: var(--accent); font-weight: 650; font-size: var(--t-sm); }
+main[data-screen='settings'] .sl-note { color: var(--muted); font-size: var(--t-xs); line-height: 1.4; }
+@container (min-width: 34rem) {
+  .settingsgrid .card a.settinglink { grid-template-columns: minmax(10rem, 20rem) minmax(0, 1fr); align-items: center; gap: var(--s-4); }
+}
+@media (min-width: 1400px) {
+  main[data-screen='settings'] .settingspage:has(> .settingsgroup.admin) { grid-template-columns: minmax(19rem, 26rem) minmax(0, 1fr); }
+  main[data-screen='settings'] .settingspage:has(> .settingsgroup.admin) .personal .settingsgrid { grid-template-columns: minmax(0, 1fr); }
+  main[data-screen='settings'] .settingspage:has(> .settingsgroup.admin) .admin .settingsgrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
+}
+
+/* ---- Unassigned ----------------------------------------------------------------------------------------------------------------------- */
+main[data-screen='unassigned'] .unassignedbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-5); margin: 0 0 var(--s-3); }
+main[data-screen='unassigned'] .unassignedbar > * { margin: 0; }
+main[data-screen='unassigned'] table[data-unassigned] th:first-child { width: 28%; }
+main[data-screen='unassigned'] table[data-unassigned] th.col-md { width: 8rem; }
+main[data-screen='unassigned'] table[data-unassigned] td.claimcell { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); white-space: nowrap; }
+main[data-screen='unassigned'] table[data-unassigned] td.claimcell form { margin: 0; flex: 0 0 auto; }
+main[data-screen='unassigned'] table[data-unassigned] td.claimcell select { min-width: 11rem; }
+main[data-screen='unassigned'] table[data-unassigned] th:last-child { text-align: right; width: 1%; white-space: nowrap; }
+@media (max-width: 40rem) { main[data-screen='unassigned'] table[data-unassigned] td.claimcell { justify-content: flex-start; } }
+
+/* ---- Channels ----------------------------------------------------------------------------------------------------------------------- */
+main[data-screen='channels'] .chpage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+main[data-screen='channels'] .chlist { min-width: 0; }
+main[data-screen='channels'] .chnew h3 { margin: 0 0 var(--s-3); }
+@media (min-width: 1100px) {
+  main[data-screen='channels'] .chpage { grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem); }
+  main[data-screen='channels'] .chnew { position: sticky; top: calc(3.25rem + var(--s-4)); }
+  /* the table becomes a card for each channel: its name, topic, size, what it grants, what is unread, and the one button */
+  main[data-screen='channels'] table.list, main[data-screen='channels'] table.list > tbody { display: block; width: 100%; }
+  main[data-screen='channels'] table.list > thead { display: none; }
+  main[data-screen='channels'] table.list > tbody { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr)); gap: var(--s-3); }
+  main[data-screen='channels'] table.list > tbody > tr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-4); padding: var(--s-3) var(--s-4); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  main[data-screen='channels'] table.list > tbody > tr:hover { background: var(--panel); border-color: var(--edge); }
+  main[data-screen='channels'] table.list > tbody > tr > td { display: block; padding: 0; border: 0; min-width: 0; text-align: left; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(1) { order: 1; flex: 1 1 12rem; font-size: var(--t-md); font-weight: 650; overflow-wrap: break-word; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(5) { order: 2; flex: 0 0 auto; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(2) { order: 3; flex: 1 0 100%; min-height: 1.4em; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(3) { order: 4; flex: 0 0 auto; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(4) { order: 5; flex: 0 0 auto; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(6) { order: 6; flex: 0 0 auto; margin-left: auto; }
+  main[data-screen='channels'] table.list > tbody > tr > td:nth-child(3)::before, main[data-screen='channels'] table.list > tbody > tr > td:nth-child(4)::before { content: attr(data-label) ' '; color: var(--muted); font-size: var(--t-xs); }
+  main[data-screen='channels'] table.list > tbody > tr > td:empty { display: none; }
+}
+
+/* ---- Contacts ------------------------------------------------------------------------------------------------------------------------- */
+main[data-screen='contacts'] .cpage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+main[data-screen='contacts'] .clist { min-width: 0; }
+main[data-screen='contacts'] .cadd h2 { margin: 0 0 var(--s-3); }
+@media (min-width: 1500px) {
+  main[data-screen='contacts'] .cpage { grid-template-columns: minmax(0, 1fr) minmax(20rem, 22rem); }
+  main[data-screen='contacts'] .cadd { position: sticky; top: calc(3.25rem + var(--s-4)); }
+  main[data-screen='contacts'] .cadd form.row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+  main[data-screen='contacts'] .cadd form.row > * { width: 100% !important; max-width: 100%; flex: none; }
+}
+
+/* ---- the file chooser on the import pages --------------------------------------------------------------------------------------------- */
+.filepick { position: relative; display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; padding: var(--s-3) var(--s-4); min-height: 3.5rem; min-width: 0;
+  border: 1.5px dashed var(--edge); border-radius: var(--radius); background: var(--surface); transition: border-color var(--en-fast, 0.12s), background var(--en-fast, 0.12s); }
+.filepick.over { border-color: var(--accent-dim); background: var(--tint); }
+.filepick.has { border-style: solid; border-color: var(--ok); background: var(--ok-tint); }
+.filepick.bad { border-color: var(--err); background: var(--err-tint); }
+.filepick:focus-within { outline: 2px solid var(--en-focus); outline-offset: 2px; }
+:root[data-theme='dark'] .filepick:focus-within { outline-color: var(--accent); }
+main .filepick > input.filepick-input[type='file'] { position: absolute; left: 0; top: 0; width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; opacity: 0; overflow: hidden; pointer-events: none; }
+.filepick-button { cursor: pointer; flex: none; user-select: none; }
+.filepick-note { min-width: 0; overflow-wrap: anywhere; font-size: var(--t-sm); }
+.filepick-name { color: var(--fg); }
+
+/* ---- phone: one column, no hover-only anything ---------------------------------------------------------------------------------------- */
+@media (max-width: 600px) {
+  main.fill { padding-inline: var(--s-4); }
+  main.fill .inboxprefs, main.fill .chnew, main.fill .cadd { padding: var(--s-3); }
+}

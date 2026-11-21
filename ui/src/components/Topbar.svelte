@@ -5,7 +5,7 @@
   import { F } from '../lib/gofuncs';
   import { post } from '../lib/api';
 
-  let { pg, onMenu, onSignOut, onEnv }: { pg: Page; onMenu: () => void; onSignOut: () => void; onEnv: (e: any, url: string) => void } = $props();
+  let { pg, onMenu, onSignOut, onEnv, railHidden = false, onRail = () => {} }: { pg: Page; onMenu: () => void; onSignOut: () => void; onEnv: (e: any, url: string) => void; railHidden?: boolean; onRail?: () => void } = $props();
   let theme = $state(currentTheme());
   let q = $state('');
   const name = $derived(pg.Identity?.DisplayName || pg.Identity?.PrincipalID?.slice(0, 8) || '');
@@ -23,6 +23,11 @@
 
 <header class="topbar">
   <button type="button" class="menubtn" aria-label="Open the menu" onclick={onMenu}>&#9776;</button>
+  <button type="button" class="railbtn ghost small" aria-expanded={!railHidden} aria-controls="sidepanel" onclick={onRail}
+    title={railHidden ? 'Show the side panel' : 'Hide the side panel'}>
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2.5" y="3.5" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 3.5v13" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+    <span class="railbtn-label">{railHidden ? 'Show menu' : 'Hide menu'}</span>
+  </button>
   <div class="titleblock">
     {#if pg.Crumbs && pg.Crumbs.length}
       <nav class="breadcrumb" aria-label="Location">

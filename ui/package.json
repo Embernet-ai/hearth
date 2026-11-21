@@ -12,8 +12,8 @@
     "check": "astro check && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "node --test src/lib/*.test.mjs && vitest run",
     "build:ssr": "vite build -c vite.ssr.config.ts",
-    "layout": "node layout/check.mjs",
-    "test:layout": "npm run build && npm run build:ssr && node layout/check.mjs"
+    "layout": "node layout/check.mjs && node layout/fill.mjs",
+    "test:layout": "npm run build && npm run build:ssr && node layout/check.mjs && node layout/fill.mjs"
   },
   "dependencies": {
     "@astrojs/svelte": "9.0.1",

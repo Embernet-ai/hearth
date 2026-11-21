@@ -15,6 +15,8 @@
   </p>
   {#if F.t(dot?.Message)}<p  class="err">{dot?.Message}</p>{/if}
 
+  <div  class="chpage">
+  <div  class="chlist">
   {#if F.t(dot?.Channels)}
     <table  class="list">
       <thead>
@@ -50,7 +52,9 @@
   {:else}
     <p  class="muted">No channels yet.</p>
   {/if}
+  </div>
 
+  <aside  class="chnew card">
   <h3>New channel</h3>
   <form  method="post"  action="/channels"  class="stack">
     <label  for="name">Name</label>
@@ -64,6 +68,8 @@
     </select>
     <div  class="row"><button  type="submit"  class="primary">Create</button></div>
   </form>
+  </aside>
+  </div>
 </section>
 {/snippet}
 {@render content(dot)}

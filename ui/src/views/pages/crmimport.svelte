@@ -1,6 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
+  import FilePicker from '../../components/FilePicker.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
   const res = $derived(dot?.CRMImport);
@@ -62,7 +63,7 @@
       {#if F.t(dot?.SalesOn)}<option  value="deals"  selected={res?.Kind === 'deals'}>Deals</option>{/if}
     </select>
     <label  for="file">CSV file</label>
-    <input  id="file"  type="file"  name="file"  accept=".csv,.tsv,text/csv"  required>
+    <FilePicker  id="file"  name="file"  accept=".csv,.tsv,text/csv"  required  kind="CSV file" />
     <div  class="row">
       <button  type="submit"  name="mode"  value="check"  class="primary">Check the file</button>
       <button  type="submit"  name="mode"  value="import">Import it</button>
