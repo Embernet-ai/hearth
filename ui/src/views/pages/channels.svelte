@@ -33,7 +33,7 @@
             <td  class="muted">{d1?.Members}</td>
             
             <td  class="muted">{d1?.Attached}</td>
-            <td>{#if F.t(d1?.Unread)}<span  class="unread">{d1?.Unread}</span>{/if}</td>
+            <td>{#if F.t(d1?.Unread)}<span  class="unread">{d1?.Unread}</span>{:else}<span  class="muted nounread">0</span>{/if}</td>
             <td>
               {#if F.t(d1?.Member)}
                 <form  method="post"  action={"/channels/" + S(d1?.ID) + "/leave"}  class="inline"                        data-confirm={"Leave " + S(d1?.Name) + "? You lose access to everything attached to it."}>

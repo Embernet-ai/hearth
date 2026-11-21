@@ -98,6 +98,22 @@ function measure({ GUTTER, MIN_FILL }) {
     worst = Math.min(worst, fill);
     if (fill < MIN_FILL) problems.push(`wide box, short content: text and controls span ${Math.round(fill * 100)}% of the ${Math.round(box.width)}px of ${label(card)}`);
   }
+  // Channels: every field of a channel is labelled in words a person can see, at every width: a visible column head over a table, or a label
+  // on each field of a card. (The phone's own labels come from ui.js copying each head onto its cell; the same is done here, so the page is drawn as the app draws it.)
+  if (main.dataset.screen === 'channels') {
+    const heads = [...main.querySelectorAll('table.list > thead th')].map((t) => t.textContent.trim());
+    main.querySelectorAll('table.list > tbody > tr > td').forEach((td, i) => { const n = heads[i % heads.length]; if (n && i % heads.length > 0 && !td.hasAttribute('data-label')) td.setAttribute('data-label', n); });
+    const row = main.querySelector('table.list > tbody > tr');
+    if (row) {
+      const seen = (td, name, i) => {
+        const th = main.querySelectorAll('table.list > thead th')[i];
+        if (th && vis(th) && th.getBoundingClientRect().width > 4 && th.textContent.trim() === name) return true; // a visible column head
+        const c = getComputedStyle(td, '::before').content; // or a label drawn on the field
+        return c && c !== 'none' && c !== 'normal' && c.replace(/^["']|["']$/g, '').toLowerCase() === name.toLowerCase() && getComputedStyle(td, '::before').display !== 'none' && vis(td);
+      };
+      ['Channel', 'Topic', 'People', 'Grants', 'Unread'].forEach((name, i) => { const td = row.children[i]; if (!td || !seen(td, name, i)) problems.push(`the ${name} heading is not visible on a channel`); });
+    }
+  }
   return { vw, left0, deadLeft, deadRight, deadPct: +(100 * (deadLeft + deadRight) / (vw - left0)).toFixed(1), worstFill: +(worst * 100).toFixed(0), problems };
 }
 
