@@ -52,11 +52,59 @@ type SpaceSync struct {
 	// every space it does not know, which is all of the real org's. Nil treats every org as real.
 	Real func(ctx context.Context, orgID string) (bool, error)
 
+	// op serialises every copy and removal. A whole copy that overlapped a one-folder copy of the same space made EmberOPS
+	// refuse both ("Document has been modified after you have opened it", "being modified by another user"), found live 2.22.9.
+	op sync.Mutex
+
 	mu     sync.Mutex
-	digest map[string]string // org -> digest of what was last sent
-	retry  map[string]bool   // org -> a deleted space would not go and is tried again
+	sent   map[string]map[string]string // org -> space id -> hash of what EmberOPS last accepted for it
+	known  map[string]map[string]bool   // org -> space ids this copy has put in or found in EmberOPS
+	listed map[string]bool              // org -> EmberOPS's spaces have been listed once, so known is complete
+	stuck  map[string]map[string]bool   // org -> deleted spaces that would not go and are tried again
 	timer  *time.Timer
 	orgs   map[string]bool
+}
+
+func itemHash(it emberops.BulkItem) string {
+	sum := sha256.Sum256([]byte(it.HearthID + " " + mapping.Dumps(it.Values)))
+	return hex.EncodeToString(sum[:])
+}
+
+func (s *SpaceSync) remember(orgID string, it emberops.BulkItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sent == nil {
+		s.sent, s.known = map[string]map[string]string{}, map[string]map[string]bool{}
+	}
+	if s.sent[orgID] == nil {
+		s.sent[orgID], s.known[orgID] = map[string]string{}, map[string]bool{}
+	}
+	id := strings.ToLower(it.HearthID)
+	s.sent[orgID][id], s.known[orgID][id] = itemHash(it), true
+}
+
+func (s *SpaceSync) forget(orgID, id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id = strings.ToLower(id)
+	delete(s.sent[orgID], id)
+	delete(s.known[orgID], id)
+}
+
+func (s *SpaceSync) markStuck(orgID, id string, stuck bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stuck == nil {
+		s.stuck = map[string]map[string]bool{}
+	}
+	if s.stuck[orgID] == nil {
+		s.stuck[orgID] = map[string]bool{}
+	}
+	if stuck {
+		s.stuck[orgID][strings.ToLower(id)] = true
+	} else {
+		delete(s.stuck[orgID], strings.ToLower(id))
+	}
 }
 
 func (s *SpaceSync) log() *slog.Logger {
@@ -66,13 +114,12 @@ func (s *SpaceSync) log() *slog.Logger {
 	return slog.Default()
 }
 
-// Sync brings EmberOPS's spaces in line with Hearth's for one org.
+// Sync brings EmberOPS's spaces in line with Hearth's for one org. It sends only the spaces whose copy has changed since EmberOPS
+// last accepted it, and removes only the spaces Hearth no longer has, so when nothing changed it writes nothing. It is the
+// background job's, never a request's.
 func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
-	// The copy is Hearth's own structure, written as the service account whoever
-	// caused it. Run as the person who made a folder it was refused for anybody
-	// EmberOPS does not let touch a Hearth Space, which is most staff, so a task
-	// filed in the folder a moment later linked a space EmberOPS did not have yet
-	// and failed with "could not create" until the background copy caught up.
+	s.op.Lock()
+	defer s.op.Unlock()
 	ctx = emberops.WithUser(ctx, nil)
 	if s.Real != nil {
 		real, err := s.Real(ctx, orgID)
@@ -92,74 +139,127 @@ func (s *SpaceSync) Sync(ctx context.Context, orgID string) error {
 		return err
 	}
 	z := mapping.TZ{Loc: s.Loc}
-	items := make([]emberops.BulkItem, 0, len(spaces))
 	want := map[string]bool{}
-	for _, sp := range spaces {
-		items = append(items, spaceItem(sp, emails, z))
-		want[strings.ToLower(sp.ID)] = true
-	}
-	sum := sha256.New()
-	for _, it := range items {
-		fmt.Fprintf(sum, "%s %v\n", it.HearthID, mapping.Dumps(it.Values))
-	}
-	d := hex.EncodeToString(sum.Sum(nil))
+	var changed []emberops.BulkItem
 	s.mu.Lock()
-	if s.digest == nil {
-		s.digest = map[string]string{}
+	for _, sp := range spaces {
+		it := spaceItem(sp, emails, z)
+		id := strings.ToLower(sp.ID)
+		want[id] = true
+		if s.sent[orgID][id] != itemHash(it) {
+			changed = append(changed, it)
+		}
 	}
-	same := s.digest[orgID] == d
-	retry := s.retry[orgID]
 	s.mu.Unlock()
-	if same && !retry {
-		return nil
-	}
-	if !same && len(items) > 0 {
-		res, err := s.C.BulkUpsert(ctx, items)
+	if len(changed) > 0 {
+		res, err := s.C.BulkUpsert(ctx, changed)
 		if err != nil {
 			return err
+		}
+		failed := map[string]bool{}
+		for _, f := range res.Failed {
+			failed[strings.ToLower(f.HearthID)] = true
+		}
+		for _, it := range changed {
+			if !failed[strings.ToLower(it.HearthID)] {
+				s.remember(orgID, it)
+			}
 		}
 		if len(res.Failed) > 0 {
 			return fmt.Errorf("emberops: %d spaces refused, first %s: %s", len(res.Failed), res.Failed[0].HearthID, res.Failed[0].Error)
 		}
 	}
-	// A space deleted in Hearth goes from EmberOPS too, children first.
-	have, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: "Hearth Space", Fields: []string{"name", "hearth_id", "lft"},
-		Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}, OrderBy: "lft desc"}, 0)
-	if err != nil {
-		return err
-	}
-	// Taking a deleted space out is Hearth's own decision, already made, so it
-	// is done as the service account: whoever happened to trigger this copy may
-	// be a person EmberOPS lets edit a document but not delete one.
-	svc := emberops.WithUser(ctx, nil)
-	failed := false
-	for _, h := range have {
-		if !want[strings.ToLower(h.S("hearth_id"))] {
-			err := s.C.Delete(svc, "Hearth Space", h.S("name"))
-			if err != nil && !errors.Is(err, emberops.ErrNotFound) && strings.Contains(err.Error(), "LinkExistsError") {
-				// Work Hearth soft deleted that EmberOPS still holds links the
-				// space, and EmberOPS will not delete a space something links.
-				// Take those records out and ask again; a record that is still
-				// live is never touched, and the space then stays, loudly.
-				s.removeDeletedWorkIn(svc, h.S("name"))
-				err = s.C.Delete(svc, "Hearth Space", h.S("name"))
-			}
-			if err != nil && !errors.Is(err, emberops.ErrNotFound) {
-				failed = true
-				s.log().Warn("emberops: could not remove a deleted space", "space", h.S("hearth_id"), "error", err)
-			}
+
+	// A space deleted in Hearth goes from EmberOPS too, children first. EmberOPS is listed once, to learn what is there; after
+	// that the spaces to remove are the ones this copy knows of that Hearth no longer has, and the ones that would not go.
+	s.mu.Lock()
+	listed := s.listed[orgID]
+	gone := map[string]bool{}
+	for id := range s.known[orgID] {
+		if !want[id] {
+			gone[id] = true
 		}
 	}
-	s.mu.Lock()
-	s.digest[orgID] = d
-	// A space that would not go is tried again on the next copy even though
-	// nothing else changed: the copy used to stop at "nothing changed" and so
-	// never came back for it (found live 2.22.7, a deleted space stayed for good).
-	if s.retry == nil {
-		s.retry = map[string]bool{}
+	for id := range s.stuck[orgID] {
+		if !want[id] {
+			gone[id] = true
+		}
 	}
-	s.retry[orgID] = failed
 	s.mu.Unlock()
+	type target struct{ id, name string }
+	var order []target
+	if !listed {
+		have, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: "Hearth Space", Fields: []string{"name", "hearth_id", "lft"},
+			Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}, OrderBy: "lft desc"}, 0)
+		if err != nil {
+			return err
+		}
+		for _, h := range have {
+			id := strings.ToLower(h.S("hearth_id"))
+			if want[id] {
+				s.mu.Lock()
+				if s.known == nil {
+					s.sent, s.known = map[string]map[string]string{}, map[string]map[string]bool{}
+				}
+				if s.known[orgID] == nil {
+					s.sent[orgID], s.known[orgID] = map[string]string{}, map[string]bool{}
+				}
+				s.known[orgID][id] = true
+				s.mu.Unlock()
+			} else {
+				order = append(order, target{id, h.S("name")})
+			}
+		}
+	} else if len(gone) > 0 {
+		for id := range gone {
+			name, err := s.C.Resolve(ctx, "Hearth Space", id)
+			if err != nil && !errors.Is(err, emberops.ErrNotFound) {
+				return err
+			}
+			if name == "" {
+				s.forget(orgID, id)
+				s.markStuck(orgID, id, false)
+				continue
+			}
+			order = append(order, target{id, name})
+		}
+	}
+	failedAny := false
+	for _, t := range order {
+		if err := s.removeCopy(ctx, orgID, t.id, t.name); err != nil {
+			failedAny = true
+			s.log().Warn("emberops: could not remove a deleted space", "space", t.id, "error", err)
+		}
+	}
+	if !listed && !failedAny {
+		s.mu.Lock()
+		if s.listed == nil {
+			s.listed = map[string]bool{}
+		}
+		s.listed[orgID] = true
+		s.mu.Unlock()
+	}
+	if failedAny {
+		return errors.New("emberops: a deleted space would not go; it is tried again on the next copy")
+	}
+	return nil
+}
+
+// removeCopy deletes one space's EmberOPS record by name, taking out the work Hearth deleted that still links it first.
+func (s *SpaceSync) removeCopy(ctx context.Context, orgID, id, name string) error {
+	err := s.C.Delete(ctx, "Hearth Space", name)
+	if err != nil && !errors.Is(err, emberops.ErrNotFound) && strings.Contains(err.Error(), "LinkExistsError") {
+		// EmberOPS will not delete a space something links. Work Hearth soft deleted is taken out and the delete asked
+		// again; work that is still live is never touched, and the space then stays, loudly.
+		s.removeDeletedWorkIn(ctx, name)
+		err = s.C.Delete(ctx, "Hearth Space", name)
+	}
+	if err != nil && !errors.Is(err, emberops.ErrNotFound) {
+		s.markStuck(orgID, id, true)
+		return err
+	}
+	s.forget(orgID, id)
+	s.markStuck(orgID, id, false)
 	return nil
 }
 
@@ -203,13 +303,15 @@ type SpaceOneSource interface {
 }
 
 // SyncOne copies one space into EmberOPS, as the service account, and sends nothing else. A folder made, renamed or moved used
-// to send every folder again, about ten seconds with 171 of them in the request. The whole copy is the scheduled job's.
+// to send every folder again, about ten seconds with 171 of them in the request. The whole copy is the background job's.
 func (s *SpaceSync) SyncOne(ctx context.Context, orgID, id string) error {
 	ctx = emberops.WithUser(ctx, nil)
 	one, ok := s.Source.(SpaceOneSource)
 	if !ok {
 		return s.Sync(ctx, orgID)
 	}
+	s.op.Lock()
+	defer s.op.Unlock()
 	if s.Real != nil {
 		real, err := s.Real(ctx, orgID)
 		if err != nil {
@@ -230,20 +332,29 @@ func (s *SpaceSync) SyncOne(ctx context.Context, orgID, id string) error {
 	if err != nil {
 		return err
 	}
-	res, err := s.C.BulkUpsert(ctx, []emberops.BulkItem{spaceItem(sp, emails, mapping.TZ{Loc: s.Loc})})
+	it := spaceItem(sp, emails, mapping.TZ{Loc: s.Loc})
+	s.mu.Lock()
+	same := s.sent[orgID][strings.ToLower(sp.ID)] == itemHash(it)
+	s.mu.Unlock()
+	if same {
+		return nil
+	}
+	res, err := s.C.BulkUpsert(ctx, []emberops.BulkItem{it})
 	if err != nil {
 		return err
 	}
 	if len(res.Failed) > 0 {
 		return fmt.Errorf("emberops: space %s refused: %s", res.Failed[0].HearthID, res.Failed[0].Error)
 	}
+	s.remember(orgID, it)
 	return nil
 }
 
-// RemoveOne takes one deleted space out of EmberOPS, as the service account, and touches no other. Work Hearth deleted that
-// EmberOPS still links to it goes first (EmberOPS will not delete a space something links); a space that still will not go
-// is marked to be tried again on the next full copy and the error returned.
+// RemoveOne takes one deleted space out of EmberOPS, as the service account, and touches no other. A space that still will not
+// go is marked to be tried again on the next full copy and the error returned.
 func (s *SpaceSync) RemoveOne(ctx context.Context, orgID, id string) error {
+	s.op.Lock()
+	defer s.op.Unlock()
 	svc := emberops.WithUser(ctx, nil)
 	if s.Real != nil {
 		real, err := s.Real(svc, orgID)
@@ -259,23 +370,10 @@ func (s *SpaceSync) RemoveOne(ctx context.Context, orgID, id string) error {
 		return err
 	}
 	if name == "" {
+		s.forget(orgID, id)
 		return nil
 	}
-	err = s.C.Delete(svc, "Hearth Space", name)
-	if err != nil && !errors.Is(err, emberops.ErrNotFound) && strings.Contains(err.Error(), "LinkExistsError") {
-		s.removeDeletedWorkIn(svc, name)
-		err = s.C.Delete(svc, "Hearth Space", name)
-	}
-	if err != nil && !errors.Is(err, emberops.ErrNotFound) {
-		s.mu.Lock()
-		if s.retry == nil {
-			s.retry = map[string]bool{}
-		}
-		s.retry[orgID] = true
-		s.mu.Unlock()
-		return err
-	}
-	return nil
+	return s.removeCopy(svc, orgID, id, name)
 }
 
 // Kick asks for a background Sync of the org shortly (debounced: a burst of
