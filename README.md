@@ -91,21 +91,30 @@ extra for a seatbelt, it's not a car. It's a ransom note with wheels.
 
 ---
 
-## 🧾 Whose Data Is It? (Mine. The Answer Is Mine.)
+## 🧾 Whose Data Is It? (Yours. The Answer Is Yours.)
 
 Here's the deal and I'm only going to say it once, loudly, at 3 AM:
 
-**It's my data. If anybody is going to sell it, it's going to be me.**
+**If you run Hearth, the data is yours. Not mine. Not Fireball's. Not some vendor's. Yours.**
 
-Not you. Not your "trusted partners." Not your "we may use aggregated, de-identified insights to improve our
-services." Not some vendor's Terms of Service that changes every spring in an email titled *"An update to our
-policies"* that nobody has ever opened in the history of email.
+Hearth doesn't phone home. No telemetry, no "anonymous usage statistics," no license server, no account with us you
+have to keep paying to keep alive. It runs on your box and talks to the outside world only through the connectors you
+turn on. I can't see your stuff. I don't *want* to see your stuff. I have enough of my own stuff.
 
-To be clear, I'm not saying they sell it. I'm saying **I shouldn't have to wonder.** I'm saying the decision shouldn't
-live in somebody else's boardroom, on somebody else's server, in somebody else's region, under somebody else's next
-funding round. If I ever want to sell my own data, I'll sell it. To who I want. For White Monster money. And I'll keep
-the receipt in my own Postgres, backed up by my own `hearthctl backup`, verified by my own `hearthctl verify`, sitting
-in my own Garage.
+**It's your data. If anybody is going to sell it, it's going to be you.**
+
+Not your vendor. Not their "trusted partners." Not their "we may use aggregated, de-identified insights to improve our
+services." Not some Terms of Service that changes every spring in an email titled *"An update to our policies"* that
+nobody has ever opened in the history of email. And definitely not me. I wrote the thing. I didn't move into it.
+
+To be clear, I'm not saying they sell it. I'm saying **you shouldn't have to wonder.** The decision shouldn't live in
+somebody else's boardroom, on somebody else's server, in somebody else's region, under somebody else's next funding
+round. If you ever want to sell your own data, sell it. To who you want. For White Monster money. Keep the receipt in
+your own Postgres, backed up by your own `hearthctl backup`, verified by your own `hearthctl verify`, sitting in your
+own Garage.
+
+That's exactly how we run it too: our Hearth, our boxes, our data. Same deal as yours. No exceptions for the guy who
+wrote it.
 
 Your company's work is not a "workspace" you're renting by the seat. It's your company. Own it.
 
