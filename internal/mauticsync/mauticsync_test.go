@@ -97,3 +97,22 @@ func TestARefusedStateOrCountryIsDroppedAndALongNameIsClipped(t *testing.T) {
 		t.Errorf("clip = %q (%d characters)", got, len([]rune(got)))
 	}
 }
+
+// Mautic answers 422, not 400, when a company is wrong in more than one way. The live run after 2.22.5 failed 14 companies that way.
+func TestMauticsRefusalOfSeveralFieldsAt422IsHandledLikeOne(t *testing.T) {
+	body := `{"errors":[{"code":422,"message":"companystate: The selected choice is invalid., companyname: This field must be unique."}]}`
+	e := &mautic.APIError{Status: 422, Method: "POST", Path: "/companies/new", Body: body}
+	if !nameTaken(e) {
+		t.Error("a 422 over a taken company name was not recognised")
+	}
+	f := mautic.Fields{"companyname": "X", "companystate": "OH"}
+	if !dropRefused(f, e) {
+		t.Error("a 422 over the state was not recognised")
+	}
+	if _, has := f["companystate"]; has {
+		t.Error("the refused state is still being sent")
+	}
+	if nameTaken(&mautic.APIError{Status: 500, Body: body}) || dropRefused(mautic.Fields{"companystate": "OH"}, &mautic.APIError{Status: 500, Body: body}) {
+		t.Error("a server error was treated as a refused value")
+	}
+}
