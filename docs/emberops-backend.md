@@ -166,3 +166,12 @@ The first migration of Fireball's whole database into a real EmberOps site (2026
 ## Tests
 
 `go test ./internal/emberops/... ./internal/auth ./internal/platform/config` run without a database: the client against a fake Frappe (token forwarding, service token, 401 retry, memo, cache, error mapping, bulk batching), session token refresh, the redirect on an ended Vord session, every store (documents and their sync into the spine, time, maintenance, plant and downtime, space sync, rules, calendar, teams, department requests, canvases, properties and links, CRM), the mapping against the addon's, the migration (dry run, order, idempotency, resume), and config validation. Each store test also asserts how many calls a page makes. The Postgres-backed suites skip without `TEST_DATABASE_URL`, as before.
+
+## A new person
+
+With `HEARTH_BACKEND=emberops` a person has to exist in EmberOps before anything Hearth does as them can work: the User (a bearer token for an email EmberOps has no User for is refused with a 401), the Employee that names them (time off, time and approvals belong to an Employee, and ERPNext strips the Employee role from a User with no Employee record), the `hearth_id` on both, and the Employee's approver link. `emberops-migrate` made them once for everybody who existed then. For everybody after, Hearth does it at sign-in, right after the identity is linked and before the first page (`internal/emberops/stores/peopleensure.go`, wired in `cmd/hearth`), and again when an admin changes somebody's approver.
+
+* It is idempotent: the User and the Employee are upserted by `hearth_id`, an existing account is taken over by email, and nothing is made twice.
+* It grants no role and removes none. The fields sent are the ones the addon's `USER_FIELDS` allow (no roles, no user type). The Employee role comes from Vord at the person's first token (`realm_role_grants` in `emberops.tf`), and it stays because the Employee exists by then.
+* The approver link is the named approver, else the one manager of the person's department. Two managers name nobody: a link to one of them would shut the other out of deciding in EmberOps. The approver is made first when they have no account yet.
+* A failure is logged and never stops a sign-in.

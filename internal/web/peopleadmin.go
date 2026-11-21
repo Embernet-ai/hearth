@@ -8,6 +8,7 @@ package web
 // reading a form and choosing a sentence for the refusal.
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -174,6 +175,12 @@ func (s *Server) postApprover(w http.ResponseWriter, r *http.Request) {
 	if s.refuseAdmin(w, r, err) {
 		return
 	}
+	// With the EmberOPS back end the Employee's approver link follows, so EmberOPS asks the same person Hearth does.
+	if err == nil && s.people != nil {
+		if perr := s.people.Ensure(r.Context(), id.OrgID, r.PathValue("id")); perr != nil {
+			s.log.WarnContext(r.Context(), "could not copy the approver to EmberOPS", "error", perr)
+		}
+	}
 	http.Redirect(w, r, backTo(r, "/people"), http.StatusSeeOther)
 }
 
@@ -217,4 +224,9 @@ func (s *Server) postManages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, backTo(r, "/people"), http.StatusSeeOther)
+}
+
+// PersonSync makes sure a person exists in the back end that holds the records (EmberOPS): *stores.People.
+type PersonSync interface {
+	Ensure(ctx context.Context, orgID, principalID string) error
 }

@@ -75,6 +75,10 @@ type OIDC struct {
 	verifier *oidc.IDTokenVerifier
 	svc      *Service
 	secure   bool
+	// OnSignIn, when set, runs after the identity is linked to a person and before the session starts, for what has
+	// to exist before that person's first page: with the EmberOPS back end, their User and Employee there. It must
+	// not fail the sign-in; whatever it cannot do it logs.
+	OnSignIn func(ctx context.Context, orgID, principalID string)
 }
 
 // NewOIDC performs discovery against the issuer.
@@ -239,6 +243,9 @@ func (o *OIDC) Callback(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	principalID, orgID, err := o.link(ctx, idToken.Issuer, subject, email, claims.Name)
 	if err != nil {
 		return err
+	}
+	if o.OnSignIn != nil {
+		o.OnSignIn(ctx, orgID, principalID)
 	}
 	if o.svc.VordTokensEnabled() {
 		return o.svc.CreateWithTokens(ctx, w, r, orgID, principalID, token)

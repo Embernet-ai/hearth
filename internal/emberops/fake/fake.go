@@ -487,7 +487,7 @@ func (f *Frappe) byHearthID(doctype, hid string) map[string]any {
 // Employee). Fields not listed search every doctype.
 var LinkTargets = map[string]string{
 	"view_user": "User", "decided_by": "User", "read_by": "User", "done_by": "User",
-	"user": "User", "employee": "Employee", "owner": "User", "reported_by": "Employee",
+	"user": "User", "employee": "Employee", "owner": "User", "reported_by": "Employee", "hearth_approver": "Employee",
 	"recorded_by": "User", "requester": "Employee", "assigned_technician": "Employee",
 	"hearth_decided_by": "User",
 }
