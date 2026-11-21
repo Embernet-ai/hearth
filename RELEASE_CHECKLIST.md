@@ -12,13 +12,17 @@ Written from how Hearth is actually built and deployed, and from IRON's checklis
 
 Only the lead pushes it: `git tag -a vX.Y.Z -m "Hearth X.Y.Z"` then `git push origin vX.Y.Z`. The Publish workflow builds the image and pushes `:X.Y.Z` and `:sha-<short>`. A tag builds `linux/amd64` only. The multi-arch image (adding `linux/arm64` and the qemu step to `publish.yml`) is one small bump release behind it, after the amd64 release is live and reads stable.
 
-## 3. Deploy (Helm, never a patch of the Deployment)
+## 3. The GitHub release
+
+Right after the tag, write the release on this repository, from the tag's own note, and let it be Latest: `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes-file <(git tag -l --format='%(contents)' vX.Y.Z)`. Then read `gh api repos/Embernet-ai/hearth/releases/latest --jq .html_url` and check it names the version you just tagged. A tag with no release leaves the releases page behind the code, which is how v2.22.3 through v2.22.10 went unannounced.
+
+## 4. Deploy (Helm, never a patch of the Deployment)
 
 1. Copy `deploy/charts/hearth` to the cluster and read the live release: `helm -n hearth get manifest hearth`.
 2. Server-side dry run with the new tag: `helm upgrade hearth ./hearth --reset-then-reuse-values --set image.tag=X.Y.Z --dry-run=server`, and diff the manifest against the live one. Only version labels, the image tag, and `HEARTH_VERSION` should change, plus anything the release meant to add.
 3. `helm upgrade hearth ./hearth --reset-then-reuse-values --set image.tag=X.Y.Z --timeout 8m --wait`.
 
-## 4. Read it back
+## 5. Read it back
 
 1. The pod log shows the schema migration (`schema migrated`, from and to) and `listening`.
 2. `/healthz` reports the release revision and `profile: release`.
