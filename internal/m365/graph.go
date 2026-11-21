@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	abs "github.com/microsoft/kiota-abstractions-go"
 	absauth "github.com/microsoft/kiota-abstractions-go/authentication"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
-	"github.com/microsoftgraph/msgraph-sdk-go/drives"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/microsoftgraph/msgraph-sdk-go/users"
 
@@ -66,8 +64,8 @@ type session struct {
 
 func (x *session) Calendar() connect.CalendarAPI { return x }
 func (x *session) Contacts() connect.ContactsAPI { return contactsAdapter{x} }
-func (x *session) Mail() connect.MailAPI         { return x }
-func (x *session) Files() connect.FilesAPI       { return x }
+func (x *session) Mail() connect.MailAPI         { return mailAdapter{x} }
+func (x *session) Files() connect.FilesAPI       { return filesAdapter{x} }
 
 // fail turns an SDK error into what the rest of Hearth understands.
 func (x *session) fail(ctx context.Context, err error) error {
@@ -292,6 +290,10 @@ func (x *session) Delete(ctx context.Context, _ string, id string) error {
 
 type contactsAdapter struct{ x *session }
 
+// Mail and files have their own Delete, so each is its own type on the session.
+type mailAdapter struct{ *session }
+type filesAdapter struct{ *session }
+
 func (a contactsAdapter) Contacts(ctx context.Context) ([]connect.Contact, error) {
 	x := a.x
 	cfg := &users.ItemContactsRequestBuilderGetRequestConfiguration{
@@ -331,149 +333,73 @@ func (a contactsAdapter) Contacts(ctx context.Context) ([]connect.Contact, error
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Mail
-// -----------------------------------------------------------------------------
-
-func (x *session) Messages(ctx context.Context, since time.Time, limit int) ([]connect.Message, error) {
-	if limit <= 0 || limit > 500 {
-		limit = 100
+func contactBody(c connect.Contact) models.Contactable {
+	out := models.NewContact()
+	given, family := splitName(c.Name)
+	out.SetGivenName(&given)
+	out.SetSurname(&family)
+	out.SetDisplayName(ptr(c.Name))
+	if c.Email != "" {
+		ea := models.NewEmailAddress()
+		ea.SetAddress(ptr(c.Email))
+		ea.SetName(ptr(c.Name))
+		out.SetEmailAddresses([]models.EmailAddressable{ea})
 	}
-	filter := "receivedDateTime ge " + since.UTC().Format("2006-01-02T15:04:05Z")
-	cfg := &users.ItemMessagesRequestBuilderGetRequestConfiguration{
-		QueryParameters: &users.ItemMessagesRequestBuilderGetQueryParameters{
-			Filter: &filter, Orderby: []string{"receivedDateTime desc"}, Top: ptr(int32(min(limit, 100))),
-			Select: []string{"id", "subject", "from", "toRecipients", "bodyPreview", "receivedDateTime", "webLink"},
-		},
+	if c.Phone != "" {
+		out.SetMobilePhone(ptr(c.Phone))
 	}
-	var out []connect.Message
-	resp, err := x.client.Me().Messages().Get(ctx, cfg)
-	for {
-		if err != nil {
-			return nil, x.fail(ctx, err)
-		}
-		for _, m := range resp.GetValue() {
-			msg := connect.Message{ID: s(m.GetId()), Subject: s(m.GetSubject()), Snippet: s(m.GetBodyPreview()), WebLink: s(m.GetWebLink())}
-			if t := m.GetReceivedDateTime(); t != nil {
-				msg.Received = t.UTC()
-			}
-			if f := m.GetFrom(); f != nil && f.GetEmailAddress() != nil {
-				msg.From = s(f.GetEmailAddress().GetAddress())
-			}
-			for _, r := range m.GetToRecipients() {
-				if r.GetEmailAddress() != nil {
-					msg.To = append(msg.To, s(r.GetEmailAddress().GetAddress()))
-				}
-			}
-			out = append(out, msg)
-			if len(out) >= limit {
-				return out, nil
-			}
-		}
-		next := resp.GetOdataNextLink()
-		if next == nil || *next == "" {
-			return out, nil
-		}
-		resp, err = x.client.Me().Messages().WithUrl(*next).Get(ctx, cfg)
+	if c.Title != "" {
+		out.SetJobTitle(ptr(c.Title))
 	}
+	if c.Company != "" {
+		out.SetCompanyName(ptr(c.Company))
+	}
+	return out
 }
 
-// -----------------------------------------------------------------------------
-// Files: OneDrive and SharePoint
-// -----------------------------------------------------------------------------
-
-func itemFrom(driveID string, it models.DriveItemable) connect.FileItem {
-	f := connect.FileItem{ID: s(it.GetId()), DriveID: driveID, Name: s(it.GetName()), WebURL: s(it.GetWebUrl()),
-		Folder: it.GetFolder() != nil}
-	if it.GetSize() != nil {
-		f.Size = *it.GetSize()
+func splitName(n string) (string, string) {
+	n = strings.TrimSpace(n)
+	if i := strings.LastIndex(n, " "); i > 0 {
+		return strings.TrimSpace(n[:i]), strings.TrimSpace(n[i+1:])
 	}
-	if it.GetFile() != nil {
-		f.MIME = s(it.GetFile().GetMimeType())
-	}
-	if t := it.GetLastModifiedDateTime(); t != nil {
-		f.Modified = t.UTC()
-	}
-	return f
+	return n, ""
 }
 
-// Drives lists the person's OneDrive and the document libraries of the SharePoint sites they follow.
-func (x *session) Drives(ctx context.Context) ([]connect.Drive, error) {
-	var out []connect.Drive
-	own, err := x.client.Me().Drive().Get(ctx, nil)
-	if err != nil {
-		return nil, x.fail(ctx, err)
+func contactOf(c models.Contactable) connect.Contact {
+	ct := connect.Contact{ID: s(c.GetId()), Version: s(c.GetChangeKey()), Name: s(c.GetDisplayName()),
+		Title: s(c.GetJobTitle()), Company: s(c.GetCompanyName()), Phone: s(c.GetMobilePhone())}
+	if ct.Name == "" {
+		ct.Name = strings.TrimSpace(s(c.GetGivenName()) + " " + s(c.GetSurname()))
 	}
-	out = append(out, connect.Drive{ID: s(own.GetId()), Name: "OneDrive", Kind: "personal"})
-
-	sites, err := x.client.Me().FollowedSites().Get(ctx, nil)
-	if err != nil {
-		// Followed sites need Sites.Read.All, which a tenant may not have approved. OneDrive still works.
-		return out, nil
-	}
-	for _, st := range sites.GetValue() {
-		ds, err := x.client.Sites().BySiteId(s(st.GetId())).Drives().Get(ctx, nil)
-		if err != nil {
-			continue
-		}
-		for _, d := range ds.GetValue() {
-			out = append(out, connect.Drive{ID: s(d.GetId()), Name: s(st.GetDisplayName()) + " / " + s(d.GetName()), Kind: "site"})
+	for _, a := range c.GetEmailAddresses() {
+		if v := s(a.GetAddress()); v != "" {
+			ct.Email = v
+			break
 		}
 	}
-	return out, nil
+	return ct
 }
 
-func (x *session) List(ctx context.Context, driveID, folderID string) ([]connect.FileItem, error) {
-	if folderID == "" {
-		root, err := x.client.Drives().ByDriveId(driveID).Root().Get(ctx, nil)
-		if err != nil {
-			return nil, x.fail(ctx, err)
-		}
-		folderID = s(root.GetId())
+func (a contactsAdapter) Create(ctx context.Context, c connect.Contact) (connect.Contact, error) {
+	res, err := a.x.client.Me().Contacts().Post(ctx, contactBody(c), nil)
+	if err != nil {
+		return connect.Contact{}, a.x.fail(ctx, err)
 	}
-	cfg := &drives.ItemItemsItemChildrenRequestBuilderGetRequestConfiguration{
-		QueryParameters: &drives.ItemItemsItemChildrenRequestBuilderGetQueryParameters{Top: ptr(int32(200))},
-	}
-	b := x.client.Drives().ByDriveId(driveID).Items().ByDriveItemId(folderID).Children()
-	var out []connect.FileItem
-	resp, err := b.Get(ctx, cfg)
-	for {
-		if err != nil {
-			return nil, x.fail(ctx, err)
-		}
-		for _, it := range resp.GetValue() {
-			out = append(out, itemFrom(driveID, it))
-		}
-		next := resp.GetOdataNextLink()
-		if next == nil || *next == "" || len(out) >= 1000 {
-			return out, nil
-		}
-		resp, err = b.WithUrl(*next).Get(ctx, cfg)
-	}
+	return contactOf(res), nil
 }
 
-func (x *session) Item(ctx context.Context, driveID, itemID string) (connect.FileItem, error) {
-	it, err := x.client.Drives().ByDriveId(driveID).Items().ByDriveItemId(itemID).Get(ctx, nil)
+func (a contactsAdapter) Update(ctx context.Context, c connect.Contact) (connect.Contact, error) {
+	res, err := a.x.client.Me().Contacts().ByContactId(c.ID).Patch(ctx, contactBody(c), nil)
 	if err != nil {
-		return connect.FileItem{}, x.fail(ctx, err)
+		return connect.Contact{}, a.x.fail(ctx, err)
 	}
-	return itemFrom(driveID, it), nil
+	return contactOf(res), nil
 }
 
-func (x *session) Open(ctx context.Context, driveID, itemID string, maxBytes int64) (connect.FileItem, io.ReadCloser, error) {
-	meta, err := x.Item(ctx, driveID, itemID)
-	if err != nil {
-		return meta, nil, err
+func (a contactsAdapter) Delete(ctx context.Context, id string) error {
+	err := a.x.client.Me().Contacts().ByContactId(id).Delete(ctx, nil)
+	if err != nil && errors.Is(a.x.fail(ctx, err), connect.ErrNotFound) {
+		return nil
 	}
-	if meta.Folder {
-		return meta, nil, errors.New("a folder cannot be downloaded")
-	}
-	if maxBytes > 0 && meta.Size > maxBytes {
-		return meta, nil, fmt.Errorf("that file is %d MB, over the %d MB import limit; link it instead", meta.Size>>20, maxBytes>>20)
-	}
-	data, err := x.client.Drives().ByDriveId(driveID).Items().ByDriveItemId(itemID).Content().Get(ctx, nil)
-	if err != nil {
-		return meta, nil, x.fail(ctx, err)
-	}
-	return meta, io.NopCloser(strings.NewReader(string(data))), nil
+	return a.x.fail(ctx, err)
 }

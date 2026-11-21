@@ -8,10 +8,13 @@ package google
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -33,6 +36,13 @@ const (
 	ScopeContacts     = "https://www.googleapis.com/auth/contacts.readonly"
 	ScopeGmailMeta    = "https://www.googleapis.com/auth/gmail.metadata"
 	ScopeDriveRead    = "https://www.googleapis.com/auth/drive.readonly"
+
+	// The scopes the connectors ask for. They are read and write, because Hearth is a company tool that works in
+	// the person's own mailbox, calendar, address book and drive as that person.
+	ScopeMailFull     = "https://mail.google.com/"
+	ScopeCalendarFull = "https://www.googleapis.com/auth/calendar"
+	ScopeContactsFull = "https://www.googleapis.com/auth/contacts"
+	ScopeDriveFull    = "https://www.googleapis.com/auth/drive"
 )
 
 // apiEndpoints are overridden by tests, which serve a recorded Google from one address.
@@ -45,25 +55,23 @@ func (s *Service) Provider() connect.Provider { return connect.Google }
 // Configured reports whether the client is set up and there is somewhere safe to keep a token.
 func (s *Service) Configured() bool { return s.cfg.Enabled() && s.box != nil }
 
-// Scopes is what each connector needs, and only that. The Gmail one is the metadata scope: headers and a preview,
-// with no way to read a body.
+// Scopes is what each connector asks for: Google's full scope for the product, read and write.
 func (s *Service) Scopes(k connect.Kind) []string {
 	switch k {
 	case connect.Calendar:
-		return []string{ScopeCalendarWrite, ScopeCalendarList}
+		return []string{ScopeCalendarFull}
 	case connect.Contacts:
-		return []string{ScopeContacts}
+		return []string{ScopeContactsFull}
 	case connect.Mail:
-		return []string{ScopeGmailMeta}
+		return []string{ScopeMailFull}
 	case connect.Files:
-		return []string{ScopeDriveRead}
+		return []string{ScopeDriveFull}
 	}
 	return nil
 }
 
-// expand adds the narrower scopes a broader grant already covers, so a person who connected before these
-// connectors existed, with calendar.readonly or gmail.readonly, is not asked to do it again for something their
-// grant already allows.
+// expand adds the narrower scopes a broader grant already covers, so a grant of the full scope is recognised for
+// whatever narrower scope something asks about.
 func expand(granted []string) []string {
 	have := map[string]bool{}
 	for _, g := range granted {
@@ -76,10 +84,13 @@ func expand(granted []string) []string {
 			}
 		}
 	}
+	add(ScopeCalendarFull, ScopeCalendarWrite, ScopeCalendarRead, ScopeCalendarList)
+	add(ScopeCalendarWrite, ScopeCalendarRead)
 	add(ScopeCalendarRead, ScopeCalendarList)
-	add("https://www.googleapis.com/auth/calendar", ScopeCalendarWrite, ScopeCalendarRead, ScopeCalendarList)
+	add(ScopeContactsFull, ScopeContacts)
+	add(ScopeMailFull, ScopeGmailRead, ScopeGmailSend, ScopeGmailMeta)
 	add(ScopeGmailRead, ScopeGmailMeta)
-	add("https://www.googleapis.com/auth/drive", ScopeDriveRead)
+	add(ScopeDriveFull, ScopeDriveRead)
 	out := make([]string, 0, len(have))
 	for k := range have {
 		out = append(out, k)
@@ -184,10 +195,15 @@ type session struct {
 
 type contactsAdapter struct{ x *session }
 
+// mailAdapter and filesAdapter are separate types because a session already has a Delete for the calendar, and
+// mail and files each have their own.
+type mailAdapter struct{ *session }
+type filesAdapter struct{ *session }
+
 func (x *session) Calendar() connect.CalendarAPI { return x }
 func (x *session) Contacts() connect.ContactsAPI { return contactsAdapter{x} }
-func (x *session) Mail() connect.MailAPI         { return x }
-func (x *session) Files() connect.FilesAPI       { return x }
+func (x *session) Mail() connect.MailAPI         { return mailAdapter{x} }
+func (x *session) Files() connect.FilesAPI       { return filesAdapter{x} }
 
 // fail turns a Google API error into what the rest of Hearth understands.
 func (x *session) fail(ctx context.Context, err error) error {
@@ -205,7 +221,11 @@ func (x *session) fail(ctx context.Context, err error) error {
 				last_error = 'Google refused the connection' WHERE principal_id = $1`, x.principal)
 			return ErrReconnect
 		case http.StatusForbidden:
-			return fmt.Errorf("google refused that; the API may not be enabled on the Google project, or the scope was not granted: %w", connect.ErrScope)
+			reason := ge.Message
+			if len(ge.Errors) > 0 && ge.Errors[0].Reason != "" {
+				reason = ge.Errors[0].Reason + ": " + ge.Message
+			}
+			return fmt.Errorf("google refused that (%s). The API may not be enabled on the Google project, or the scope was not granted: %w", reason, connect.ErrScope)
 		case http.StatusNotFound, http.StatusGone:
 			return connect.ErrNotFound
 		}
@@ -364,20 +384,206 @@ func (a contactsAdapter) Contacts(ctx context.Context) ([]connect.Contact, error
 	return out, x.fail(ctx, err)
 }
 
+const personFields = "names,emailAddresses,phoneNumbers,organizations"
+
+func personTo(c connect.Contact) *people.Person {
+	p := &people.Person{}
+	given, family := splitName(c.Name)
+	p.Names = []*people.Name{{GivenName: given, FamilyName: family}}
+	if c.Email != "" {
+		p.EmailAddresses = []*people.EmailAddress{{Value: c.Email}}
+	}
+	if c.Phone != "" {
+		p.PhoneNumbers = []*people.PhoneNumber{{Value: c.Phone}}
+	}
+	if c.Company != "" || c.Title != "" {
+		p.Organizations = []*people.Organization{{Name: c.Company, Title: c.Title}}
+	}
+	return p
+}
+
+// splitName takes "Priya Shah" to a given name and a family name, and a single word to a given name alone.
+func splitName(n string) (string, string) {
+	n = strings.TrimSpace(n)
+	if i := strings.LastIndex(n, " "); i > 0 {
+		return strings.TrimSpace(n[:i]), strings.TrimSpace(n[i+1:])
+	}
+	return n, ""
+}
+
+func contactFrom(p *people.Person) connect.Contact {
+	c := connect.Contact{ID: p.ResourceName, Version: p.Etag}
+	if len(p.Names) > 0 {
+		c.Name = p.Names[0].DisplayName
+	}
+	if len(p.EmailAddresses) > 0 {
+		c.Email = p.EmailAddresses[0].Value
+	}
+	if len(p.PhoneNumbers) > 0 {
+		c.Phone = p.PhoneNumbers[0].Value
+	}
+	if len(p.Organizations) > 0 {
+		c.Company, c.Title = p.Organizations[0].Name, p.Organizations[0].Title
+	}
+	return c
+}
+
+func (a contactsAdapter) Create(ctx context.Context, c connect.Contact) (connect.Contact, error) {
+	p, err := a.x.ppl.People.CreateContact(personTo(c)).PersonFields(personFields).Context(ctx).Do()
+	if err != nil {
+		return connect.Contact{}, a.x.fail(ctx, err)
+	}
+	out := contactFrom(p)
+	if out.Name == "" {
+		out.Name = c.Name
+	}
+	return out, nil
+}
+
+func (a contactsAdapter) Update(ctx context.Context, c connect.Contact) (connect.Contact, error) {
+	p := personTo(c)
+	// Google refuses an edit made from a copy that is not the current one, so the person goes back with the etag
+	// it was last read with.
+	p.Etag = c.Version
+	out, err := a.x.ppl.People.UpdateContact(c.ID, p).UpdatePersonFields(personFields).PersonFields(personFields).Context(ctx).Do()
+	if err != nil {
+		return connect.Contact{}, a.x.fail(ctx, err)
+	}
+	return contactFrom(out), nil
+}
+
+func (a contactsAdapter) Delete(ctx context.Context, id string) error {
+	_, err := a.x.ppl.People.DeleteContact(id).Context(ctx).Do()
+	if err != nil && errors.Is(a.x.fail(ctx, err), connect.ErrNotFound) {
+		return nil
+	}
+	return a.x.fail(ctx, err)
+}
+
 // -----------------------------------------------------------------------------
-// Mail
+// Mail, read and write, through Gmail
 // -----------------------------------------------------------------------------
 
-// Messages reads the inbox and sent mail. The metadata scope cannot search, so it takes the newest of each label
-// and stops at the first message older than the cut-off.
-func (x *session) Messages(ctx context.Context, since time.Time, limit int) ([]connect.Message, error) {
+func header(p *gmail.MessagePart, name string) string {
+	if p == nil {
+		return ""
+	}
+	for _, h := range p.Headers {
+		if strings.EqualFold(h.Name, name) {
+			return h.Value
+		}
+	}
+	return ""
+}
+
+func splitAddrs(v string) []string {
+	var out []string
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	if list, err := mail.ParseAddressList(v); err == nil {
+		for _, a := range list {
+			out = append(out, a.String())
+		}
+		return out
+	}
+	for _, a := range strings.Split(v, ",") {
+		if a = strings.TrimSpace(a); a != "" {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// bodyOf finds the readable body of a message: the plain text part when there is one, else the HTML one.
+func bodyOf(p *gmail.MessagePart) (text string, html bool) {
+	var plain, rich string
+	var walk func(*gmail.MessagePart)
+	walk = func(q *gmail.MessagePart) {
+		if q == nil {
+			return
+		}
+		if q.Body != nil && q.Body.Data != "" && q.Filename == "" {
+			if raw, err := base64URLDecode(q.Body.Data); err == nil {
+				switch {
+				case strings.HasPrefix(q.MimeType, "text/plain") && plain == "":
+					plain = string(raw)
+				case strings.HasPrefix(q.MimeType, "text/html") && rich == "":
+					rich = string(raw)
+				}
+			}
+		}
+		for _, c := range q.Parts {
+			walk(c)
+		}
+	}
+	walk(p)
+	if plain != "" {
+		return plain, false
+	}
+	return rich, rich != ""
+}
+
+func attachmentNames(p *gmail.MessagePart) []string {
+	var out []string
+	var walk func(*gmail.MessagePart)
+	walk = func(q *gmail.MessagePart) {
+		if q == nil {
+			return
+		}
+		if q.Filename != "" {
+			out = append(out, q.Filename)
+		}
+		for _, c := range q.Parts {
+			walk(c)
+		}
+	}
+	walk(p)
+	return out
+}
+
+func messageFrom(m *gmail.Message, withBody bool) connect.Message {
+	out := connect.Message{ID: m.Id, ThreadID: m.ThreadId, Snippet: m.Snippet, Received: time.UnixMilli(m.InternalDate).UTC(),
+		WebLink: "https://mail.google.com/mail/u/0/#all/" + m.Id, Labels: m.LabelIds}
+	if m.Payload != nil {
+		out.Subject = header(m.Payload, "Subject")
+		out.From = header(m.Payload, "From")
+		out.To = splitAddrs(header(m.Payload, "To"))
+		out.Cc = splitAddrs(header(m.Payload, "Cc"))
+		out.Attached = attachmentNames(m.Payload)
+		if withBody {
+			out.Body, out.HTML = bodyOf(m.Payload)
+		}
+	}
+	for _, l := range m.LabelIds {
+		switch l {
+		case "UNREAD":
+			out.Unread = true
+		case "INBOX", "SENT", "DRAFT", "TRASH", "SPAM":
+			if out.Folder == "" {
+				out.Folder = l
+			}
+		}
+	}
+	return out
+}
+
+func (x *session) getFull(ctx context.Context, id string) (*gmail.Message, error) {
+	m, err := x.gm.Users.Messages.Get("me", id).Format("full").Context(ctx).Do()
+	if err != nil {
+		return nil, x.fail(ctx, err)
+	}
+	return m, nil
+}
+
+// Messages reads the inbox and sent mail, with bodies, back to a cut-off.
+func (x mailAdapter) Messages(ctx context.Context, since time.Time, limit int) ([]connect.Message, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
 	var out []connect.Message
 	for _, label := range []string{"INBOX", "SENT"} {
-		got := 0
-		token := ""
+		got, token := 0, ""
 	pages:
 		for got < limit {
 			call := x.gm.Users.Messages.List("me").LabelIds(label).MaxResults(50)
@@ -389,32 +595,14 @@ func (x *session) Messages(ctx context.Context, since time.Time, limit int) ([]c
 				return out, x.fail(ctx, err)
 			}
 			for _, m := range list.Messages {
-				full, err := x.gm.Users.Messages.Get("me", m.Id).Format("metadata").
-					MetadataHeaders("From", "To", "Subject").Context(ctx).Do()
+				full, err := x.getFull(ctx, m.Id)
 				if err != nil {
 					continue // one unreadable message does not lose the rest
 				}
-				when := time.UnixMilli(full.InternalDate).UTC()
-				if when.Before(since) {
+				if time.UnixMilli(full.InternalDate).Before(since) {
 					break pages
 				}
-				msg := connect.Message{ID: full.Id, Snippet: full.Snippet, Received: when,
-					WebLink: "https://mail.google.com/mail/u/0/#all/" + full.Id}
-				if full.Payload != nil {
-					for _, h := range full.Payload.Headers {
-						switch strings.ToLower(h.Name) {
-						case "from":
-							msg.From = h.Value
-						case "to":
-							for _, a := range strings.Split(h.Value, ",") {
-								msg.To = append(msg.To, strings.TrimSpace(a))
-							}
-						case "subject":
-							msg.Subject = h.Value
-						}
-					}
-				}
-				out = append(out, msg)
+				out = append(out, messageFrom(full, true))
 				got++
 				if got >= limit {
 					break pages
@@ -424,6 +612,264 @@ func (x *session) Messages(ctx context.Context, since time.Time, limit int) ([]c
 				break
 			}
 			token = list.NextPageToken
+		}
+	}
+	return out, nil
+}
+
+func (x mailAdapter) Inbox(ctx context.Context, q connect.MailQuery) ([]connect.Message, string, error) {
+	limit := q.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	call := x.gm.Users.Messages.List("me").MaxResults(int64(limit))
+	search := strings.TrimSpace(q.Search)
+	switch strings.ToLower(q.Folder) {
+	case "sent":
+		call = call.LabelIds("SENT")
+	case "archive":
+		search = strings.TrimSpace("-in:inbox -in:sent -in:drafts -in:trash -in:spam " + search)
+	case "all":
+	default:
+		call = call.LabelIds("INBOX")
+	}
+	if search != "" {
+		call = call.Q(search)
+	}
+	if q.Cursor != "" {
+		call = call.PageToken(q.Cursor)
+	}
+	list, err := call.Context(ctx).Do()
+	if err != nil {
+		return nil, "", x.fail(ctx, err)
+	}
+	var out []connect.Message
+	for _, m := range list.Messages {
+		full, err := x.gm.Users.Messages.Get("me", m.Id).Format("metadata").
+			MetadataHeaders("From", "To", "Cc", "Subject").Context(ctx).Do()
+		if err != nil {
+			continue
+		}
+		out = append(out, messageFrom(full, false))
+	}
+	return out, list.NextPageToken, nil
+}
+
+func (x mailAdapter) Get(ctx context.Context, id string) (connect.Message, error) {
+	m, err := x.getFull(ctx, id)
+	if err != nil {
+		return connect.Message{}, err
+	}
+	return messageFrom(m, true), nil
+}
+
+// rfc822 builds a message for Gmail's raw send. Header values are encoded, and the body is base64 so any text
+// survives the trip.
+func rfc822(from string, o connect.Outgoing, extra map[string]string) string {
+	var b strings.Builder
+	w := func(k, v string) {
+		if v != "" {
+			b.WriteString(k + ": " + v + "\r\n")
+		}
+	}
+	w("From", from)
+	w("To", strings.Join(o.To, ", "))
+	w("Cc", strings.Join(o.Cc, ", "))
+	w("Bcc", strings.Join(o.Bcc, ", "))
+	w("Subject", mimeSubject(o.Subject))
+	for k, v := range extra {
+		w(k, v)
+	}
+	ct := "text/plain"
+	if o.HTML {
+		ct = "text/html"
+	}
+	w("MIME-Version", "1.0")
+	w("Content-Type", ct+"; charset=UTF-8")
+	w("Content-Transfer-Encoding", "base64")
+	b.WriteString("\r\n")
+	enc := base64.StdEncoding.EncodeToString([]byte(o.Body))
+	for len(enc) > 76 {
+		b.WriteString(enc[:76] + "\r\n")
+		enc = enc[76:]
+	}
+	b.WriteString(enc + "\r\n")
+	return b.String()
+}
+
+func mimeSubject(s string) string {
+	for _, r := range s {
+		if r > 126 || r < 32 {
+			return mime.QEncoding.Encode("utf-8", s)
+		}
+	}
+	return s
+}
+
+func (x *session) self(ctx context.Context) (string, error) {
+	p, err := x.gm.Users.GetProfile("me").Context(ctx).Do()
+	if err != nil {
+		return "", x.fail(ctx, err)
+	}
+	return p.EmailAddress, nil
+}
+
+func (x *session) send(ctx context.Context, from string, o connect.Outgoing, extra map[string]string, thread string) error {
+	raw := base64.URLEncoding.EncodeToString([]byte(rfc822(from, o, extra)))
+	_, err := x.gm.Users.Messages.Send("me", &gmail.Message{Raw: raw, ThreadId: thread}).Context(ctx).Do()
+	return x.fail(ctx, err)
+}
+
+func (x mailAdapter) Send(ctx context.Context, o connect.Outgoing) error {
+	from, err := x.self(ctx)
+	if err != nil {
+		return err
+	}
+	return x.send(ctx, from, o, nil, "")
+}
+
+func prefixed(prefix, subject string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(subject)), strings.ToLower(prefix)) {
+		return subject
+	}
+	return prefix + " " + subject
+}
+
+func quote(m connect.Message) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n\nOn %s, %s wrote:\n", m.Received.Format("Mon, 2 Jan 2006 15:04 MST"), m.From)
+	for _, line := range strings.Split(strings.TrimRight(m.Body, "\r\n"), "\n") {
+		b.WriteString("> " + strings.TrimRight(line, "\r") + "\n")
+	}
+	return b.String()
+}
+
+func (x mailAdapter) Reply(ctx context.Context, id string, o connect.Outgoing, all bool) error {
+	orig, err := x.getFull(ctx, id)
+	if err != nil {
+		return err
+	}
+	me, err := x.self(ctx)
+	if err != nil {
+		return err
+	}
+	m := messageFrom(orig, true)
+	to := header(orig.Payload, "Reply-To")
+	if to == "" {
+		to = m.From
+	}
+	o.To = splitAddrs(to)
+	if all {
+		for _, a := range append(append([]string{}, m.To...), m.Cc...) {
+			if !strings.Contains(strings.ToLower(a), strings.ToLower(me)) {
+				o.Cc = append(o.Cc, a)
+			}
+		}
+	}
+	o.Subject = prefixed("Re:", m.Subject)
+	if !m.HTML && !o.HTML {
+		o.Body += quote(m)
+	}
+	mid := header(orig.Payload, "Message-ID")
+	refs := strings.TrimSpace(header(orig.Payload, "References") + " " + mid)
+	return x.send(ctx, me, o, map[string]string{"In-Reply-To": mid, "References": refs}, orig.ThreadId)
+}
+
+func (x mailAdapter) Forward(ctx context.Context, id string, o connect.Outgoing) error {
+	orig, err := x.getFull(ctx, id)
+	if err != nil {
+		return err
+	}
+	me, err := x.self(ctx)
+	if err != nil {
+		return err
+	}
+	m := messageFrom(orig, true)
+	o.Subject = prefixed("Fwd:", m.Subject)
+	if !m.HTML && !o.HTML {
+		o.Body += fmt.Sprintf("\n\n---------- Forwarded message ---------\nFrom: %s\nDate: %s\nSubject: %s\nTo: %s\n\n%s",
+			m.From, m.Received.Format("Mon, 2 Jan 2006 15:04 MST"), m.Subject, strings.Join(m.To, ", "), m.Body)
+	}
+	return x.send(ctx, me, o, nil, "")
+}
+
+func (x *session) modify(ctx context.Context, id string, add, remove []string) error {
+	_, err := x.gm.Users.Messages.Modify("me", id, &gmail.ModifyMessageRequest{AddLabelIds: add, RemoveLabelIds: remove}).Context(ctx).Do()
+	return x.fail(ctx, err)
+}
+
+func (x mailAdapter) Archive(ctx context.Context, id string) error {
+	return x.modify(ctx, id, nil, []string{"INBOX"})
+}
+
+func (x mailAdapter) MarkRead(ctx context.Context, id string, read bool) error {
+	if read {
+		return x.modify(ctx, id, nil, []string{"UNREAD"})
+	}
+	return x.modify(ctx, id, []string{"UNREAD"}, nil)
+}
+
+func (x mailAdapter) Delete(ctx context.Context, id string) error {
+	_, err := x.gm.Users.Messages.Trash("me", id).Context(ctx).Do()
+	return x.fail(ctx, err)
+}
+
+// labelIDs turns names into Gmail label ids, making a label that does not exist yet when it is being added.
+func (x *session) labelIDs(ctx context.Context, names []string, create bool) ([]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	list, err := x.gm.Users.Labels.List("me").Context(ctx).Do()
+	if err != nil {
+		return nil, x.fail(ctx, err)
+	}
+	byName := map[string]string{}
+	for _, l := range list.Labels {
+		byName[strings.ToLower(l.Name)] = l.Id
+	}
+	var ids []string
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		if id, ok := byName[strings.ToLower(n)]; ok {
+			ids = append(ids, id)
+			continue
+		}
+		if !create {
+			continue
+		}
+		l, err := x.gm.Users.Labels.Create("me", &gmail.Label{Name: n, LabelListVisibility: "labelShow", MessageListVisibility: "show"}).Context(ctx).Do()
+		if err != nil {
+			return nil, x.fail(ctx, err)
+		}
+		ids = append(ids, l.Id)
+	}
+	return ids, nil
+}
+
+func (x mailAdapter) Label(ctx context.Context, id string, add, remove []string) error {
+	a, err := x.labelIDs(ctx, add, true)
+	if err != nil {
+		return err
+	}
+	r, err := x.labelIDs(ctx, remove, false)
+	if err != nil {
+		return err
+	}
+	return x.modify(ctx, id, a, r)
+}
+
+func (x mailAdapter) Labels(ctx context.Context) ([]string, error) {
+	list, err := x.gm.Users.Labels.List("me").Context(ctx).Do()
+	if err != nil {
+		return nil, x.fail(ctx, err)
+	}
+	var out []string
+	for _, l := range list.Labels {
+		if l.Type == "user" {
+			out = append(out, l.Name)
 		}
 	}
 	return out, nil
@@ -444,7 +890,7 @@ func fileFrom(driveID string, f *drive.File) connect.FileItem {
 	return it
 }
 
-func (x *session) Drives(ctx context.Context) ([]connect.Drive, error) {
+func (x filesAdapter) Drives(ctx context.Context) ([]connect.Drive, error) {
 	out := []connect.Drive{{ID: "root", Name: "My Drive", Kind: "personal"}}
 	err := x.dr.Drives.List().PageSize(100).Pages(ctx, func(r *drive.DriveList) error {
 		for _, d := range r.Drives {
@@ -459,7 +905,7 @@ func (x *session) Drives(ctx context.Context) ([]connect.Drive, error) {
 	return out, nil
 }
 
-func (x *session) List(ctx context.Context, driveID, folderID string) ([]connect.FileItem, error) {
+func (x filesAdapter) List(ctx context.Context, driveID, folderID string) ([]connect.FileItem, error) {
 	if folderID == "" {
 		folderID = driveID
 		if folderID == "" {
@@ -490,7 +936,7 @@ func (x *session) List(ctx context.Context, driveID, folderID string) ([]connect
 
 var errStop = errors.New("stop")
 
-func (x *session) Item(ctx context.Context, driveID, itemID string) (connect.FileItem, error) {
+func (x filesAdapter) Item(ctx context.Context, driveID, itemID string) (connect.FileItem, error) {
 	f, err := x.dr.Files.Get(itemID).Fields(fileFields).SupportsAllDrives(true).Context(ctx).Do()
 	if err != nil {
 		return connect.FileItem{}, x.fail(ctx, err)
@@ -505,7 +951,7 @@ var exports = map[string][2]string{
 	"application/vnd.google-apps.presentation": {"application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx"},
 }
 
-func (x *session) Open(ctx context.Context, driveID, itemID string, maxBytes int64) (connect.FileItem, io.ReadCloser, error) {
+func (x filesAdapter) Open(ctx context.Context, driveID, itemID string, maxBytes int64) (connect.FileItem, io.ReadCloser, error) {
 	meta, err := x.Item(ctx, driveID, itemID)
 	if err != nil {
 		return meta, nil, err
@@ -532,4 +978,73 @@ func (x *session) Open(ctx context.Context, driveID, itemID string, maxBytes int
 		return meta, nil, x.fail(ctx, err)
 	}
 	return meta, resp.Body, nil
+}
+
+// -----------------------------------------------------------------------------
+// Files, write
+// -----------------------------------------------------------------------------
+
+func parentOf(driveID, folderID string) string {
+	if folderID != "" {
+		return folderID
+	}
+	if driveID == "" {
+		return "root"
+	}
+	return driveID
+}
+
+func (x filesAdapter) Upload(ctx context.Context, driveID, folderID, name, mimeType string, size int64, r io.Reader) (connect.FileItem, error) {
+	f, err := x.dr.Files.Create(&drive.File{Name: name, Parents: []string{parentOf(driveID, folderID)}}).
+		Media(r, googleapi.ContentType(mimeType)).SupportsAllDrives(true).Fields(fileFields).Context(ctx).Do()
+	if err != nil {
+		return connect.FileItem{}, x.fail(ctx, err)
+	}
+	return fileFrom(driveID, f), nil
+}
+
+func (x filesAdapter) Replace(ctx context.Context, driveID, itemID, mimeType string, size int64, r io.Reader) (connect.FileItem, error) {
+	f, err := x.dr.Files.Update(itemID, &drive.File{}).Media(r, googleapi.ContentType(mimeType)).
+		SupportsAllDrives(true).Fields(fileFields).Context(ctx).Do()
+	if err != nil {
+		return connect.FileItem{}, x.fail(ctx, err)
+	}
+	return fileFrom(driveID, f), nil
+}
+
+func (x filesAdapter) Rename(ctx context.Context, driveID, itemID, name string) (connect.FileItem, error) {
+	f, err := x.dr.Files.Update(itemID, &drive.File{Name: name}).SupportsAllDrives(true).Fields(fileFields).Context(ctx).Do()
+	if err != nil {
+		return connect.FileItem{}, x.fail(ctx, err)
+	}
+	return fileFrom(driveID, f), nil
+}
+
+func (x filesAdapter) Move(ctx context.Context, driveID, itemID, folderID string) (connect.FileItem, error) {
+	cur, err := x.dr.Files.Get(itemID).Fields("parents").SupportsAllDrives(true).Context(ctx).Do()
+	if err != nil {
+		return connect.FileItem{}, x.fail(ctx, err)
+	}
+	f, err := x.dr.Files.Update(itemID, &drive.File{}).AddParents(parentOf(driveID, folderID)).
+		RemoveParents(strings.Join(cur.Parents, ",")).SupportsAllDrives(true).Fields(fileFields).Context(ctx).Do()
+	if err != nil {
+		return connect.FileItem{}, x.fail(ctx, err)
+	}
+	return fileFrom(driveID, f), nil
+}
+
+func (x filesAdapter) Mkdir(ctx context.Context, driveID, folderID, name string) (connect.FileItem, error) {
+	f, err := x.dr.Files.Create(&drive.File{Name: name, MimeType: "application/vnd.google-apps.folder",
+		Parents: []string{parentOf(driveID, folderID)}}).SupportsAllDrives(true).Fields(fileFields).Context(ctx).Do()
+	if err != nil {
+		return connect.FileItem{}, x.fail(ctx, err)
+	}
+	return fileFrom(driveID, f), nil
+}
+
+// Delete moves to Drive's bin, which is what deleting is in Drive, and the person can restore it from there.
+func (x filesAdapter) Delete(ctx context.Context, driveID, itemID string) error {
+	_, err := x.dr.Files.Update(itemID, &drive.File{Trashed: true, ForceSendFields: []string{"Trashed"}}).
+		SupportsAllDrives(true).Fields("id").Context(ctx).Do()
+	return x.fail(ctx, err)
 }

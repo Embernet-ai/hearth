@@ -1,6 +1,6 @@
 # Microsoft 365
 
-Hearth can use a Microsoft 365 business tenant for sign-in and for four connectors: calendar, contacts, mail and files, plus chat notifications into Teams. It is meant for a self-hosted Hearth. Every connector is off until an administrator turns it on, and every connection is one person's own: Hearth never holds an application permission that reads a whole tenant.
+Hearth can use a Microsoft 365 business tenant for sign-in and for four connectors, all of them read and write: calendar, contacts, mail and files, plus chat notifications into Teams. It is meant for a self-hosted Hearth. Every connector is off until an administrator turns it on, and every connection is one person's own, made with delegated permissions: Hearth works in a person's mailbox, calendar, address book and drive as that person, and never holds an application permission that reaches a whole tenant.
 
 ## Register the app in Microsoft Entra
 
@@ -17,12 +17,12 @@ In the Microsoft Entra admin center, under App registrations, make one registrat
 |---|---|
 | Sign-in | `openid`, `profile`, `email`, `offline_access`, `User.Read` |
 | Calendar | `Calendars.ReadWrite` |
-| Contacts | `Contacts.Read` |
-| Mail | `Mail.Read` |
-| Files | `Files.Read.All`, `Sites.Read.All` |
+| Contacts | `Contacts.ReadWrite` |
+| Mail | `Mail.ReadWrite`, `Mail.Send` |
+| Files | `Files.ReadWrite.All`, `Sites.Read.All` (to find the SharePoint sites a person follows) |
 | Chat notifications | none |
 
-`Sites.Read.All` and some tenant policies need an administrator's consent. Grant it once for everybody under API permissions, or from Settings, Connectors, Grant for the whole tenant.
+`Files.ReadWrite.All`, `Sites.Read.All` and some tenant policies need an administrator's consent. Grant it once for everybody under API permissions, or from Settings, Connectors, Grant for the whole tenant.
 
 ## Install
 
@@ -78,6 +78,9 @@ Hearth was built and tested against Microsoft's published API shapes and recorde
 3. Make an event in Outlook for tomorrow. Choose Sync now. Expect it on the Hearth calendar.
 4. Make an event in Hearth. Choose Sync now. Expect it in Outlook, and a Teams link on it if you turned on links.
 5. Move the Hearth event. Sync. Expect it moved in Outlook.
-6. Disconnect. Expect the Connectors page to show you as not connected.
+6. Open Mailbox. Expect your inbox, open a message with its whole body, reply to it, and expect the reply in Outlook's Sent Items.
+7. Make a contact in the CRM and sync. Expect it in your Outlook contacts, and the reverse.
+8. Open Cloud files, upload a file, rename it, move it and delete it, and expect each in OneDrive.
+9. Disconnect. Expect the Connectors page to show you as not connected.
 
 If a step fails, the Connectors page shows the last error for each connector and each person, in words.

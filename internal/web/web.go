@@ -576,6 +576,7 @@ type page struct {
 	// files linked to a document, and the messages linked to a contact.
 	Connectors *ConnectorsView `json:",omitempty"`
 	Cloud      *CloudView      `json:",omitempty"`
+	Mailbox    *MailboxView    `json:",omitempty"`
 	CloudOn    bool            `json:",omitempty"`
 	// ConnectorsOn is whether the Settings page links to the Connectors page.
 	ConnectorsOn bool                 `json:",omitempty"`
@@ -1243,6 +1244,21 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /settings/connectors/chat", s.postConnectorChat)
 	authed.HandleFunc("POST /integrations/microsoft/connect", s.startMicrosoft)
 	authed.HandleFunc("GET /integrations/microsoft/callback", s.microsoftCallback)
+	authed.HandleFunc("GET /mailbox", s.getMailbox)
+	authed.HandleFunc("POST /mailbox/send", s.postMailSend)
+	authed.HandleFunc("POST /mailbox/reply", s.postMailReply)
+	authed.HandleFunc("POST /mailbox/forward", s.postMailForward)
+	authed.HandleFunc("POST /mailbox/archive", s.postMailArchive)
+	authed.HandleFunc("POST /mailbox/label", s.postMailLabel)
+	authed.HandleFunc("POST /mailbox/read", s.postMailRead)
+	authed.HandleFunc("POST /mailbox/delete", s.postMailDelete)
+	authed.HandleFunc("POST /cloud/upload", s.postCloudUpload)
+	authed.HandleFunc("POST /cloud/replace", s.postCloudReplace)
+	authed.HandleFunc("POST /cloud/rename", s.postCloudRename)
+	authed.HandleFunc("POST /cloud/move", s.postCloudMove)
+	authed.HandleFunc("POST /cloud/mkdir", s.postCloudMkdir)
+	authed.HandleFunc("POST /cloud/delete", s.postCloudDelete)
+	authed.HandleFunc("POST /cloud/save", s.postCloudSave)
 	authed.HandleFunc("GET /cloud", s.getCloud)
 	authed.HandleFunc("POST /cloud/link", s.postCloudLink)
 	authed.HandleFunc("POST /cloud/import", s.postCloudImport)

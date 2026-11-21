@@ -1,6 +1,6 @@
 # Google Workspace
 
-Hearth can use a Google Workspace domain for sign-in and for four connectors: calendar, contacts, mail and files, plus chat notifications into Google Chat. It is meant for a self-hosted Hearth. Every connector is off until an administrator turns it on, and every connection is one person's own. Hearth never uses a service account that reads the whole domain.
+Hearth can use a Google Workspace domain for sign-in and for four connectors, all of them read and write: calendar, contacts, mail and files, plus chat notifications into Google Chat. It is meant for a self-hosted Hearth. Every connector is off until an administrator turns it on, and every connection is one person's own: Hearth works in a person's mailbox, calendar, address book and drive as that person, and never uses a service account that reaches the whole domain.
 
 ## Create the OAuth client
 
@@ -16,13 +16,13 @@ In the Google Cloud console, in a project for Hearth:
 | Connector | Scope |
 |---|---|
 | Sign-in | `openid`, `email`, `profile` |
-| Calendar | `calendar.events`, `calendar.calendarlist.readonly` |
-| Contacts | `contacts.readonly` |
-| Mail | `gmail.metadata` |
-| Files | `drive.readonly` |
+| Calendar | `https://www.googleapis.com/auth/calendar` |
+| Contacts | `https://www.googleapis.com/auth/contacts` |
+| Mail | `https://mail.google.com/` |
+| Files | `https://www.googleapis.com/auth/drive` |
 | Chat notifications | none |
 
-`gmail.metadata` can read headers and a short preview, and cannot read a message body. `drive.readonly` is a restricted scope, which an Internal app may use without Google's verification.
+`mail.google.com` and `drive` are restricted scopes. An app whose audience is Internal may use them for your own domain without Google's verification.
 
 ## Install
 
@@ -60,4 +60,7 @@ Google's sign-in token carries no groups, so there is no group-to-role mapping f
 3. Make an event in Google Calendar. Choose Sync now. Expect it on the Hearth calendar.
 4. Make an event in Hearth. Sync. Expect it in Google Calendar, with a Meet link if you turned on links.
 5. Share a calendar with a second person, sync it into a department on the Connectors page, and expect the people in that department to see its events in Hearth.
-6. Disconnect, and expect the page to show you as not connected.
+6. Open Mailbox. Expect your inbox, open a message with its whole body, reply, and expect the reply in Gmail's Sent.
+7. Make a contact in the CRM and sync. Expect it in Google Contacts, and the reverse.
+8. Open Cloud files, upload a file, rename it, move it and delete it, and expect each in Drive.
+9. Disconnect, and expect the page to show you as not connected.

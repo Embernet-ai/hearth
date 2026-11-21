@@ -171,6 +171,13 @@ Owning your data doesn't mean living in a cave. Hearth talks to the world. It ju
   - **SCIM** for provisioning from your identity provider.
   - **EmberOps** (on Frappe), so accounting can invoice a real customer.
     [`docs/crm-sync.md`](docs/crm-sync.md), [`docs/emberops-backend.md`](docs/emberops-backend.md)
+- **📬 Microsoft 365 and Google Workspace, read AND write.** Sign in with your tenant or your domain, then work in your
+  own mailbox (the whole thing: open, send, reply, forward, archive, label), your calendar (both ways, with Meet and
+  Teams links), your contacts (both ways, deletes included), and your files in OneDrive, SharePoint and Drive (upload,
+  replace, rename, move, delete) without leaving Hearth. Every switch is off until an admin flips it, every token is
+  sealed, and every call is made as *you*, so nobody reads a colleague's mailbox through somebody else's login. It's a
+  company tool, not a surveillance tool. [`docs/microsoft-365.md`](docs/microsoft-365.md),
+  [`docs/google-workspace.md`](docs/google-workspace.md)
 - **📱 Push notifications** via plain Web Push. Hearth is an installable app. No extra service, no third-party push
   vendor reading your notifications. [`docs/push-notifications.md`](docs/push-notifications.md)
 

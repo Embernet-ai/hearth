@@ -1,14 +1,15 @@
 package connect
 
-// Mail: messages linked to the people in the CRM, read-only.
+// Mail: a person's whole mailbox, read and write, as that person.
 //
-// Hearth never sends, moves or deletes anything in a mailbox through this, and it does not keep mail. For a
-// message that names somebody the person already has in the CRM it keeps the sender, the recipients, the subject,
-// a short preview and the link back to the message at the provider. Everything else in the mailbox is read and
-// dropped in the same pass.
+// Two parts. The mailbox itself (list, open, send, reply, forward, archive, label, delete) passes straight through to
+// Google or Microsoft, so Hearth shows and does exactly what the person's own mail client could, and keeps nothing
+// of it. And a sync that links messages to the people already in the CRM, keeping the whole message so it shows on
+// the contact's page, to the person whose mailbox it came from and nobody else.
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/mail"
 	"strings"
@@ -31,6 +32,8 @@ type LinkedMail struct {
 	From     string
 	To       []string
 	Snippet  string
+	Body     string
+	HTML     bool
 	Received time.Time
 	WebLink  string
 }
@@ -95,11 +98,12 @@ func (s *Service) SyncMail(ctx context.Context, orgID, principalID string, p Pro
 		for contactID := range hit {
 			ct, err := s.db.Exec(ctx, `
 				INSERT INTO connector_mail (id, org_id, principal_id, provider, message_id, contact_id, subject,
-				                            from_addr, to_addrs, snippet, received_at, web_link)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-				ON CONFLICT (principal_id, provider, message_id, contact_id) DO NOTHING`,
+				                            from_addr, to_addrs, snippet, body, html, received_at, web_link)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+				ON CONFLICT (principal_id, provider, message_id, contact_id) DO UPDATE SET body = EXCLUDED.body, html = EXCLUDED.html
+				WHERE connector_mail.body IS DISTINCT FROM EXCLUDED.body`,
 				uuid.NewString(), orgID, principalID, string(p), m.ID, contactID, clip(m.Subject, 300),
-				clip(m.From, 300), clipAll(m.To, 20), clip(m.Snippet, 240), m.Received, m.WebLink)
+				clip(m.From, 300), clipAll(m.To, 20), clip(m.Snippet, 240), clip(m.Body, 500000), m.HTML, m.Received, m.WebLink)
 			if err != nil {
 				return n, fmt.Errorf("connect: link message: %w", err)
 			}
@@ -138,7 +142,7 @@ func (s *Service) MailFor(ctx context.Context, orgID, principalID, contactID str
 		limit = 25
 	}
 	rows, err := s.db.Query(ctx, `
-		SELECT id::text, provider, subject, from_addr, to_addrs, snippet, received_at, web_link
+		SELECT id::text, provider, subject, from_addr, to_addrs, snippet, body, html, received_at, web_link
 		  FROM connector_mail
 		 WHERE org_id=$1 AND principal_id=$2 AND contact_id=$3
 		 ORDER BY received_at DESC LIMIT $4`, orgID, principalID, contactID, limit)
@@ -150,11 +154,119 @@ func (s *Service) MailFor(ctx context.Context, orgID, principalID, contactID str
 	for rows.Next() {
 		var m LinkedMail
 		var p string
-		if err := rows.Scan(&m.ID, &p, &m.Subject, &m.From, &m.To, &m.Snippet, &m.Received, &m.WebLink); err != nil {
+		if err := rows.Scan(&m.ID, &p, &m.Subject, &m.From, &m.To, &m.Snippet, &m.Body, &m.HTML, &m.Received, &m.WebLink); err != nil {
 			return nil, err
 		}
 		m.Provider = Provider(p)
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// -----------------------------------------------------------------------------
+// The mailbox, passed through
+// -----------------------------------------------------------------------------
+
+func (s *Service) mailAPI(ctx context.Context, orgID, principalID string, p Provider) (MailAPI, error) {
+	sess, err := s.session(ctx, orgID, principalID, p, Mail)
+	if err != nil {
+		return nil, err
+	}
+	return sess.Mail(), nil
+}
+
+// Inbox lists a page of the person's mailbox.
+func (s *Service) Inbox(ctx context.Context, orgID, principalID string, p Provider, q MailQuery) ([]Message, string, error) {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return api.Inbox(ctx, q)
+}
+
+// Message opens one message with its whole body.
+func (s *Service) Message(ctx context.Context, orgID, principalID string, p Provider, id string) (Message, error) {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return Message{}, err
+	}
+	return api.Get(ctx, id)
+}
+
+// SendMail sends a message as the person.
+func (s *Service) SendMail(ctx context.Context, orgID, principalID string, p Provider, o Outgoing) error {
+	if len(o.To) == 0 {
+		return errors.New("connect: a message needs somebody to go to")
+	}
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.Send(ctx, o)
+}
+
+// ReplyMail answers a message as the person.
+func (s *Service) ReplyMail(ctx context.Context, orgID, principalID string, p Provider, id string, o Outgoing, all bool) error {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.Reply(ctx, id, o, all)
+}
+
+// ForwardMail forwards a message as the person.
+func (s *Service) ForwardMail(ctx context.Context, orgID, principalID string, p Provider, id string, o Outgoing) error {
+	if len(o.To) == 0 {
+		return errors.New("connect: a forward needs somebody to go to")
+	}
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.Forward(ctx, id, o)
+}
+
+// ArchiveMail takes a message out of the inbox.
+func (s *Service) ArchiveMail(ctx context.Context, orgID, principalID string, p Provider, id string) error {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.Archive(ctx, id)
+}
+
+// LabelMail adds and removes labels or categories on a message.
+func (s *Service) LabelMail(ctx context.Context, orgID, principalID string, p Provider, id string, add, remove []string) error {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.Label(ctx, id, add, remove)
+}
+
+// MailLabels lists the labels or categories the person has.
+func (s *Service) MailLabels(ctx context.Context, orgID, principalID string, p Provider) ([]string, error) {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return nil, err
+	}
+	return api.Labels(ctx)
+}
+
+// MarkMailRead marks a message read or unread.
+func (s *Service) MarkMailRead(ctx context.Context, orgID, principalID string, p Provider, id string, read bool) error {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.MarkRead(ctx, id, read)
+}
+
+// DeleteMail sends a message to the provider's bin.
+func (s *Service) DeleteMail(ctx context.Context, orgID, principalID string, p Provider, id string) error {
+	api, err := s.mailAPI(ctx, orgID, principalID, p)
+	if err != nil {
+		return err
+	}
+	return api.Delete(ctx, id)
 }

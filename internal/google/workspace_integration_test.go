@@ -70,8 +70,14 @@ const (
 )
 
 func msgMeta(id string, ms int64, from, to, subj string) string {
-	return `{"id":"` + id + `","snippet":"Please find the quote","internalDate":"` + itoa(ms) + `","labelIds":["INBOX"],
-	  "payload":{"headers":[{"name":"From","value":"` + from + `"},{"name":"To","value":"` + to + `"},{"name":"Subject","value":"` + subj + `"}]}}`
+	body := base64.URLEncoding.EncodeToString([]byte("Hi Dana,\n\nPlease find the quote.\n\nPriya"))
+	html := base64.URLEncoding.EncodeToString([]byte("<p>Hi Dana</p>"))
+	return `{"id":"` + id + `","threadId":"th-` + id + `","snippet":"Please find the quote","internalDate":"` + itoa(ms) + `","labelIds":["INBOX","UNREAD"],
+	  "payload":{"mimeType":"multipart/alternative","headers":[{"name":"From","value":"` + from + `"},{"name":"To","value":"` + to + `"},
+	    {"name":"Cc","value":"ops@example.com"},{"name":"Subject","value":"` + subj + `"},{"name":"Message-ID","value":"<` + id + `@mail.example>"},
+	    {"name":"References","value":"<earlier@mail.example>"}],
+	    "parts":[{"mimeType":"text/plain","body":{"data":"` + body + `"}},{"mimeType":"text/html","body":{"data":"` + html + `"}},
+	             {"mimeType":"application/pdf","filename":"quote-118.pdf","body":{"attachmentId":"a1"}}]}}`
 }
 
 func itoa(n int64) string { b, _ := json.Marshal(n); return string(b) }
@@ -108,6 +114,33 @@ func newWSFake(t *testing.T) *wsFake {
 		q := r.URL.Query()
 		p := r.URL.Path
 		switch {
+		case p == "/v1/people:createContact" && r.Method == "POST":
+			_, _ = w.Write([]byte(`{"resourceName":"people/cNEW","etag":"etag-new","names":[{"displayName":"Dana Park"}],"emailAddresses":[{"value":"dana.park@acme.test"}]}`))
+		case strings.HasSuffix(p, ":updateContact") && r.Method == "PATCH":
+			_, _ = w.Write([]byte(`{"resourceName":"people/c1","etag":"etag-patched","names":[{"displayName":"Priya Shah"}]}`))
+		case strings.HasSuffix(p, ":deleteContact") && r.Method == "DELETE":
+			if strings.Contains(p, "/gone:") {
+				w.WriteHeader(404)
+				_, _ = w.Write([]byte(`{"error":{"code":404,"message":"x"}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{}`))
+		case strings.HasSuffix(p, "/users/me/profile"):
+			_, _ = w.Write([]byte(`{"emailAddress":"dana@example.com"}`))
+		case strings.HasSuffix(p, "/users/me/messages/send") && r.Method == "POST":
+			_, _ = w.Write([]byte(`{"id":"sent1","threadId":"th-m1"}`))
+		case strings.HasSuffix(p, "/modify") && r.Method == "POST":
+			_, _ = w.Write([]byte(`{"id":"m1"}`))
+		case strings.HasSuffix(p, "/trash") && r.Method == "POST":
+			_, _ = w.Write([]byte(`{"id":"m1"}`))
+		case strings.HasSuffix(p, "/users/me/labels") && r.Method == "GET":
+			_, _ = w.Write([]byte(`{"labels":[{"id":"INBOX","name":"INBOX","type":"system"},{"id":"Label_1","name":"Quotes","type":"user"},{"id":"Label_2","name":"Old","type":"user"}]}`))
+		case strings.HasSuffix(p, "/users/me/labels") && r.Method == "POST":
+			_, _ = w.Write([]byte(`{"id":"Label_9","name":"Urgent","type":"user"}`))
+		case strings.HasSuffix(p, "/upload/drive/v3/files") && r.Method == "POST", strings.Contains(p, "/drive/v3/files") && r.Method == "POST":
+			_, _ = w.Write([]byte(`{"id":"newfile","name":"plan.txt","mimeType":"text/plain","size":"5"}`))
+		case strings.Contains(p, "/files/") && r.Method == "PATCH":
+			_, _ = w.Write([]byte(`{"id":"fi1","name":"renamed.pdf","mimeType":"application/pdf","size":"11"}`))
 		case strings.HasSuffix(p, "/users/me/calendarList"):
 			_, _ = w.Write([]byte(calList))
 		case strings.HasSuffix(p, "/events") && r.Method == "GET":
@@ -219,18 +252,21 @@ func TestTheDomainHintAndTheScopesOfTheConnectorsAreWhatTheURLAsksFor(t *testing
 		t.Errorf("query %v", q)
 	}
 	sc := q.Get("scope")
-	if !strings.Contains(sc, ScopeCalendarWrite) || !strings.Contains(sc, ScopeCalendarList) || strings.Contains(sc, "gmail") || strings.Contains(sc, "drive") {
+	if !strings.Contains(sc, ScopeCalendarFull) || strings.Contains(sc, "gmail") || strings.Contains(sc, "drive") {
 		t.Errorf("scope %q", sc)
 	}
 }
 
-func TestEarlierGrantsCoverTheNarrowerScopesTheConnectorsNeed(t *testing.T) {
-	got := expand([]string{ScopeCalendarRead, ScopeGmailRead})
-	if !connect.HasScopes(got, []string{ScopeCalendarList, ScopeGmailMeta}) {
-		t.Errorf("calendar.readonly and gmail.readonly should cover the calendar list and the metadata scope: %v", got)
+func TestTheFullScopesCoverTheNarrowerOnesAndAReadOnlyGrantDoesNotCoverTheFullOnes(t *testing.T) {
+	got := expand([]string{ScopeCalendarFull, ScopeContactsFull, ScopeMailFull, ScopeDriveFull})
+	if !connect.HasScopes(got, []string{ScopeCalendarWrite, ScopeCalendarList, ScopeContacts, ScopeGmailSend, ScopeGmailMeta, ScopeDriveRead}) {
+		t.Errorf("the full scopes should cover the narrower ones: %v", got)
 	}
-	if connect.HasScopes(got, []string{ScopeCalendarWrite}) || connect.HasScopes(got, []string{ScopeDriveRead}) {
-		t.Errorf("a read grant must not be treated as write or as Drive: %v", got)
+	old := expand([]string{ScopeCalendarRead, ScopeGmailRead, ScopeContacts, ScopeDriveRead})
+	for _, full := range []string{ScopeCalendarFull, ScopeMailFull, ScopeContactsFull, ScopeDriveFull} {
+		if connect.HasScopes(old, []string{full}) {
+			t.Errorf("a read-only grant was treated as covering %s: the person has to connect again", full)
+		}
 	}
 }
 
@@ -311,7 +347,7 @@ func TestContactsAcrossPages(t *testing.T) {
 	}
 }
 
-func TestMailReadsHeadersOnlyStopsAtTheCutoffAndAsksForTheLabels(t *testing.T) {
+func TestMailIsReadInFullFromTheInboxAndSentAndStopsAtTheCutoff(t *testing.T) {
 	_, w, s := wsSetup(t, "example.com")
 	ms, err := s.Mail().Messages(context.Background(), time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC), 50)
 	if err != nil {
@@ -321,20 +357,225 @@ func TestMailReadsHeadersOnlyStopsAtTheCutoffAndAsksForTheLabels(t *testing.T) {
 		t.Fatalf("messages %+v: one from the inbox label and one from sent, the October one cut off", ms)
 	}
 	m := ms[0]
-	if m.Subject != "Quote 118" || m.From != "Priya Shah <priya@acme.test>" || len(m.To) != 2 || m.To[1] != "ops@example.com" ||
-		m.Snippet != "Please find the quote" || !strings.Contains(m.WebLink, "m1") {
+	if m.Subject != "Quote 118" || m.From != "Priya Shah <priya@acme.test>" || len(m.To) != 2 || len(m.Cc) != 1 || m.Snippet != "Please find the quote" ||
+		m.Body != "Hi Dana,\n\nPlease find the quote.\n\nPriya" || m.HTML || !m.Unread || m.ThreadID != "th-m1" ||
+		len(m.Attached) != 1 || m.Attached[0] != "quote-118.pdf" || !strings.Contains(m.WebLink, "m1") {
 		t.Errorf("message %+v", m)
 	}
-	var sawInbox, sawSent bool
+	var sawInbox, sawSent, sawFull bool
 	for _, c := range w.calls {
 		sawInbox = sawInbox || strings.Contains(c, "labelIds=INBOX")
 		sawSent = sawSent || strings.Contains(c, "labelIds=SENT")
-		if strings.Contains(c, "format=full") || strings.Contains(c, "format=raw") || strings.Contains(c, "q=") {
-			t.Errorf("call %q asks for a body or searches, which the metadata scope refuses", c)
+		sawFull = sawFull || strings.Contains(c, "format=full")
+	}
+	if !sawInbox || !sawSent || !sawFull {
+		t.Errorf("inbox=%v sent=%v full=%v", sawInbox, sawSent, sawFull)
+	}
+}
+
+func rawOf(t *testing.T, body string) (headers map[string]string, text string) {
+	t.Helper()
+	var m struct{ Raw, ThreadId string }
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		t.Fatalf("body %s: %v", body, err)
+	}
+	raw, err := base64.URLEncoding.DecodeString(m.Raw)
+	if err != nil {
+		t.Fatalf("raw: %v", err)
+	}
+	head, rest, _ := strings.Cut(string(raw), "\r\n\r\n")
+	headers = map[string]string{"threadId": m.ThreadId}
+	for _, line := range strings.Split(head, "\r\n") {
+		k, v, _ := strings.Cut(line, ": ")
+		headers[k] = v
+	}
+	dec, _ := base64.StdEncoding.DecodeString(strings.ReplaceAll(rest, "\r\n", ""))
+	return headers, string(dec)
+}
+
+func TestMailIsSentRepliedForwardedArchivedLabelledAndDeletedAsThePerson(t *testing.T) {
+	_, w, s := wsSetup(t, "example.com")
+	ctx := context.Background()
+	mailbox := s.Mail()
+	send := "POST /gmail/v1/users/me/messages/send"
+
+	if err := mailbox.Send(ctx, connect.Outgoing{To: []string{"a@b.test"}, Cc: []string{"c@d.test"}, Bcc: []string{"e@f.test"}, Subject: "Café quote", Body: "héllo"}); err != nil {
+		t.Fatal(err)
+	}
+	h, text := rawOf(t, w.bodies[send])
+	if h["From"] != "dana@example.com" || h["To"] != "a@b.test" || h["Cc"] != "c@d.test" || h["Bcc"] != "e@f.test" || h["MIME-Version"] != "1.0" ||
+		!strings.HasPrefix(h["Content-Type"], "text/plain; charset=UTF-8") || text != "héllo" {
+		t.Errorf("sent %v %q", h, text)
+	}
+	if !strings.HasPrefix(h["Subject"], "=?utf-8?") {
+		t.Errorf("a subject with a non-ASCII character has to be encoded: %q", h["Subject"])
+	}
+
+	// A reply keeps the thread and the references, goes to the sender, quotes the original.
+	if err := mailbox.Reply(ctx, "m1", connect.Outgoing{Body: "Thanks Priya"}, false); err != nil {
+		t.Fatal(err)
+	}
+	h, text = rawOf(t, w.bodies[send])
+	if h["To"] != `"Priya Shah" <priya@acme.test>` && h["To"] != "Priya Shah <priya@acme.test>" {
+		t.Errorf("reply to %q", h["To"])
+	}
+	if h["Subject"] != "Re: Quote 118" || h["In-Reply-To"] != "<m1@mail.example>" || h["References"] != "<earlier@mail.example> <m1@mail.example>" || h["threadId"] != "th-m1" {
+		t.Errorf("reply headers %v", h)
+	}
+	if !strings.HasPrefix(text, "Thanks Priya") || !strings.Contains(text, "> Please find the quote.") {
+		t.Errorf("reply body %q", text)
+	}
+	// Reply all keeps the other recipients but not the person.
+	if err := mailbox.Reply(ctx, "m1", connect.Outgoing{Body: "all"}, true); err != nil {
+		t.Fatal(err)
+	}
+	h, _ = rawOf(t, w.bodies[send])
+	if strings.Contains(h["Cc"], "dana@example.com") || !strings.Contains(h["Cc"], "ops@example.com") {
+		t.Errorf("reply all Cc %q: the other people stay and the person does not", h["Cc"])
+	}
+
+	if err := mailbox.Forward(ctx, "m1", connect.Outgoing{To: []string{"c@d.test"}, Body: "fyi"}); err != nil {
+		t.Fatal(err)
+	}
+	h, text = rawOf(t, w.bodies[send])
+	if h["Subject"] != "Fwd: Quote 118" || h["To"] != "c@d.test" || !strings.Contains(text, "---------- Forwarded message ---------") || !strings.Contains(text, "Please find the quote.") {
+		t.Errorf("forward %v %q", h, text)
+	}
+
+	mod := "POST /gmail/v1/users/me/messages/m1/modify"
+	if err := mailbox.Archive(ctx, "m1"); err != nil || !strings.Contains(w.bodies[mod], `"removeLabelIds":["INBOX"]`) {
+		t.Errorf("archive %v %s", err, w.bodies[mod])
+	}
+	if err := mailbox.MarkRead(ctx, "m1", true); err != nil || !strings.Contains(w.bodies[mod], `"removeLabelIds":["UNREAD"]`) {
+		t.Errorf("mark read %v %s", err, w.bodies[mod])
+	}
+	// Quotes exists, Urgent is made, Old is removed by name.
+	if err := mailbox.Label(ctx, "m1", []string{"quotes", "Urgent"}, []string{"Old"}); err != nil {
+		t.Fatal(err)
+	}
+	if b := w.bodies[mod]; !strings.Contains(b, `"addLabelIds":["Label_1","Label_9"]`) || !strings.Contains(b, `"removeLabelIds":["Label_2"]`) {
+		t.Errorf("label %s", b)
+	}
+	if labels, err := mailbox.Labels(ctx); err != nil || len(labels) != 2 {
+		t.Errorf("labels %v %v: user labels only", labels, err)
+	}
+	if err := mailbox.Delete(ctx, "m1"); err != nil {
+		t.Fatal(err)
+	}
+	var trashed bool
+	for _, c := range w.calls {
+		trashed = trashed || strings.HasPrefix(c, "POST /gmail/v1/users/me/messages/m1/trash")
+	}
+	if !trashed {
+		t.Error("delete should move to Trash")
+	}
+
+	list, _, err := mailbox.Inbox(ctx, connect.MailQuery{Folder: "archive", Search: "from:priya", Limit: 10})
+	if err != nil || len(list) != 2 {
+		t.Fatalf("inbox %+v %v", list, err)
+	}
+	var q string
+	for _, c := range w.calls {
+		if strings.HasPrefix(c, "GET /gmail/v1/users/me/messages?") && strings.Contains(c, "q=") {
+			q, _ = url.QueryUnescape(c)
 		}
 	}
-	if !sawInbox || !sawSent {
-		t.Error("both the inbox and sent mail should be read")
+	if !strings.Contains(q, "-in:inbox") || !strings.Contains(q, "from:priya") {
+		t.Errorf("archive search %q", q)
+	}
+}
+
+func TestContactsAreCreatedEditedAndDeletedAtGoogle(t *testing.T) {
+	_, w, s := wsSetup(t, "example.com")
+	ctx := context.Background()
+	api := s.Contacts()
+
+	out, err := api.Create(ctx, connect.Contact{Name: "Dana Park", Email: "dana.park@acme.test", Phone: "555 0123", Title: "CFO", Company: "Acme"})
+	if err != nil || out.ID != "people/cNEW" || out.Version != "etag-new" {
+		t.Fatalf("create %+v %v", out, err)
+	}
+	var p struct {
+		Names          []struct{ GivenName, FamilyName string }
+		EmailAddresses []struct{ Value string }
+		PhoneNumbers   []struct{ Value string }
+		Organizations  []struct{ Name, Title string }
+	}
+	if err := json.Unmarshal([]byte(w.bodies["POST /v1/people:createContact"]), &p); err != nil || p.Names[0].GivenName != "Dana" || p.Names[0].FamilyName != "Park" ||
+		p.EmailAddresses[0].Value != "dana.park@acme.test" || p.PhoneNumbers[0].Value != "555 0123" || p.Organizations[0].Title != "CFO" {
+		t.Errorf("create body %s", w.bodies["POST /v1/people:createContact"])
+	}
+	upd, err := api.Update(ctx, connect.Contact{ID: "people/c1", Version: "etag-old", Name: "Priya Shah"})
+	if err != nil || upd.Version != "etag-patched" {
+		t.Fatalf("update %+v %v", upd, err)
+	}
+	if b := w.bodies["PATCH /v1/people/c1:updateContact"]; !strings.Contains(b, `"etag":"etag-old"`) {
+		t.Errorf("update body %s: Google refuses an edit that does not carry the etag it was read at", b)
+	}
+	var sawFields bool
+	for _, c := range w.calls {
+		sawFields = sawFields || (strings.Contains(c, ":updateContact") && strings.Contains(c, "updatePersonFields="))
+	}
+	if !sawFields {
+		t.Error("an update has to say which fields it changes")
+	}
+	if err := api.Delete(ctx, "people/c1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.Delete(ctx, "people/gone"); err != nil {
+		t.Errorf("deleting what is already gone should succeed, got %v", err)
+	}
+}
+
+func TestFilesAreUploadedReplacedRenamedMovedMadeAndTrashedAtGoogle(t *testing.T) {
+	_, w, s := wsSetup(t, "example.com")
+	ctx := context.Background()
+	files := s.Files()
+
+	it, err := files.Upload(ctx, "root", "fo1", "plan.txt", "text/plain", 5, strings.NewReader("hello"))
+	if err != nil || it.ID != "newfile" {
+		t.Fatalf("upload %+v %v", it, err)
+	}
+	var up string
+	for k, b := range w.bodies {
+		if strings.HasPrefix(k, "POST ") && strings.Contains(k, "/upload/drive/v3/files") {
+			up = b
+		}
+	}
+	if !strings.Contains(up, `"name":"plan.txt"`) || !strings.Contains(up, `"parents":["fo1"]`) || !strings.Contains(up, "hello") {
+		t.Errorf("upload body %q: a multipart request carrying the metadata and the bytes", up)
+	}
+	if _, err := files.Replace(ctx, "root", "fi1", "application/pdf", 3, strings.NewReader("new")); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := files.Rename(ctx, "root", "fi1", "renamed.pdf"); err != nil || r.Name != "renamed.pdf" {
+		t.Fatalf("rename %+v %v", r, err)
+	}
+	if b := w.bodies["PATCH /drive/v3/files/fi1"]; !strings.Contains(b, `"name":"renamed.pdf"`) {
+		t.Errorf("rename body %s", b)
+	}
+	if _, err := files.Move(ctx, "root", "fi1", "fo2"); err != nil {
+		t.Fatal(err)
+	}
+	var mv string
+	for _, c := range w.calls {
+		if strings.HasPrefix(c, "PATCH /drive/v3/files/fi1?") && strings.Contains(c, "addParents") {
+			mv = c
+		}
+	}
+	if !strings.Contains(mv, "addParents=fo2") || !strings.Contains(mv, "supportsAllDrives=true") {
+		t.Errorf("move %q", mv)
+	}
+	if d, err := files.Mkdir(ctx, "root", "fo1", "Quotes"); err != nil || d.ID != "newfile" {
+		t.Fatalf("mkdir %+v %v", d, err)
+	}
+	if b := w.bodies["POST /drive/v3/files"]; !strings.Contains(b, "application/vnd.google-apps.folder") || !strings.Contains(b, `"parents":["fo1"]`) {
+		t.Errorf("mkdir body %s", b)
+	}
+	if err := files.Delete(ctx, "root", "fi1"); err != nil {
+		t.Fatal(err)
+	}
+	if b := w.bodies["PATCH /drive/v3/files/fi1"]; !strings.Contains(b, `"trashed":true`) {
+		t.Errorf("delete should move to the bin: %s", b)
 	}
 }
 
@@ -391,22 +632,15 @@ func TestGoogleRefusalsBecomeTheErrorsHearthActsOn(t *testing.T) {
 	}
 }
 
-func TestEveryConnectorAsksForNoMoreThanItNeeds(t *testing.T) {
+func TestEveryConnectorAsksForGooglesFullReadWriteScope(t *testing.T) {
 	f := setup(t)
 	want := map[connect.Kind][]string{
-		connect.Calendar: {ScopeCalendarWrite, ScopeCalendarList}, connect.Contacts: {ScopeContacts},
-		connect.Mail: {ScopeGmailMeta}, connect.Files: {ScopeDriveRead}, connect.Chat: nil,
+		connect.Calendar: {"https://www.googleapis.com/auth/calendar"}, connect.Contacts: {"https://www.googleapis.com/auth/contacts"},
+		connect.Mail: {"https://mail.google.com/"}, connect.Files: {"https://www.googleapis.com/auth/drive"}, connect.Chat: nil,
 	}
 	for k, w := range want {
 		if got := f.svc.Scopes(k); strings.Join(got, ",") != strings.Join(w, ",") {
 			t.Errorf("%s asks for %v, want %v", k, got, w)
-		}
-	}
-	for _, k := range connect.Kinds {
-		for _, s := range f.svc.Scopes(k) {
-			if strings.Contains(s, "gmail.send") || strings.Contains(s, "gmail.modify") || strings.HasSuffix(s, "/auth/drive") || strings.Contains(s, "admin.") {
-				t.Errorf("%s asks for %s, which is more than the connector does", k, s)
-			}
 		}
 	}
 }

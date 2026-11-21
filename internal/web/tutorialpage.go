@@ -130,7 +130,7 @@ func (s *Server) backToReal(w http.ResponseWriter, r *http.Request, real string)
 // Google, imports, real accounts, capabilities. Prefixes of POST paths.
 var playgroundBlocked = []string{
 	"/integrations/", "/agents", "/settings/mail", "/calendar/feed", "/import/",
-	"/rules", "/account/password", "/settings/connectors", "/cloud/",
+	"/rules", "/account/password", "/settings/connectors", "/cloud/", "/mailbox/",
 }
 
 // playgroundBlocks is the guard's whole decision: whether a request with this

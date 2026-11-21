@@ -29,7 +29,7 @@ Under Settings, Connectors a person sees every calendar they can read. Choosing 
 
 | Provider | Permission |
 |---|---|
-| Google Workspace | `calendar.events` and `calendar.calendarlist.readonly` |
+| Google Workspace | `https://www.googleapis.com/auth/calendar` |
 | Microsoft 365 | `Calendars.ReadWrite` (delegated) |
 
 ## Limits

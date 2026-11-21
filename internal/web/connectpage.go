@@ -94,9 +94,9 @@ type StatusView struct {
 
 var connectorText = map[connect.Kind]string{
 	connect.Calendar: "Two-way. Events sync both ways for a week back and ninety days ahead. Where both sides changed an event, the provider's version wins.",
-	connect.Contacts: "Imports each person's address book into the CRM and keeps it current. Contacts stay the importer's own until the CRM shares them, and one deleted at the provider stays in Hearth.",
-	connect.Mail:     "Links messages to the people already in the CRM. Read only: Hearth keeps the sender, the subject and a short preview, never the message body or an attachment.",
-	connect.Files:    "Browse OneDrive and SharePoint, or Google Drive, then link a file to a document or import a copy of it.",
+	connect.Contacts: "Two-way. Contacts sync between the person's address book and the CRM, and new, edited and deleted ones flow in both directions. What comes in is the importer's own in the CRM until it is shared.",
+	connect.Mail:     "The person's whole mailbox, read and write, in Hearth: open any message with its body, send, reply, forward, archive, label and delete. Messages that name a CRM contact also show on the contact.",
+	connect.Files:    "Open, upload, replace, rename, move and delete files and folders in OneDrive, SharePoint and Google Drive from Hearth, link or import them into documents, and save a document's attachment out to a drive.",
 	connect.Chat:     "Copies a person's Hearth notifications into a Google Chat space or a Teams chat they choose, through a webhook they supply. It asks the provider for no permissions.",
 }
 

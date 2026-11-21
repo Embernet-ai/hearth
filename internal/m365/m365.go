@@ -50,9 +50,10 @@ var baseScopes = []string{"openid", "profile", "email", "offline_access", "User.
 // Scope names, as Graph spells them.
 const (
 	ScopeCalendar = "Calendars.ReadWrite"
-	ScopeContacts = "Contacts.Read"
-	ScopeMail     = "Mail.Read"
-	ScopeFiles    = "Files.Read.All"
+	ScopeContacts = "Contacts.ReadWrite"
+	ScopeMail     = "Mail.ReadWrite"
+	ScopeMailSend = "Mail.Send"
+	ScopeFiles    = "Files.ReadWrite.All"
 	ScopeSites    = "Sites.Read.All"
 )
 
@@ -79,7 +80,9 @@ func (s *Service) Provider() connect.Provider { return connect.Microsoft }
 // Configured reports whether the registration is complete and there is somewhere safe to keep a token.
 func (s *Service) Configured() bool { return s.cfg.Enabled() && s.box != nil }
 
-// Scopes is what each connector needs, and only that.
+// Scopes is what each connector asks for: read and write, delegated, so everything is done as the person. Sites.Read.All
+// is what lets Hearth find the SharePoint sites a person follows; the files in them are reached through
+// Files.ReadWrite.All.
 func (s *Service) Scopes(k connect.Kind) []string {
 	switch k {
 	case connect.Calendar:
@@ -87,7 +90,7 @@ func (s *Service) Scopes(k connect.Kind) []string {
 	case connect.Contacts:
 		return []string{ScopeContacts}
 	case connect.Mail:
-		return []string{ScopeMail}
+		return []string{ScopeMail, ScopeMailSend}
 	case connect.Files:
 		return []string{ScopeFiles, ScopeSites}
 	}

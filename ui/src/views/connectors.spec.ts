@@ -66,3 +66,53 @@ describe('cloud files', () => {
     expect(d.querySelector('form[action="/cloud/link"]')).toBeNull();
   });
 });
+
+describe('cloud files, writing', () => {
+  test('each file offers rename, move, replace and delete, and the folder takes an upload and a new folder', () => {
+    const d = draw('cloud', fixture('cloud-browse'));
+    expect(d.querySelector('form[action="/cloud/upload"][enctype="multipart/form-data"]')).not.toBeNull();
+    expect(d.querySelector('form[action="/cloud/mkdir"]')).not.toBeNull();
+    for (const a of ['rename', 'move', 'replace', 'delete']) {
+      expect(d.querySelector(`form[action="/cloud/${a}"]`), a).not.toBeNull();
+    }
+    // A folder cannot have its content replaced.
+    const folder = d.querySelector('[data-item="fo"]')!;
+    expect(folder.querySelector('form[action="/cloud/replace"]')).toBeNull();
+  });
+
+  test('saving a Hearth attachment shows what is being saved and where it goes', () => {
+    const d = draw('cloud', fixture('cloud-save'));
+    const f = d.querySelector('form[data-save]')!;
+    expect(f.textContent).toContain('spec.txt');
+    expect((f.querySelector('input[name="savefile"]') as HTMLInputElement).value).toBe('file1');
+    // A file can move into the folder; the folder itself is not offered as its own destination.
+    const moveFile = d.querySelector('[data-item="fi"] select[name="to"]')!;
+    expect(moveFile.textContent).toContain('Quotes');
+    expect(d.querySelector('[data-item="fo"] select[name="to"]')!.textContent).not.toContain('Quotes');
+  });
+});
+
+describe('mailbox', () => {
+  test('the list shows each message and a compose form', () => {
+    const d = draw('mailbox', fixture('mailbox-list'));
+    expect(d.querySelector('[data-message="m1"] a[href*="id=m1"]')).not.toBeNull();
+    expect(d.querySelector('form[action="/mailbox/send"]')).not.toBeNull();
+    expect(text(d)).toContain('Older messages');
+  });
+
+  test('an open message shows the whole body and every action', () => {
+    const d = draw('mailbox', fixture('mailbox-open'));
+    expect(text(d)).toContain('Hi Dana, the quote.');
+    expect(text(d)).toContain('quote-118.pdf');
+    for (const a of ['reply', 'forward', 'archive', 'label', 'read', 'delete']) {
+      expect(d.querySelector(`form[action="/mailbox/${a}"]`), a).not.toBeNull();
+    }
+    expect(d.querySelector('form[action="/mailbox/reply"] input[name="all"]')).not.toBeNull();
+  });
+
+  test('with no mail connected it points at the Connectors page', () => {
+    const d = draw('mailbox', fixture('mailbox-none'));
+    expect(d.querySelector('a[href="/settings/connectors"]')).not.toBeNull();
+    expect(d.querySelector('form[action="/mailbox/send"]')).toBeNull();
+  });
+});

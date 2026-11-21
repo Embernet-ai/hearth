@@ -1,11 +1,18 @@
 package connect
 
-// Contacts: an address book imported into the CRM, and kept current.
+// Contacts: an address book and the CRM, kept the same in both directions.
 //
-// Imported as the person who connected, so the contacts are theirs: the CRM's own access rules decide who else
-// sees them, and a person's private address book does not become the whole company's by being connected. The sync
-// only ever adds and updates. A contact deleted at the provider is left in Hearth, because a CRM record can carry
-// deals and history that nothing in the provider knows about.
+// Imported and exported as the person who connected, so what comes in is theirs in the CRM and the CRM's own
+// sharing decides who else sees it. Each linked contact has two facts recorded at the last run, the provider's change
+// marker and a hash of the Hearth record, and the next run reads who changed what since:
+//
+//	new at the provider                      a new CRM contact (or a link to the one with that address)
+//	new in Hearth, made by this person       a new contact at the provider
+//	changed at the provider only             Hearth takes the change
+//	changed in Hearth only                   the provider takes the change
+//	changed on both sides                    the provider wins, and the log says so
+//	deleted at the provider                  deleted in Hearth (a soft delete, recoverable in the CRM)
+//	deleted in Hearth                        deleted at the provider
 
 import (
 	"context"
@@ -25,13 +32,14 @@ func contactHash(c crm.Contact) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// SyncContacts imports and updates one person's contacts and returns how many Hearth records it touched.
+// SyncContacts runs one person's address book both ways and returns how many records it touched on either side.
 func (s *Service) SyncContacts(ctx context.Context, orgID, principalID string, p Provider) (int, error) {
 	sess, err := s.session(ctx, orgID, principalID, p, Contacts)
 	if err != nil {
 		return 0, err
 	}
-	remote, err := sess.Contacts().Contacts(ctx)
+	api := sess.Contacts()
+	remote, err := api.Contacts(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -77,29 +85,31 @@ func (s *Service) SyncContacts(ctx context.Context, orgID, principalID string, p
 			if err != nil {
 				return touched, err
 			}
-			if id == "" {
-				continue
-			}
-			if created {
+			if id != "" && created {
 				touched++
 			}
-			continue
-		}
-		if l.version == r.Version {
 			continue
 		}
 		cur, err := s.crm.GetContact(ctx, orgID, actor, l.entityID)
 		if err != nil {
 			if errors.Is(err, crm.ErrNotFound) {
-				// Deleted in Hearth on purpose: it stays deleted, and the link stays so it is not made again.
-				_, _ = s.db.Exec(ctx, `UPDATE connector_links SET remote_version=$4 WHERE principal_id=$1 AND provider=$2
-					AND connector='contacts' AND external_id=$3`, principalID, string(p), r.ID, r.Version)
+				// Deleted in Hearth: take it off the provider too.
+				if err := api.Delete(ctx, r.ID); err != nil && !errors.Is(err, ErrNotFound) {
+					return touched, err
+				}
+				s.dropContactLink(ctx, principalID, p, r.ID)
+				touched++
 				continue
 			}
 			return touched, err
 		}
-		if contactHash(*cur) == l.hash {
-			// Nobody changed it in Hearth since the last run, so the provider's version is the newer one.
+		remoteMoved := r.Version != l.version
+		localMoved := contactHash(*cur) != l.hash
+		switch {
+		case remoteMoved:
+			if localMoved {
+				s.log.Info("connect: contact clash, the provider's version wins", "provider", p, "contact", l.entityID)
+			}
 			upd := *cur
 			upd.Name, upd.Phone, upd.Title = want.Name, want.Phone, want.Title
 			if want.Email != "" {
@@ -122,21 +132,81 @@ func (s *Service) SyncContacts(ctx context.Context, orgID, principalID string, p
 				return touched, err
 			}
 			touched++
+		case localMoved:
+			out, err := api.Update(ctx, toRemoteContact(*cur, r.ID, r.Version))
+			if err != nil {
+				return touched, err
+			}
+			if err := s.setContactLink(ctx, orgID, principalID, p, r.ID, l.entityID, out.Version, contactHash(*cur)); err != nil {
+				return touched, err
+			}
+			touched++
+		}
+	}
+
+	// Linked here, gone there: deleted at the provider, so deleted here.
+	for ext, l := range links {
+		if seen[ext] {
 			continue
 		}
-		// Changed in Hearth since: Hearth's edit is kept, and only the provider's marker moves on.
-		if err := s.setContactLink(ctx, orgID, principalID, p, r.ID, l.entityID, r.Version, l.hash); err != nil {
+		if err := s.crm.DeleteContact(ctx, orgID, actor, l.entityID); err != nil && !errors.Is(err, crm.ErrNotFound) {
 			return touched, err
 		}
+		s.dropContactLink(ctx, principalID, p, ext)
+		touched++
 	}
-	// Gone at the provider: forget the link, keep the record.
-	for ext := range links {
-		if !seen[ext] {
-			_, _ = s.db.Exec(ctx, `DELETE FROM connector_links WHERE principal_id=$1 AND provider=$2
-				AND connector='contacts' AND external_id=$3`, principalID, string(p), ext)
+
+	// New in Hearth, made by this person: send it across.
+	mine, err := s.unlinkedContacts(ctx, orgID, principalID)
+	if err != nil {
+		return touched, err
+	}
+	for _, id := range mine {
+		c, err := s.crm.GetContact(ctx, orgID, actor, id)
+		if err != nil {
+			continue
 		}
+		out, err := api.Create(ctx, toRemoteContact(*c, "", ""))
+		if err != nil {
+			return touched, err
+		}
+		if err := s.setContactLink(ctx, orgID, principalID, p, out.ID, id, out.Version, contactHash(*c)); err != nil {
+			return touched, err
+		}
+		touched++
 	}
 	return touched, nil
+}
+
+func toRemoteContact(c crm.Contact, id, version string) Contact {
+	return Contact{ID: id, Version: version, Name: c.Name, Email: c.Email, Phone: c.Phone, Title: c.Title, Company: c.CompanyName}
+}
+
+// unlinkedContacts finds contacts this person made that no address book has yet.
+func (s *Service) unlinkedContacts(ctx context.Context, orgID, principalID string) ([]string, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT c.id::text FROM contacts c
+		 WHERE c.org_id=$1 AND c.created_by=$2 AND c.deleted_at IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM connector_links l WHERE l.entity_type='contact' AND l.entity_id=c.id)
+		 ORDER BY c.created_at LIMIT 500`, orgID, principalID)
+	if err != nil {
+		return nil, fmt.Errorf("connect: find new contacts: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (s *Service) dropContactLink(ctx context.Context, principalID string, p Provider, ext string) {
+	_, _ = s.db.Exec(ctx, `DELETE FROM connector_links WHERE principal_id=$1 AND provider=$2 AND connector='contacts' AND external_id=$3`,
+		principalID, string(p), ext)
 }
 
 // adoptOrCreate links a remote contact to the Hearth person with the same address when there is one, and makes a

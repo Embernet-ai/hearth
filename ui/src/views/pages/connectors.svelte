@@ -101,6 +101,14 @@
             </form>
           </div>
         {/if}
+        {#if p.Mine && p.Mine.Live}
+          <p  class="small">
+            {#each p.Connectors as c}
+              {#if c.Key === 'mail' && c.Enabled && c.Covered}<a  href={"/mailbox?provider=" + p.Key}>Open your mailbox</a> {/if}
+              {#if c.Key === 'files' && c.Enabled && c.Covered}<a  href={"/cloud?provider=" + p.Key}>Open your files</a> {/if}
+            {/each}
+          </p>
+        {/if}
         {#if !p.Mine || !p.Mine.Live || p.Connectors.some((c) => c.Enabled && c.Key !== 'chat' && !c.Covered)}
           {#if p.Tenant && p.Connectors.some((c) => c.Enabled && c.Key !== 'chat')}
             <form  method="post"  action={"/integrations/" + p.Key + "/connect"}  class="stack">
