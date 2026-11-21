@@ -34,6 +34,7 @@
             <span  class="muted small">{d1?.Documents} document{#if F.t(F.ne(d1?.Documents, 1))}s{/if}</span>
             {#if F.t(v_can)}{@const v_me = d1?.ID}
               <a  class="addfolder shown"  data-addunder={S(d1?.ID)}  href={("/spaces?parent=" + S(d1?.ID))}  title={"Add a folder in " + S(d1?.Name)}  aria-label="Add a folder">+</a>
+              <a  class="small"  href={"/spaces/" + S(d1?.ID) + "/access"}  title={"Give somebody " + S(d1?.Name) + " and what is in it"}>Access</a>
               <details  class="rowedit">
                 <summary  class="ghost small">Edit</summary>
                 <div  class="editbody">

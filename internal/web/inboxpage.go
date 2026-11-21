@@ -19,7 +19,7 @@ func (s *Server) getInbox(w http.ResponseWriter, r *http.Request) {
 	id := auth.From(r.Context())
 	unreadOnly := r.URL.Query().Get("all") == ""
 
-	list, err := s.inbox.Inbox(r.Context(), id.PrincipalID, unreadOnly, 100)
+	list, err := s.inbox.InboxFor(r.Context(), id.Subjects, unreadOnly, 100)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "inbox", "error", err)
 		s.fail(w, r, http.StatusInternalServerError, "could not load your inbox")
@@ -103,7 +103,7 @@ func (s *Server) saveNotificationPrefs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.inbox.SetPrefs(r.Context(), id.PrincipalID, p); err != nil {
-		list, _ := s.inbox.Inbox(r.Context(), id.PrincipalID, false, 100)
+		list, _ := s.inbox.InboxFor(r.Context(), id.Subjects, false, 100)
 		w.WriteHeader(http.StatusBadRequest)
 		s.render(w, r, "inbox", page{
 			Title: "Inbox", Notifications: list, Prefs: p,

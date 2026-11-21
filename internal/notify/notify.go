@@ -334,6 +334,73 @@ func (s *Service) Inbox(ctx context.Context, principalID string, unreadOnly bool
 	return out, rows.Err()
 }
 
+// seenClause keeps a notification about a document only while the person can
+// still open the document. The row was written when it happened, with the title
+// and a line of the text; a grant that has ended, been taken back, or never
+// followed the work when it moved out of a folder must not leave that behind.
+// $keys is the placeholder of the caller's subject keys.
+func seenClause(keys string) string {
+	return ` AND (n.entity_type <> 'document' OR EXISTS (
+	    SELECT 1 FROM grants g
+	     WHERE g.entity_type = 'document' AND g.entity_id = n.entity_id
+	       AND g.subject_key = ANY(` + keys + `)
+	       AND (g.expires_at IS NULL OR g.expires_at > now())))`
+}
+
+// InboxFor is Inbox for a signed in person, hiding what they can no longer open.
+// A super admin reaches everything, so nothing is hidden from them.
+func (s *Service) InboxFor(ctx context.Context, actor core.Subjects, unreadOnly bool, limit int) ([]*Notification, error) {
+	if actor.Super() {
+		return s.Inbox(ctx, actor.Principal(), unreadOnly, limit)
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	sql := `
+		SELECT n.id::text, n.reason, n.entity_type, n.entity_id::text, n.title,
+		       n.excerpt, n.actor_id::text,
+		       COALESCE(NULLIF(a.display_name,''), ''),
+		       n.read_at, n.created_at
+		FROM notifications n
+		LEFT JOIN principals a ON a.id = n.actor_id
+		WHERE n.principal_id = $1` + seenClause("$3")
+	if unreadOnly {
+		sql += ` AND n.read_at IS NULL`
+	}
+	sql += ` ORDER BY n.created_at DESC LIMIT $2`
+	rows, err := s.db.Query(ctx, sql, actor.Principal(), limit, actor.Keys())
+	if err != nil {
+		return nil, fmt.Errorf("notify: inbox: %w", err)
+	}
+	defer rows.Close()
+	var out []*Notification
+	for rows.Next() {
+		n := &Notification{}
+		if err := rows.Scan(&n.ID, &n.Reason, &n.EntityType, &n.EntityID, &n.Title,
+			&n.Excerpt, &n.ActorID, &n.ActorName, &n.ReadAt, &n.CreatedAt); err != nil {
+			return nil, fmt.Errorf("notify: scan notification: %w", err)
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// UnreadFor is the badge for a signed in person, counting only what they can
+// still open.
+func (s *Service) UnreadFor(ctx context.Context, actor core.Subjects) (int, error) {
+	if actor.Super() {
+		return s.Unread(ctx, actor.Principal())
+	}
+	var n int
+	err := s.db.QueryRow(ctx,
+		`SELECT count(*) FROM notifications n WHERE n.principal_id = $1 AND n.read_at IS NULL`+seenClause("$2"),
+		actor.Principal(), actor.Keys()).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("notify: unread: %w", err)
+	}
+	return n, nil
+}
+
 // Unread is the badge.
 func (s *Service) Unread(ctx context.Context, principalID string) (int, error) {
 	var n int

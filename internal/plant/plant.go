@@ -204,10 +204,11 @@ func (s *Service) CreateSpace(ctx context.Context, orgID string, actor core.Subj
 	// has to be shared separately is a tree nobody uses twice.
 	if sp.ParentID != nil {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by)
-			SELECT gen_random_uuid(), $1, 'space', $2, g.subject_key, g.level, $4
+			INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by, expires_at, via_space_id)
+			SELECT gen_random_uuid(), $1, 'space', $2, g.subject_key, g.level, $4, g.expires_at, g.via_space_id
 			FROM grants g
 			WHERE g.entity_type = 'space' AND g.entity_id = $3
+			  AND (g.expires_at IS NULL OR g.expires_at > now())
 			ON CONFLICT (entity_type, entity_id, subject_key) DO NOTHING`,
 			orgID, sp.ID, *sp.ParentID, principal); err != nil {
 			return nil, fmt.Errorf("plant: inherit space grants: %w", err)
@@ -443,7 +444,63 @@ func (s *Service) GetSpace(ctx context.Context, orgID string, actor core.Subject
 	if err != nil {
 		return nil, err
 	}
+	// The path starts at the highest folder the caller may open. Naming a
+	// parent they were never given is how a person delegated one subfolder
+	// would learn what the rest of the space is called.
+	if !actor.Super() {
+		if sp.Path, sp.Depth, err = s.visiblePath(ctx, actor, id); err != nil {
+			return nil, err
+		}
+	}
 	return sp, nil
+}
+
+// visiblePath is the names from the highest folder the actor may view down to
+// id, and how many folders that is below the first of them.
+func (s *Service) visiblePath(ctx context.Context, actor core.Subjects, id string) (string, int, error) {
+	rows, err := s.db.Query(ctx, `
+		WITH RECURSIVE up AS (
+		    SELECT id, parent_id, name, 0 AS depth FROM spaces WHERE id = $1
+		  UNION ALL
+		    SELECT p.id, p.parent_id, p.name, u.depth + 1
+		    FROM spaces p JOIN up u ON p.id = u.parent_id
+		    WHERE u.depth < $2
+		) CYCLE id SET looped USING up_path
+		SELECT id::text, name FROM up WHERE NOT looped ORDER BY depth`, id, maxDepth)
+	if err != nil {
+		return "", 0, fmt.Errorf("plant: visible path: %w", err)
+	}
+	var names []string
+	var ids []string
+	for rows.Next() {
+		var sid, name string
+		if err := rows.Scan(&sid, &name); err != nil {
+			rows.Close()
+			return "", 0, err
+		}
+		ids = append(ids, sid)
+		names = append(names, name)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", 0, err
+	}
+	// Nearest first; stop at the first one the actor cannot open.
+	keep := 0
+	for i, sid := range ids {
+		if i > 0 {
+			if err := s.authz.Require(ctx, actor,
+				core.Ref{Type: core.EntitySpace, ID: sid}, core.AccessView); err != nil {
+				break
+			}
+		}
+		keep = i + 1
+	}
+	parts := make([]string, keep)
+	for i := 0; i < keep; i++ {
+		parts[keep-1-i] = names[i]
+	}
+	return strings.Join(parts, " / "), keep - 1, nil
 }
 
 // spacePath walks to the root for the breadcrumb.

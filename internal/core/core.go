@@ -250,10 +250,13 @@ func MemberSpaces(principalParam string) string {
 	    -- A space marked open_to_all is a department for everybody in its
 	    -- organisation, with no row per person. This is how every account can
 	    -- file a daily report from day one (migration 00044).
+	    -- Not for a contractor account: it reaches what it was given and
+	    -- nothing else, and this is everybody's.
 	    SELECT s.id, 0 FROM spaces s
 	     WHERE s.open_to_all
 	       AND s.org_id = (SELECT p.org_id FROM principals p
-	                        WHERE p.id = NULLIF(` + principalParam + `::text, '')::uuid)
+	                        WHERE p.id = NULLIF(` + principalParam + `::text, '')::uuid
+	                          AND NOT p.contractor)
 	  UNION ALL
 	    SELECT c.id, m.depth + 1 FROM spaces c
 	      JOIN member_spaces m ON c.parent_id = m.id

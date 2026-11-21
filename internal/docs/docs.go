@@ -364,9 +364,14 @@ func (s *Service) Create(ctx context.Context, orgID string, actor core.Subjects,
 	// Same transaction. See the comment above.
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by)
-		VALUES (gen_random_uuid(), $1, 'document', $2, $3, 'admin', $4)`,
+		VALUES (gen_random_uuid(), $1, 'document', $2, $3, 'admin', $4)
+		ON CONFLICT (entity_type, entity_id, subject_key) DO UPDATE
+		   SET level = 'admin', expires_at = NULL, via_space_id = NULL`,
 		orgID, d.ID, core.Subject{Kind: core.SubjectPrincipal, ID: principal}.Key(), principal,
 	); err != nil {
+		// A person delegated the folder this is filed in already holds a row
+		// from it; what they made themselves is theirs outright, so it
+		// becomes theirs as owner.
 		return nil, fmt.Errorf("docs: grant to creator: %w", err)
 	}
 
@@ -401,10 +406,11 @@ func (s *Service) Create(ctx context.Context, orgID string, actor core.Subjects,
 	// exists on the folder, never on what the folder holds.
 	if d.SpaceID != nil {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by)
-			SELECT gen_random_uuid(), $1, 'document', $2, g.subject_key, g.level, $4
+			INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by, expires_at, via_space_id)
+			SELECT gen_random_uuid(), $1, 'document', $2, g.subject_key, g.level, $4, g.expires_at, g.via_space_id
 			FROM grants g
 			WHERE g.entity_type = 'space' AND g.entity_id = $3
+			  AND (g.expires_at IS NULL OR g.expires_at > now())
 			ON CONFLICT (entity_type, entity_id, subject_key) DO NOTHING`,
 			orgID, d.ID, *d.SpaceID, principal); err != nil {
 			return nil, fmt.Errorf("docs: inherit space grants: %w", err)
@@ -417,8 +423,8 @@ func (s *Service) Create(ctx context.Context, orgID string, actor core.Subjects,
 	// a subtask of their own -- a member, an assignee -- gains nothing above it.
 	if d.ParentID != nil {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by)
-			SELECT gen_random_uuid(), $1, 'document', $2, g.subject_key, g.level, $4
+			INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by, expires_at, via_space_id)
+			SELECT gen_random_uuid(), $1, 'document', $2, g.subject_key, g.level, $4, g.expires_at, g.via_space_id
 			FROM grants g
 			WHERE g.entity_type = 'document' AND g.entity_id = $3
 			  AND (g.expires_at IS NULL OR g.expires_at > now())

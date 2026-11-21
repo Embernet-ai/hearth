@@ -210,7 +210,7 @@ func (s *Service) Reports(ctx context.Context, orgID string, actor core.Subjects
 		return nil, err
 	}
 
-	paths, err := s.spacePaths(ctx, orgID)
+	paths, err := s.spacePaths(ctx, orgID, actor)
 	if err != nil {
 		return nil, err
 	}
@@ -232,8 +232,11 @@ func (s *Service) Reports(ctx context.Context, orgID string, actor core.Subjects
 	return out, nil
 }
 
-// spacePaths maps every space id in the org to its slash-separated path.
-func (s *Service) spacePaths(ctx context.Context, orgID string) (map[string]string, error) {
+// spacePaths maps every space id in the org to its slash-separated path, as the
+// actor may see it: the path starts at the highest folder they may open, so a
+// person given one subfolder is never told what the folders above it are
+// called.
+func (s *Service) spacePaths(ctx context.Context, orgID string, actor core.Subjects) (map[string]string, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT id::text, COALESCE(parent_id::text, ''), name FROM spaces WHERE org_id = $1`, orgID)
 	if err != nil {
@@ -253,12 +256,40 @@ func (s *Service) spacePaths(ctx context.Context, orgID string) (map[string]stri
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	var open map[string]bool
+	if !actor.Super() {
+		open = map[string]bool{}
+		vr, err := s.db.Query(ctx, `
+			WITH RECURSIVE `+core.MemberSpaces("$3")+`
+			SELECT entity_id::text FROM grants
+			 WHERE entity_type = 'space' AND org_id = $1 AND subject_key = ANY($2)
+			   AND (expires_at IS NULL OR expires_at > now())
+			UNION SELECT id::text FROM member_spaces`, orgID, actor.Keys(), actor.Principal())
+		if err != nil {
+			return nil, fmt.Errorf("docs: space paths visibility: %w", err)
+		}
+		for vr.Next() {
+			var id string
+			if err := vr.Scan(&id); err != nil {
+				vr.Close()
+				return nil, err
+			}
+			open[id] = true
+		}
+		vr.Close()
+		if err := vr.Err(); err != nil {
+			return nil, err
+		}
+	}
 	paths := make(map[string]string, len(nodes))
 	for id := range nodes {
 		var parts []string
 		for cur, hops := id, 0; cur != "" && hops < 12; hops++ {
 			n, ok := nodes[cur]
 			if !ok {
+				break
+			}
+			if open != nil && cur != id && !open[cur] {
 				break
 			}
 			parts = append([]string{n.name}, parts...)
