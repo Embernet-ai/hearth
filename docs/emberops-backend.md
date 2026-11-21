@@ -95,6 +95,8 @@ Hearth's access control stays a query on its own tables (grants, space managers,
 
 Deleting a task or a document in Hearth deletes its record in EmberOps too (a work order is still only marked deleted). If EmberOps refuses (a subtask under the task, a timesheet on it) the record is marked deleted instead. A deleted space is removed from EmberOps on the next copy; when records Hearth deleted are still linked to it, those go first and the space follows. A space whose linked work is still live stays, and the log says so on every copy until the work is dealt with.
 
+`hearthctl space-remove` and `hearthctl doc-delete` go through the same stores as the pages (`backendSet` in `cmd/hearthctl/backend.go`), so with `HEARTH_BACKEND=emberops` the EmberOps records go too, and a document taken out of a space (from a page or from `space-remove`) takes its EmberOps link to that space with it.
+
 Differences to know about: Frappe has no comment-only level, and the addon collapses levels to read and write; an expiring grant is sent with its expiry and dropped from the copy once it has expired, at the next sync.
 
 ## Performance

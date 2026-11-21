@@ -22,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -116,8 +117,37 @@ func runSpaceRemove(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve the admin's subjects: %w", err)
 	}
-	dsvc := docs.New(pools.Web, az)
-	psvc := plant.New(pools.Web, az)
+	set, err := backendSet(ctx, pools.Web, az)
+	if err != nil {
+		return err
+	}
+	var work []spaceItem
+	for _, it := range items {
+		work = append(work, spaceItem{it.id, it.kind, it.title, it.status})
+	}
+	if err := closeOutSpace(ctx, set.Docs, set.Plant, az, orgID, principalID, actor, *space, work, os.Stdout); err != nil {
+		return err
+	}
+	fmt.Printf("space %q removed, %d item(s) kept\n", name, len(items))
+	return nil
+}
+
+type spaceItem struct{ id, kind, title, status string }
+
+// admins is the one grant a command needs to make before it may change a document: admin on it, which leaves a row saying who
+// decided it.
+type admins interface {
+	Grant(ctx context.Context, orgID string, ref core.Ref, subject core.Subject, level core.AccessLevel, grantedBy string) error
+}
+
+// closeOutSpace cancels the open tasks in a space, takes every document out of it, and deletes the empty space, through the
+// stores it is given: the Postgres services in the standalone back end, the EmberOps stores in the other, so the EmberOps copies
+// follow.
+func closeOutSpace(ctx context.Context, ds docs.Store, ps plant.Store, az admins, orgID, principalID string, actor core.Subjects,
+	space string, items []spaceItem, w io.Writer) error {
+	open := func(st string) bool {
+		return st == docs.StatusTodo || st == docs.StatusInProgress || st == docs.StatusBlocked
+	}
 	cancelled := docs.StatusCancelled
 	for _, it := range items {
 		if err := az.Grant(ctx, orgID, core.Ref{Type: core.EntityDocument, ID: it.id},
@@ -125,18 +155,17 @@ func runSpaceRemove(ctx context.Context, args []string) error {
 			return fmt.Errorf("grant admin on %s: %w", it.id, err)
 		}
 		if open(it.status) {
-			if _, err := dsvc.Update(ctx, orgID, actor, it.id, docs.UpdateParams{Task: &docs.TaskPatch{Status: &cancelled}}); err != nil {
+			if _, err := ds.Update(ctx, orgID, actor, it.id, docs.UpdateParams{Task: &docs.TaskPatch{Status: &cancelled}}); err != nil {
 				return fmt.Errorf("cancel %s: %w", it.id, err)
 			}
-			fmt.Printf("cancelled %s %s\n", it.id, it.title)
+			fmt.Fprintf(w, "cancelled %s %s\n", it.id, it.title)
 		}
-		if err := psvc.MoveDocument(ctx, orgID, actor, it.id, nil); err != nil {
+		if err := ps.MoveDocument(ctx, orgID, actor, it.id, nil); err != nil {
 			return fmt.Errorf("take %s out of the space: %w", it.id, err)
 		}
 	}
-	if err := psvc.DeleteSpace(ctx, orgID, actor, *space); err != nil {
-		return fmt.Errorf("delete space %s: %w", *space, err)
+	if err := ps.DeleteSpace(ctx, orgID, actor, space); err != nil {
+		return fmt.Errorf("delete space %s: %w", space, err)
 	}
-	fmt.Printf("space %q removed, %d item(s) kept\n", name, len(items))
 	return nil
 }

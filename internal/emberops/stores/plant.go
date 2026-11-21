@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Embernet-ai/hearth/internal/core"
+	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/mapping"
 	"github.com/Embernet-ai/hearth/internal/plant"
@@ -208,6 +209,10 @@ type Plant struct {
 	Dir    Directory
 	Authz  plant.Authorizer
 	Spaces *SpaceSync
+	// Docs reads a document's kind, so a move of it reaches EmberOPS; nil leaves a moved document's EmberOPS link alone.
+	Docs interface {
+		GetAsSystem(ctx context.Context, orgID, id string) (*docs.Document, error)
+	}
 	// CurrencyPerCent is the value of one cent in the site's currency, for parts cost (0 means 0.01).
 	CurrencyPerCent float64
 }
@@ -656,4 +661,32 @@ func (s *SpaceSync) removeDeletedWorkIn(ctx context.Context, spaceName string) {
 			}
 		}
 	}
+}
+
+// MoveDocument files a document in another space, or takes it out, and moves its EmberOPS record with it. The spine decides
+// the space, but the EmberOPS record carries a link to it: left behind, a document taken out of a space kept that space in
+// EmberOPS for good, and a space with a record linked can never be deleted there.
+func (s *Plant) MoveDocument(ctx context.Context, orgID string, actor core.Subjects, docID string, spaceID *string) error {
+	if err := s.Store.MoveDocument(ctx, orgID, actor, docID, spaceID); err != nil {
+		return err
+	}
+	if s.Docs == nil {
+		return nil
+	}
+	d, err := s.Docs.GetAsSystem(ctx, orgID, docID)
+	if err != nil {
+		return err
+	}
+	dt := doctypeFor(d.Kind)
+	if dt == "" {
+		return nil
+	}
+	var link any
+	if spaceID != nil && *spaceID != "" {
+		link = "hearth:" + *spaceID
+	}
+	if _, err := s.C.Upsert(ctx, dt, docID, map[string]any{"hearth_space": link}); err != nil && !errors.Is(err, emberops.ErrNotFound) {
+		return fmt.Errorf("emberops: move %s %s: %w", dt, docID, err)
+	}
+	return nil
 }

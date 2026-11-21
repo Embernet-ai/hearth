@@ -110,6 +110,9 @@ func EmberOPS(c *emberops.Client, p PG, o Options) Set {
 	}
 	set.Maint = &Maint{Base: b, Dir: dir, Authz: o.Authz}
 	set.Plant = &Plant{Store: p.Plant, Base: b, Dir: dir, Authz: o.Authz, Spaces: o.Spaces, CurrencyPerCent: o.CurrencyPerCent}
+	if p.Docs != nil {
+		set.Plant.(*Plant).Docs = p.Docs
+	}
 	set.TimeOff = &TimeOff{Base: b, Dir: dir, PG: p.TimeOff, Notify: o.TimeOffNotify}
 	return set
 }
