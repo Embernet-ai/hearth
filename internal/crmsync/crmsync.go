@@ -51,6 +51,7 @@ type Ops interface {
 	ListAll(ctx context.Context, lq emberops.ListQuery, max int) ([]emberops.Row, error)
 	Count(ctx context.Context, doctype string, filters []emberops.Filter) (int, error)
 	Update(ctx context.Context, doctype, name string, values map[string]any) (emberops.Row, error)
+	Get(ctx context.Context, doctype, name string) (emberops.Row, error)
 }
 
 // readAll is the most records the sync reads of one doctype. The client's own default for a list is 5000, and Fireball
@@ -442,6 +443,8 @@ type Options struct {
 	// Companies makes a company in Hearth when EmberOps has a Customer or Supplier no Hearth company matches.
 	// Without it such a party is reported and left.
 	Companies CompanyMaker
+	// Contacts makes a person in Hearth when EmberOps has a Contact (with an email or a number) that Hearth does not. Without it such a person is reported and left.
+	Contacts ContactMaker
 }
 
 // Action is one thing the run did or would do.
@@ -622,6 +625,7 @@ func (s *Syncer) Run(ctx context.Context, o Options) (*Report, error) {
 	if !o.Remove && len(o.Only) == 0 {
 		s.union(ctx, rep, o.Write)
 		s.fromOps(ctx, rep, o.Companies, o.Write)
+		s.contactsFromOps(ctx, rep, o.Contacts, o.Write)
 	}
 	if o.Timeline && !o.Show && !o.Remove && len(o.Only) == 0 {
 		s.timeline(ctx, rep, o.Write)

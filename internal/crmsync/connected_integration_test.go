@@ -448,3 +448,71 @@ func TestAPersonTheCallerMadeWithNoCompanyStillReachesEmberOps(t *testing.T) {
 		t.Errorf("a settled contact was sent again: %v %+v", err, rep.Actions)
 	}
 }
+
+type testContactMaker struct{ x *syncFixture }
+
+func (m testContactMaker) MakeContact(ctx context.Context, name, email, phone, title, company string) (string, error) {
+	id := uuid.NewString()
+	var co any
+	if company != "" {
+		co = company
+	}
+	m.x.exec(`INSERT INTO contacts (id, org_id, company_id, name, email, phone, title, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		id, m.x.org, co, name, email, phone, title, m.x.who)
+	return id, nil
+}
+
+func TestAPersonTypedIntoEmberOpsContactsReachesHearthOnceAndIsLinked(t *testing.T) {
+	x := newSyncFixture(t)
+	co := x.mkCo("Typed In Client", "ti.example", "client")
+	x.f.Put("Customer", map[string]any{"name": "Typed In Client", "customer_name": "Typed In Client", "hearth_id": co, "disabled": 0})
+	already := x.person(co, "Hearth Has Her", "her@ti.example", "216 555 0150")
+	byPhone := x.person(co, "Number Only", "", "216 555 0151")
+	x.f.Put("Contact", map[string]any{"name": "Ola Ops", "first_name": "Ola", "last_name": "Ops", "designation": "Buyer", "owner": "staff@ops.example", "email_id": "ola@ti.example",
+		"email_ids": []any{map[string]any{"email_id": "ola@ti.example", "is_primary": 1}},
+		"phone_nos": []any{map[string]any{"phone": "216 555 0123", "is_primary_phone": 1}},
+		"links":     []any{map[string]any{"link_doctype": "Customer", "link_name": "Typed In Client"}}})
+	x.f.Put("Contact", map[string]any{"name": "Her Twin", "first_name": "Her", "last_name": "Twin", "owner": "staff@ops.example", "email_id": "HER@ti.example",
+		"email_ids": []any{map[string]any{"email_id": "HER@ti.example", "is_primary": 1}}})
+	x.f.Put("Contact", map[string]any{"name": "Phone Twin", "first_name": "Phone", "last_name": "Twin", "owner": "staff@ops.example",
+		"phone_nos": []any{map[string]any{"phone": "(216) 555-0151", "is_primary_phone": 1}}})
+	x.f.Put("Contact", map[string]any{"name": "Empty Ep", "first_name": "Empty", "owner": "staff@ops.example"})
+	o := opts()
+	o.Contacts = testContactMaker{x}
+
+	rep, err := x.sync.Run(x.ctx, o)
+	if err != nil || rep.Failed() {
+		t.Fatalf("run: %v %+v", err, rep.Actions)
+	}
+	var n int
+	_ = x.pools.Web.QueryRow(x.ctx, `SELECT count(*) FROM contacts WHERE org_id=$1 AND lower(email)='ola@ti.example' AND company_id=$2 AND title='Buyer'`, x.org, co).Scan(&n)
+	if n != 1 || rep.Count("union", "create contact") != 1 {
+		t.Fatalf("Ola was made %d times under her company: %+v", n, rep.Actions)
+	}
+	var total int
+	_ = x.pools.Web.QueryRow(x.ctx, `SELECT count(*) FROM contacts WHERE org_id=$1`, x.org).Scan(&total)
+	if total != 3 {
+		t.Errorf("Hearth has %d contacts, want its two and Ola: a duplicate by email or number was made", total)
+	}
+	_ = already
+	_ = byPhone
+	// The next run links her by email, and a third changes nothing.
+	for i := 0; i < 2; i++ {
+		if rep, err = x.sync.Run(x.ctx, o); err != nil || rep.Failed() {
+			t.Fatalf("run %d: %v %+v", i+2, err, rep.Actions)
+		}
+	}
+	linked := map[string]bool{}
+	for _, c := range x.f.All("Contact") {
+		if h, _ := c["hearth_id"].(string); h != "" {
+			linked[fmt.Sprint(c["first_name"], " ", c["last_name"])] = true
+		}
+	}
+	if !linked["Ola Ops"] || !linked["Her Twin"] || linked["Phone Twin"] || linked["Empty <nil>"] {
+		t.Errorf("linked after three runs: %v", linked)
+	}
+	_ = x.pools.Web.QueryRow(x.ctx, `SELECT count(*) FROM contacts WHERE org_id=$1`, x.org).Scan(&total)
+	if total != 3 || rep.Count("union", "create contact") != 0 {
+		t.Errorf("a settled sync made more people: %d contacts, %+v", total, rep.Actions)
+	}
+}
