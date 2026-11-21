@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -115,17 +116,35 @@ func runDocDelete(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve the owner's subjects: %w", err)
 	}
-	svc := docs.New(pools.Web, az)
+	set, err := backendSet(ctx, pools.Web, az)
+	if err != nil {
+		return err
+	}
+	var ids2 []docRef
 	for _, t := range plan {
+		ids2 = append(ids2, docRef{t.id, t.title})
+	}
+	if err := deleteDocuments(ctx, set.Docs, az, orgID, principalID, actor, ids2, os.Stdout); err != nil {
+		return err
+	}
+	fmt.Printf("%d documents removed\n", len(plan))
+	return nil
+}
+
+type docRef struct{ id, title string }
+
+// deleteDocuments deletes each document through the store it is given, after the admin grant that records who decided it. In
+// the EmberOps back end that store removes the EmberOps record as well.
+func deleteDocuments(ctx context.Context, ds docs.Store, az admins, orgID, principalID string, actor core.Subjects, list []docRef, w io.Writer) error {
+	for _, t := range list {
 		if err := az.Grant(ctx, orgID, core.Ref{Type: core.EntityDocument, ID: t.id},
 			core.Subject{Kind: core.SubjectPrincipal, ID: principalID}, core.AccessAdmin, principalID); err != nil {
 			return fmt.Errorf("grant admin on document %s: %w", t.id, err)
 		}
-		if err := svc.Delete(ctx, orgID, actor, t.id); err != nil {
+		if err := ds.Delete(ctx, orgID, actor, t.id); err != nil {
 			return fmt.Errorf("delete document %s: %w", t.id, err)
 		}
-		fmt.Printf("deleted document %s %s\n", t.id, t.title)
+		fmt.Fprintf(w, "deleted document %s %s\n", t.id, t.title)
 	}
-	fmt.Printf("%d documents removed\n", len(plan))
 	return nil
 }

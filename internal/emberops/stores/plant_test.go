@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Embernet-ai/hearth/internal/core"
+	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/emberops/stores"
 	"github.com/Embernet-ai/hearth/internal/plant"
 )
@@ -330,4 +331,49 @@ func TestADeletedSpaceGoesEvenWhenDeletedWorkStillLinksIt(t *testing.T) {
 	if len(e.f.All("Task")) != 1 || e.f.All("Task")[0]["name"] != "TASK-L" || len(e.f.All("Hearth Document")) != 0 {
 		t.Errorf("tasks = %v, documents = %v: want only the live task left", e.f.All("Task"), e.f.All("Hearth Document"))
 	}
+}
+
+type moveOK struct{ *pgPlant }
+
+func (moveOK) MoveDocument(context.Context, string, core.Subjects, string, *string) error { return nil }
+
+type kindOf map[string]string
+
+func (k kindOf) GetAsSystem(_ context.Context, _, id string) (*docs.Document, error) {
+	return &docs.Document{ID: id, Kind: k[id]}, nil
+}
+
+// Taking a document out of a space, or filing it in another, moves its EmberOPS record's link too. Left behind, the record
+// kept the old space in EmberOPS for good, and a space with a record linked can never be deleted there.
+func TestMovingADocumentMovesItsEmberOPSLink(t *testing.T) {
+	e, s, pg := newPlant(t)
+	ctx := e.as("svc-tok")
+	s.Store = moveOK{pg}
+	const task, note = "dddddddd-0000-0000-0000-000000000001", "dddddddd-0000-0000-0000-000000000002"
+	s.Docs = kindOf{task: docs.KindTask, note: docs.KindDoc}
+	a, _ := s.CreateSpace(ctx, org, actor(ann), "A", "folder", nil)
+	b, _ := s.CreateSpace(ctx, org, actor(ann), "B", "folder", nil)
+	if err := s.Spaces.Sync(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	name := map[string]string{}
+	for _, sp := range e.f.All("Hearth Space") {
+		name[sp["space_name"].(string)] = sp["name"].(string)
+	}
+	e.f.Put("Task", map[string]any{"name": "TASK-1", "hearth_id": task, "hearth_space": name["A"]})
+	e.f.Put("Hearth Document", map[string]any{"name": "HDOC-1", "hearth_id": note, "hearth_space": name["A"]})
+
+	if err := s.MoveDocument(ctx, org, actor(ann), task, &b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.f.All("Task")[0]["hearth_space"]; got != name["B"] {
+		t.Errorf("task's space in EmberOPS = %v, want %s", got, name["B"])
+	}
+	if err := s.MoveDocument(ctx, org, actor(ann), note, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.f.All("Hearth Document")[0]["hearth_space"]; got != nil {
+		t.Errorf("document taken out of its space still links %v in EmberOPS", got)
+	}
+	_ = a
 }
