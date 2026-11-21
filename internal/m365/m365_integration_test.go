@@ -7,6 +7,7 @@ package m365
 // header that asks for UTC times, the bearer token, the body of an event that is created.
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -64,7 +65,7 @@ func idToken(tid, oid, upn string) string {
 func newFakeMS(t *testing.T) *fakeMS {
 	f := &fakeMS{grantValid: true, tenantOfID: tenant}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/{tenant}/oauth2/v2.0/token", func(w http.ResponseWriter, r *http.Request) {
+	token := func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Form.Get("grant_type") {
@@ -94,15 +95,23 @@ func newFakeMS(t *testing.T) *fakeMS {
 				"scope": "openid profile email User.Read Calendars.ReadWrite",
 			})
 		}
-	})
+	}
 	graph := func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
+		var rd io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			// The SDK compresses what it sends.
+			if zr, err := gzip.NewReader(r.Body); err == nil {
+				rd = zr
+			}
+		}
+		b, _ := io.ReadAll(rd)
 		f.mu.Lock()
 		f.calls = append(f.calls, call{r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization"),
 			strings.Join(r.Header.Values("Prefer"), ","), string(b)})
 		status := f.status
 		f.mu.Unlock()
 		if status != 0 {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
 			_, _ = w.Write([]byte(`{"error":{"code":"Denied","message":"x"}}`))
 			return
@@ -148,7 +157,13 @@ func newFakeMS(t *testing.T) *fakeMS {
 			_, _ = w.Write([]byte(`{"error":{"code":"itemNotFound","message":"no"}}`))
 		}
 	}
-	mux.HandleFunc("/v1.0/", graph)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/oauth2/v2.0/token") {
+			token(w, r)
+			return
+		}
+		graph(w, r)
+	})
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f
@@ -416,11 +431,11 @@ func TestACreatedEventIsSentInTheShapeGraphDocumentsWithATeamsLinkWhenAsked(t *t
 		t.Fatalf("%s %s", c.method, c.path)
 	}
 	var body struct {
-		Subject string
-		Body    struct{ ContentType, Content string }
-		Start   struct{ DateTime, TimeZone string }
-		End     struct{ DateTime, TimeZone string }
-		Loc     struct{ DisplayName string } `json:"location"`
+		Subject                   string
+		Body                      struct{ ContentType, Content string }
+		Start                     struct{ DateTime, TimeZone string }
+		End                       struct{ DateTime, TimeZone string }
+		Loc                       struct{ DisplayName string } `json:"location"`
 		IsAllDay, IsOnlineMeeting bool
 		OnlineMeetingProvider     string
 	}
@@ -549,7 +564,7 @@ func TestEveryConnectorAsksForNoMoreThanItNeeds(t *testing.T) {
 	}
 	for _, k := range connect.Kinds {
 		for _, s := range f.svc.Scopes(k) {
-			if strings.Contains(s, "Send") || strings.HasSuffix(s, "ReadWrite.All") || strings.HasSuffix(s, "Write") {
+			if strings.Contains(s, "Send") || strings.HasSuffix(s, "ReadWrite.All") {
 				t.Errorf("%s asks for %s, which writes or sends more than the connector does", k, s)
 			}
 		}

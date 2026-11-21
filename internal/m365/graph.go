@@ -76,7 +76,7 @@ func (x *session) fail(ctx context.Context, err error) error {
 	}
 	var api abs.ApiErrorable
 	if errors.As(err, &api) {
-		switch code := api.(*abs.ApiError).ResponseStatusCode; {
+		switch code := api.GetStatusCode(); {
 		case code == http.StatusUnauthorized:
 			x.s.markRevoked(ctx, x.principal)
 			return connect.ErrReconnect
@@ -86,8 +86,6 @@ func (x *session) fail(ctx context.Context, err error) error {
 			return connect.ErrNotFound
 		}
 	}
-	var odata interface{ GetErrorEscaped() *string }
-	_ = odata
 	return fmt.Errorf("microsoft graph: %w", err)
 }
 
