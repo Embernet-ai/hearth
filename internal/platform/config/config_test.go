@@ -376,3 +376,47 @@ func TestLoadChecksTheAreaApps(t *testing.T) {
 		t.Fatalf("a complete pair loads: %v", err)
 	}
 }
+
+func oidcEnv(t *testing.T) {
+	t.Helper()
+	validEnv(t)
+	t.Setenv("HEARTH_OIDC_ISSUER", "https://vord.example.com/realms/fireball")
+	t.Setenv("HEARTH_OIDC_CLIENT_ID", "hearth")
+	t.Setenv("HEARTH_OIDC_CLIENT_SECRET", "x")
+}
+
+// The sign-in form is on by default, so an install that uses local accounts keeps its door.
+func TestLocalLoginFormDefaultsOn(t *testing.T) {
+	validEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.LocalLoginForm {
+		t.Fatal("the local sign-in form is off by default; installs that use local accounts would lose their door")
+	}
+}
+
+// An install whose only way in is its provider turns the form off, and names the provider on the button.
+func TestLocalLoginFormCanBeTurnedOffWithAProvider(t *testing.T) {
+	oidcEnv(t)
+	t.Setenv("HEARTH_LOCAL_LOGIN_FORM", "false")
+	t.Setenv("HEARTH_OIDC_NAME", " Vord ")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LocalLoginForm || cfg.OIDCName != "Vord" {
+		t.Fatalf("LocalLoginForm=%v OIDCName=%q", cfg.LocalLoginForm, cfg.OIDCName)
+	}
+}
+
+// With the form off and no provider there is nothing on the page, so that is refused at startup.
+func TestLocalLoginFormOffNeedsAProvider(t *testing.T) {
+	validEnv(t)
+	t.Setenv("HEARTH_LOCAL_LOGIN_FORM", "false")
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "HEARTH_LOCAL_LOGIN_FORM") {
+		t.Fatalf("err = %v, want the form setting named", err)
+	}
+}

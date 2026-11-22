@@ -90,6 +90,13 @@ oidc:
   #
   requiredRoles: ""
 
+  # What the sign-in button calls the provider, as in "Login with Vord". Empty reads "single sign-on".
+  name: ""
+  # Whether the sign-in page offers the email and password form beside the provider button. True keeps local accounts'
+  # door. An install whose only way in is the provider sets false and the page is the one button. It changes the page,
+  # not the accounts: a local account that exists still signs in, and false needs the provider above.
+  localLoginForm: true
+
   # A business identity provider as a preset on this same sign-in, for a self-hosted Hearth that runs on a
   # Microsoft 365 tenant or a Google Workspace domain: "microsoft" (Entra ID) or "google" (Workspace). Empty is the
   # generic sign-in above. A preset derives the issuer, so `issuer` is ignored, and it adds the checks that provider

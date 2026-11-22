@@ -2012,7 +2012,7 @@ func (r *runner) signOutRevokes() {
 	body, _ := io.ReadAll(resp.Body)
 	// Redirected to the login page, so the final body is the login form.
 	r.check("sign out revokes the session",
-		strings.Contains(string(body), "Sign in"), "landed back on the login page")
+		strings.Contains(string(body), "Login to Hearth"), "landed back on the login page")
 }
 
 func (r *runner) anonymousIsDenied(docID string) {

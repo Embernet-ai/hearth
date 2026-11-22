@@ -542,6 +542,7 @@ func run() error {
 		Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
 		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
+		OIDCName: cfg.OIDCName, HideLocalLogin: !cfg.LocalLoginForm,
 		NotifyDB: pools.Web, WorkerOn: cfg.WorkerEnabled,
 		Version:    cfg.Version,
 		InboundKey: cfg.InboundKey, MailReady: relayMail.Configured(),

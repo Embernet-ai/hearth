@@ -17,6 +17,7 @@ var brandIcons = map[string]string{
 	"/favicon.ico":           "favicon.ico",
 	"/favicon.svg":           "favicon.svg",
 	"/icon.svg":              "icon.svg",
+	"/vord.svg":              "vord.svg",
 	"/icon-maskable.svg":     "icon-maskable.svg",
 	"/apple-touch-icon.png":  "apple-touch-icon.png",
 	"/icon-192.png":          "icon-192.png",

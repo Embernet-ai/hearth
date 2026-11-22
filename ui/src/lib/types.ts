@@ -34,6 +34,8 @@ export interface Page {
   Timer?: null | { DocumentID?: string; DocTitle?: string; Elapsed: number }; // Elapsed is minutes, written by the walk from the entry's method
   Wide?: boolean;
   SSO?: boolean;
+  SSOName?: string;
+  HideLocalLogin?: boolean;
   Next?: string;
   [k: string]: unknown;
 }

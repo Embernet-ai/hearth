@@ -41,6 +41,39 @@ label { font-weight: 600; font-size: var(--en-fs-xs); color: var(--muted); }
 .block { display: flex; justify-content: center; width: 100%; }
 
 .centered-page { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* The sign-in door, drawn as the EmberOps door: logo, "Login to Hearth", one white card on a grey page, the ember Login
+   button, and the provider button in the same grey style. Its own colours, so it reads the same in both palettes. */
+.door {
+  --door-bg: #F3F3F3; --door-card: #FFFFFF; --door-line: #EAECF0; --door-ink: #101828; --door-text: #525252;
+  --door-muted: #7C7C7C; --door-field: #F3F3F3; --door-btn: #F3F3F3; --door-btn-hover: #E8E8E8; --door-ember: #D92D20;
+  --door-ember-deep: #912018;
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 97px 16px 24px;
+  background: var(--door-bg); color: var(--door-text); font-family: var(--en-font);
+}
+:root[data-theme='dark'] .door, :root:not([data-theme]) .door {
+  --door-bg: #232323; --door-card: #2D2D2D; --door-line: #3A3A3A; --door-ink: #F8F8F8; --door-text: #E0E0E0;
+  --door-muted: #A0A0A0; --door-field: #232323; --door-btn: #3A3A3A; --door-btn-hover: #454545;
+}
+.door-head { text-align: center; }
+.door-logo { display: block; height: 40px; width: auto; margin: 0 auto; }
+.door-title { margin: 16px 0 24px; font-size: 18px; font-weight: 600; letter-spacing: 0.01em; color: var(--door-ink); }
+.door-card { width: 100%; max-width: 400px; display: grid; gap: 12px; padding: 40px; background: var(--door-card); border: 1px solid var(--door-line); border-radius: 10px; }
+.door-form { display: grid; gap: 12px; }
+.door-form input { min-height: 36px; padding: 4px 12px; border: 0; border-radius: 8px; background: var(--door-field); color: var(--door-ink); font-size: 14px; }
+.door-form input:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(217, 45, 32, 0.28); }
+.door-primary { justify-content: center; min-height: 36px; padding: 4px 8px; border: 0; border-radius: 8px; background: var(--door-ember); color: #FFFFFF; font-size: 14px; font-weight: 500; }
+.door-primary:hover { background: var(--door-ember-deep); border: 0; }
+.door-btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 4px 8px; background: var(--door-btn); color: var(--door-text); border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none; }
+.door-btn:hover { background: var(--door-btn-hover); text-decoration: none; }
+.door-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(217, 45, 32, 0.28); }
+.door-btn-icon { width: 18px; height: 18px; }
+.door-or { margin: 3px 0; text-align: center; font-size: 14px; color: var(--door-muted); }
+.door-err { margin: 0; font-size: 14px; color: var(--door-ember); }
+.door-fine { margin: 0; font-size: 12px; line-height: 1.5; color: var(--door-muted); text-align: center; }
+.door-link { margin: 16px 0 0; font-size: 12px; }
+.door-link a { color: var(--door-muted); }
 .card.centered { width: min(100%, 26rem); }
 
 /* Shell */

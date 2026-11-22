@@ -151,6 +151,15 @@ type Config struct {
 	// belong in this application, and on a shared identity provider those are
 	// not the same question.
 	OIDCRequiredRoles []string
+	// OIDCName is what the sign-in button calls the provider ("Vord"). Empty reads
+	// "single sign-on", which is true of any provider.
+	OIDCName string
+	// LocalLoginForm is whether the sign-in page offers the email and password form
+	// beside single sign-on. True by default, so an install that uses local
+	// accounts keeps its form. An install whose only way in is the provider turns it
+	// off and its door is the one button. It changes the page, not the accounts:
+	// a local account that exists still signs in.
+	LocalLoginForm bool
 
 	// A business identity provider as a preset on the same sign-in: "microsoft" (Entra ID) or "google"
 	// (Workspace). Empty is the generic path. See auth.OIDCConfig.
@@ -447,6 +456,8 @@ func Load() (*Config, error) {
 		fail("HEARTH_OIDC_PROVIDER=%s needs a client id and secret: HEARTH_%s_CLIENT_ID and HEARTH_%s_CLIENT_SECRET, or HEARTH_OIDC_CLIENT_ID and HEARTH_OIDC_CLIENT_SECRET",
 			cfg.OIDCProvider, strings.ToUpper(cfg.OIDCProvider), strings.ToUpper(cfg.OIDCProvider))
 	}
+	cfg.OIDCName = strings.TrimSpace(os.Getenv("HEARTH_OIDC_NAME"))
+	cfg.LocalLoginForm = envBool("HEARTH_LOCAL_LOGIN_FORM", true)
 
 	// All three together, or none. A PARTIAL configuration is rejected rather
 	// than half-applied: a half-configured provider fails at login time rather
@@ -468,6 +479,10 @@ func Load() (*Config, error) {
 	if set > 0 && set < need {
 		fail("HEARTH_OIDC_ISSUER, HEARTH_OIDC_CLIENT_ID and HEARTH_OIDC_CLIENT_SECRET " +
 			"must all be set together, or none of them")
+	}
+	if !cfg.LocalLoginForm && !cfg.SSOEnabled() {
+		// A door with no form and no button is a locked door.
+		fail("HEARTH_LOCAL_LOGIN_FORM=false needs single sign-on (HEARTH_OIDC_*): the sign-in page would have nothing on it")
 	}
 	cfg.TrustedProxies = splitList(os.Getenv("HEARTH_TRUSTED_PROXIES"))
 	cfg.MCPAudience = strings.TrimSpace(os.Getenv("HEARTH_MCP_AUDIENCE"))
