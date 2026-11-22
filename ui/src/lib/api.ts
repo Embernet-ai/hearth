@@ -3,7 +3,7 @@ import type { Envelope } from './types';
 // Every address the server has is a page of the interface, so an address in the bar and the address the
 // data is fetched from are the same string. These are the exceptions: downloads, images, feeds and the
 // requests a machine makes. A link to one is left to the browser.
-const NOT_PAGES = /^\/(files|avatar|export|calendar\/feed|inbound|static|api|events|login\/sso|auth\/|logout$|_astro|theme-next\.js|sw\.js|healthz|readyz|manifest)|\.(csv|ics|pdf|png|jpg|svg|zip|xlsx|js|css|webmanifest)(\?|$)|\/(avatar|qr|label|download|export)(\?|$|\/)/;
+const NOT_PAGES = /^\/(files|avatar|export|calendar\/feed|inbound|static|api|events|login\/sso|auth\/|integrations\/[a-z0-9]+\/connect|logout$|_astro|theme-next\.js|sw\.js|healthz|readyz|manifest)|\.(csv|ics|pdf|png|jpg|svg|zip|xlsx|js|css|webmanifest)(\?|$)|\/(avatar|qr|label|download|export)(\?|$|\/)/;
 
 /** Whether an address (path and query, same origin) is a page the interface draws. */
 export function isPage(address: string): boolean {
