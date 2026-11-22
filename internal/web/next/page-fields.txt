@@ -326,3 +326,8 @@ CloudLinks
 LinkedMail
 ConnectorsOn
 Mailbox
+Marketing
+FormsArea
+SocialArea
+ToolsList
+ToolsOn

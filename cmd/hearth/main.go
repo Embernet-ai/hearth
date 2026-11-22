@@ -34,12 +34,14 @@ import (
 	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/stores"
 	"github.com/Embernet-ai/hearth/internal/files"
+	"github.com/Embernet-ai/hearth/internal/forms"
 	"github.com/Embernet-ai/hearth/internal/google"
 	"github.com/Embernet-ai/hearth/internal/jobs"
 	"github.com/Embernet-ai/hearth/internal/m365"
 	"github.com/Embernet-ai/hearth/internal/mailint"
 	"github.com/Embernet-ai/hearth/internal/mailsettings"
 	"github.com/Embernet-ai/hearth/internal/maint"
+	"github.com/Embernet-ai/hearth/internal/mautic"
 	"github.com/Embernet-ai/hearth/internal/mcpserver"
 	"github.com/Embernet-ai/hearth/internal/notify"
 	"github.com/Embernet-ai/hearth/internal/offline"
@@ -59,9 +61,11 @@ import (
 	"github.com/Embernet-ai/hearth/internal/rules"
 	"github.com/Embernet-ai/hearth/internal/scim"
 	"github.com/Embernet-ai/hearth/internal/search"
+	"github.com/Embernet-ai/hearth/internal/social"
 	"github.com/Embernet-ai/hearth/internal/teams"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 	"github.com/Embernet-ai/hearth/internal/timeoff"
+	"github.com/Embernet-ai/hearth/internal/tools"
 	"github.com/Embernet-ai/hearth/internal/views"
 	"github.com/Embernet-ai/hearth/internal/web"
 )
@@ -159,6 +163,28 @@ func run() error {
 		googleSvc = google.New(pools.Web, googleCfg, box)
 		log.Info("google enabled", "redirect", googleCfg.RedirectURL)
 	}
+	// The Marketing, Forms and Social areas and the Tools launcher. Each is only built when its address and credentials are
+	// set; an area whose app is not set up still opens and says what to set.
+	var marketingClient *mautic.Client
+	if cfg.MarketingURL != "" {
+		marketingClient = mautic.New(cfg.MarketingURL, cfg.MarketingClientID, cfg.MarketingClientSecret)
+		log.Info("marketing area connected", "url", cfg.MarketingURL)
+	}
+	var formsClient *forms.Client
+	if cfg.FormsURL != "" {
+		formsClient = forms.New(cfg.FormsURL, cfg.FormsAPIKey)
+		log.Info("forms area connected", "url", cfg.FormsURL)
+	}
+	var socialClient *social.Client
+	if cfg.SocialURL != "" {
+		socialClient = social.New(cfg.SocialURL, cfg.SocialAPIKey)
+		log.Info("social area connected", "url", cfg.SocialURL)
+	}
+	toolCards, err := tools.Parse(cfg.ToolsJSON)
+	if err != nil {
+		return err
+	}
+
 	// Microsoft 365, per person, on the same footing as Google above.
 	var msSvc *m365.Service
 	msCfg := m365.Config{
@@ -501,6 +527,7 @@ func run() error {
 		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
+		Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
 		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
 		NotifyDB: pools.Web, WorkerOn: cfg.WorkerEnabled,

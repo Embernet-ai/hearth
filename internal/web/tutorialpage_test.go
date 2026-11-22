@@ -36,7 +36,7 @@ func TestThePlaygroundGuardCoversEveryRouteThatReachesOutside(t *testing.T) {
 		"/integrations/provisioning", "/agents", "/settings/mail", "/calendar/feed",
 		"/import/", "/rules", "/account/password", "/documents/{id}/reply",
 		"/people/{id}/capability", "/people/{id}/password-link",
-		"/settings/connectors/", "/cloud/", "/mailbox/",
+		"/settings/connectors/", "/cloud/", "/mailbox/", "/marketing/", "/forms", "/social/",
 	}
 	// Names that smell of the outside world. A write route containing one must
 	// be blocked, or be listed in judgedSafe with the reason it is.

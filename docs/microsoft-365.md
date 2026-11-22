@@ -77,7 +77,7 @@ provisioned for them, Outlook ignores the request and the event is created witho
 
 ## Check it on your own tenant
 
-Hearth was built and tested against Microsoft's published API shapes and recorded responses. It has not been run against a live tenant by the people who wrote it, so run this once on yours before relying on it:
+We ran the connectors against a live Microsoft 365 Business Premium tenant with a delegated token before release: calendar (create, read back, move, delete), contacts (create, edit, list, delete), mail (send, open in full, reply, label, mark read, archive) and OneDrive (folders, upload, an upload over 4 MB through an upload session, replace, rename, move, delete) all passed. That run found one real bug, a send that Graph refused when the cc and bcc lists were null, and it is fixed. One thing is not yet proven live: a Teams link on a new event, because the test mailbox did not have Teams provisioned yet, so Graph created the event without a link (see Teams links above). Run this once on your tenant too, since every tenant is set up a little differently:
 
 1. Sign in with a Microsoft account in the tenant. Expect to land signed in, with the account named as in Entra.
 2. Connect from Settings, Connectors with the calendar ticked. Expect a Microsoft consent screen listing `Calendars.ReadWrite`.

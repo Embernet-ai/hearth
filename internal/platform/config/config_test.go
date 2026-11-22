@@ -359,3 +359,20 @@ func TestLoadStorageReadsAPrefix(t *testing.T) {
 		t.Fatalf("a missing prefix should name what it looked for: %v", err)
 	}
 }
+
+func TestLoadChecksTheAreaApps(t *testing.T) {
+	validEnv(t)
+	t.Setenv("HEARTH_FORMS_URL", "forms.example.com")
+	t.Setenv("HEARTH_SOCIAL_API_KEY", "k")
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "HEARTH_FORMS_URL must start with") || !strings.Contains(err.Error(), "HEARTH_SOCIAL_URL and its credentials") {
+		t.Fatalf("want both area mistakes reported, got %v", err)
+	}
+	t.Setenv("HEARTH_FORMS_URL", "https://forms.example.com")
+	t.Setenv("HEARTH_FORMS_API_KEY", "k")
+	t.Setenv("HEARTH_SOCIAL_URL", "https://social.example.com")
+	cfg, err := Load()
+	if err != nil || cfg.FormsURL == "" || cfg.SocialAPIKey != "k" {
+		t.Fatalf("a complete pair loads: %v", err)
+	}
+}

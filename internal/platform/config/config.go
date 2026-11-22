@@ -166,6 +166,12 @@ type Config struct {
 	// The Microsoft 365 connectors' Entra app registration, delegated and per person. Empty disables them.
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
+	// The Marketing, Forms and Social areas call the apps an installation runs for them. Each needs an address and its
+	// credentials; without them the area opens and says what to set. ToolsJSON is the Tools launcher's cards.
+	MarketingURL, MarketingClientID, MarketingClientSecret string
+	FormsURL, FormsAPIKey                                  string
+	SocialURL, SocialAPIKey                                string
+	ToolsJSON                                              string
 	// ConnectorsEvery is how often the connectors pull. Zero means every ten minutes.
 	ConnectorsEvery time.Duration
 
@@ -388,6 +394,25 @@ func Load() (*Config, error) {
 			fail("HEARTH_CONNECTORS_INTERVAL must be a duration of at least a minute, like 10m, got %q", v)
 		}
 		cfg.ConnectorsEvery = d
+	}
+	cfg.MarketingURL = strings.TrimSpace(os.Getenv("HEARTH_MARKETING_URL"))
+	cfg.MarketingClientID = strings.TrimSpace(os.Getenv("HEARTH_MARKETING_CLIENT_ID"))
+	cfg.MarketingClientSecret = os.Getenv("HEARTH_MARKETING_CLIENT_SECRET")
+	cfg.FormsURL = strings.TrimSpace(os.Getenv("HEARTH_FORMS_URL"))
+	cfg.FormsAPIKey = os.Getenv("HEARTH_FORMS_API_KEY")
+	cfg.SocialURL = strings.TrimSpace(os.Getenv("HEARTH_SOCIAL_URL"))
+	cfg.SocialAPIKey = os.Getenv("HEARTH_SOCIAL_API_KEY")
+	cfg.ToolsJSON = os.Getenv("HEARTH_TOOLS")
+	for _, a := range []struct{ name, url, cred string }{
+		{"MARKETING", cfg.MarketingURL, cfg.MarketingClientID + cfg.MarketingClientSecret},
+		{"FORMS", cfg.FormsURL, cfg.FormsAPIKey}, {"SOCIAL", cfg.SocialURL, cfg.SocialAPIKey},
+	} {
+		if a.url != "" && !strings.HasPrefix(a.url, "http://") && !strings.HasPrefix(a.url, "https://") {
+			fail("HEARTH_%s_URL must start with http:// or https://, got %q", a.name, a.url)
+		}
+		if (a.url == "") != (a.cred == "") {
+			fail("HEARTH_%s_URL and its credentials must be set together, or neither", a.name)
+		}
 	}
 	cfg.OIDCRoleMap = map[string]string{}
 	for _, pair := range splitList(os.Getenv("HEARTH_OIDC_ROLE_MAP")) {

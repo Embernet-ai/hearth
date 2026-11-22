@@ -30,6 +30,10 @@
       <a  class="settinglink"  href={("/inbox#notifications")}><span  class="sl-title">Email, digest and quiet hours</span><span  class="sl-note">How often email reaches you, and when it stays quiet.</span></a>
     </div>
     <div  class="card">
+      <h3>Phone app</h3>
+      <a  class="settinglink"  href={("/connect")}><span  class="sl-title">Hearth server address</span><span  class="sl-note">Point the phone app at your own Hearth server. The address is checked, then you sign in there.</span></a>
+    </div>
+    <div  class="card">
       <h3>Tutorial</h3>
       <a  class="settinglink"  href={("/settings/tutorial")}><span  class="sl-title">Learn Hearth in your own practice company</span><span  class="sl-note">Practice with nothing real at stake.</span></a>
     </div>

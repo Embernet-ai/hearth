@@ -79,6 +79,17 @@ export const groups: RailGroup[] = [
     ],
   },
   {
+    key: 'g-apps',
+    heading: 'Marketing',
+    dot: 'talk',
+    items: [
+      { label: 'Marketing', href: '/marketing' },
+      { label: 'Forms', href: '/forms' },
+      { label: 'Social', href: '/social' },
+      { label: 'Tools', href: '/tools', show: (pg) => !!pg.ToolsOn },
+    ],
+  },
+  {
     key: 'g-plant',
     heading: 'Plant',
     dot: 'know',

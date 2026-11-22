@@ -187,6 +187,12 @@ Owning your data doesn't mean living in a cave. Hearth talks to the world. It ju
   sealed, and every call is made as *you*, so nobody reads a colleague's mailbox through somebody else's login. It's a
   company tool, not a surveillance tool. [`docs/microsoft-365.md`](docs/microsoft-365.md),
   [`docs/google-workspace.md`](docs/google-workspace.md)
+- **📣 Marketing, Forms and Social, in the app.** Write an email, build a campaign, cut a segment, make a form and read
+  every answer, line up a post for the week. All of it reads AND writes, against the apps you already run, so your
+  marketing doesn't live in four tabs and a prayer. Plus a Tools launcher that puts every other app one tap away.
+  [`docs/areas.md`](docs/areas.md)
+- **📱 Your server, your phone.** The installed app has a Hearth server address setting, so a self-hoster points it at their own box,
+  gets it checked, signs in, and the phone remembers. [`docs/phone-app.md`](docs/phone-app.md)
 - **📱 Push notifications** via plain Web Push. Hearth is an installable app. No extra service, no third-party push
   vendor reading your notifications. [`docs/push-notifications.md`](docs/push-notifications.md)
 
