@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { draw, text } from './testing/draw';
+import { draw, page, text } from './testing/draw';
 import { fixture } from './testing/fixture';
 
 // Marketing, Forms, Social and Tools each say plainly when they are not set up, and otherwise show the app's records
@@ -70,5 +70,26 @@ describe('tools', () => {
   });
   test('says so when none are set up', () => {
     expect(draw('tools', fixture('tools-none')).querySelector('[data-not-set-up]')).not.toBeNull();
+  });
+});
+
+// The Calendar page deletes an event a person made. Work that falls due, a time off Out and an entry from Google carry no delete.
+describe('calendar delete', () => {
+  const day = (entries: any[]) => ({ Date: '2026-11-24T00:00:00Z', InMonth: true, Today: false, Entries: entries });
+  const cal = (entries: any[]) => page({ Month: '2026-11-01T00:00:00Z', PrevMonth: '2026-10', NextMonth: '2026-12', Days: [[day(entries)]], Departments: [] });
+  test('an event gets a Delete button that posts to its delete route and asks first', () => {
+    const d = draw('calendar', cal([{ ID: 'e1', Kind: 'event', Title: 'Standup' }]));
+    const f = d.querySelector('form[action="/calendar/e1/delete"]');
+    expect(f).not.toBeNull();
+    expect(f!.getAttribute('data-confirm')).toBe('Delete this event?');
+    expect(f!.querySelector('button')!.textContent).toBe('Delete');
+  });
+  test('work that falls due, a time off Out and a Google entry have none', () => {
+    const d = draw('calendar', cal([
+      { ID: 'w1', Kind: 'due', Title: 'Fix press', DocumentID: 'doc1' },
+      { ID: 'o1', Kind: 'event', Title: 'Out: Ann' },
+      { ID: 'g1', Kind: 'google', Title: 'From Google', Link: 'https://calendar.example/g1' },
+    ]));
+    expect(d.querySelector('[data-event-delete]')).toBeNull();
   });
 });

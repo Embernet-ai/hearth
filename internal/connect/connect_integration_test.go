@@ -1095,3 +1095,54 @@ func TestAHearthAttachmentCanBeSavedToADrive(t *testing.T) {
 		t.Fatal("a person who cannot see the document saved its attachment to their drive")
 	}
 }
+
+// refusingEvents is an event store that will not delete one event, as EmberOPS did for a person.
+type refusingEvents struct {
+	EventStore
+	refuse string
+}
+
+func (r refusingEvents) Delete(ctx context.Context, org, id string) error {
+	if id == r.refuse {
+		return errors.New("not allowed to delete this event")
+	}
+	return r.EventStore.Delete(ctx, org, id)
+}
+
+// Several events deleted at the provider and one of them cannot be removed here: the others still go, the run says what failed,
+// and the next run takes the stuck one once it can.
+func TestOneEventThatCannotBeRemovedDoesNotStopTheRest(t *testing.T) {
+	f := setup(t)
+	f.turnOn(Calendar)
+	ctx := context.Background()
+	for i, n := range []string{"E1", "E2", "E3", "E4", "E5", "E6"} {
+		f.fake.put("primary", Event{ID: n, Title: "Event " + n, Start: f.at(1, 8+i), End: f.at(1, 9+i)})
+	}
+	f.syncCal()
+	local := f.localEvents(f.dana)
+	if len(local) != 6 {
+		t.Fatalf("%d events arrived, want 6", len(local))
+	}
+	stuck := local["Event E3"].ID
+	pg := f.svc.events
+	f.svc.events = refusingEvents{EventStore: pg, refuse: stuck}
+	for _, n := range []string{"E1", "E2", "E3", "E4", "E5", "E6"} {
+		f.fake.Delete(ctx, "primary", n)
+	}
+	// Map order is random, so run it enough times that a stop at the refusal would have left others behind in at least one.
+	for i := 0; i < 20; i++ {
+		if _, err := f.svc.SyncCalendar(ctx, f.org, f.dana, Google); err == nil {
+			t.Fatal("a refused delete was not reported")
+		}
+		left := f.localEvents(f.dana)
+		if len(left) != 1 || left["Event E3"].ID != stuck {
+			t.Fatalf("after a run with one event refused, %d events are left, want only the stuck one: %v", len(left), left)
+		}
+	}
+	// Once it can be removed, the next run takes it, because its link was kept.
+	f.svc.events = pg
+	f.syncCal()
+	if left := f.localEvents(f.dana); len(left) != 0 {
+		t.Fatalf("the stuck event was not removed on the next run: %v", left)
+	}
+}
