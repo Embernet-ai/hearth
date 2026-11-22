@@ -317,8 +317,9 @@ push:
 #
 # The OAuth client must have this exact redirect URI registered:
 #   <HEARTH_PUBLIC_BASE_URL>/integrations/google/callback
+# On by default. With no client in the Secret the Google connector says it is not set up; nothing else changes.
 google:
-  enabled: false
+  enabled: true
 
 # ─── Microsoft 365, per person ─────────────────────────────────────────────────
 # Each person connects their own work account under Settings, Connectors, and an administrator turns on each
@@ -327,8 +328,9 @@ google:
 # reason Google does. The Entra app registration needs this exact redirect URI:
 #   <HEARTH_PUBLIC_BASE_URL>/integrations/microsoft/callback
 # and its client id and secret in existingSecret (secretKeys.microsoftClientID, microsoftClientSecret).
+# On by default, the same way.
 microsoft:
-  enabled: false
+  enabled: true
 
 # How often the connectors pull from Microsoft 365 and Google Workspace. Empty is every ten minutes; the least
 # accepted is one minute.
