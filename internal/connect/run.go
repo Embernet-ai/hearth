@@ -12,7 +12,7 @@ import (
 func (s *Service) SyncPerson(ctx context.Context, orgID, principalID string, p Provider) map[Kind]error {
 	res := map[Kind]error{}
 	for _, k := range Kinds {
-		if !k.Synced() {
+		if !k.Synced() || s.UnavailableReason(k) != "" {
 			continue
 		}
 		on, err := s.Enabled(ctx, orgID, p, k)

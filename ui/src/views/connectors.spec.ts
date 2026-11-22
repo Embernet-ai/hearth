@@ -115,4 +115,14 @@ describe('mailbox', () => {
     expect(d.querySelector('a[href="/settings/connectors"]')).not.toBeNull();
     expect(d.querySelector('form[action="/mailbox/send"]')).toBeNull();
   });
+
+  test('a connector this installation cannot run says why and has no switch', () => {
+    const d = draw('connectors', fixture('connectors-emberops'));
+    const files = d.querySelector('[data-provider="microsoft"] [data-connector="files"]')!;
+    expect(files.textContent).toContain('Not available');
+    expect(files.textContent).toContain('documents are kept in EmberOps');
+    expect(files.querySelector('form')).toBeNull();
+    // The others are untouched.
+    expect(d.querySelector('[data-provider="microsoft"] [data-connector="calendar"] form')).not.toBeNull();
+  });
 });

@@ -129,7 +129,8 @@
       "Key": "calendar",
       "Label": "Calendar",
       "LastOK": null,
-      "MeetLinks": true
+      "MeetLinks": true,
+      "Unavailable": ""
      },
      {
       "Connections": 0,
@@ -140,7 +141,8 @@
       "Key": "contacts",
       "Label": "Contacts",
       "LastOK": null,
-      "MeetLinks": false
+      "MeetLinks": false,
+      "Unavailable": ""
      },
      {
       "Connections": 0,
@@ -151,7 +153,8 @@
       "Key": "chat",
       "Label": "Chat notifications",
       "LastOK": null,
-      "MeetLinks": false
+      "MeetLinks": false,
+      "Unavailable": ""
      }
     ],
     "Key": "microsoft",
