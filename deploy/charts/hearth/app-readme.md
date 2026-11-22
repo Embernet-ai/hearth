@@ -4,7 +4,7 @@ A self-hosted all-in-one workspace. Work orders, assets, tasks, and documents si
 on one entity spine, with attachments verified by digest, permissions through
 grants, live updates over SSE, local accounts, and generic OIDC single sign-on.
 
-One Go binary, Postgres, and MinIO. That is the whole system.
+One Go binary, Postgres, and Garage for files. That is the whole system.
 
 ## Before installing
 
