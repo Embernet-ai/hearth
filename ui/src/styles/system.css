@@ -146,6 +146,8 @@ form.card > .row > select { flex: 1 1 14rem; min-width: 0; }
 .settingsgrid .card { margin: 0; }
 .settingsgrid .card h3 { margin: 0 0 var(--s-2); }
 .settingsgrid .card a { padding: var(--s-1) 0; }
+/* A card's button keeps its own shape: the plain-link rules above and in hearth.css are for text links and would turn it into a block with its label at the top left. */
+.settingsgrid .card a.button { display: inline-flex; justify-content: center; align-items: center; padding: 0.5em 1.1em; align-self: flex-start; }
 pre { max-width: 100%; overflow-x: auto; }
 main section > .table-wrap, main section table.list { max-width: 100%; }
 
