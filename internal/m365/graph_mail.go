@@ -95,8 +95,14 @@ func outgoing(o connect.Outgoing) models.Messageable {
 	b.SetContent(ptr(o.Body))
 	m.SetBody(b)
 	m.SetToRecipients(recipientList(o.To))
-	m.SetCcRecipients(recipientList(o.Cc))
-	m.SetBccRecipients(recipientList(o.Bcc))
+	// Graph refuses a null recipient list, and the SDK writes an unset-but-empty slice as null, so each optional list
+	// is only set when it has somebody in it.
+	if cc := recipientList(o.Cc); len(cc) > 0 {
+		m.SetCcRecipients(cc)
+	}
+	if bcc := recipientList(o.Bcc); len(bcc) > 0 {
+		m.SetBccRecipients(bcc)
+	}
 	return m
 }
 

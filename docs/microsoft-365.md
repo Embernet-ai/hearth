@@ -69,6 +69,12 @@ An account in more than 200 groups gets a pointer in its token instead of the li
 3. Turn on the connectors you want. Each has its own page: [calendar](connector-calendar.md), [contacts](connector-contacts.md), [mail](connector-mail.md), [files](connector-files.md) and [chat notifications](connector-chat.md).
 4. Each person opens the same page, chooses Connect my Microsoft 365 account, and ticks what they want. They see what Microsoft asks before anything is granted.
 
+## Teams links
+
+A Teams link is added to an event Hearth creates only when the person's calendar allows Teams meetings. If Teams is not
+provisioned for them, Outlook ignores the request and the event is created without a link. To check, ask Graph for
+`/me/calendar?$select=allowedOnlineMeetingProviders`: it has to include `teamsForBusiness`.
+
 ## Check it on your own tenant
 
 Hearth was built and tested against Microsoft's published API shapes and recorded responses. It has not been run against a live tenant by the people who wrote it, so run this once on yours before relying on it:
