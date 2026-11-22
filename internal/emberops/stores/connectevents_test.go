@@ -162,25 +162,3 @@ func TestCalendarShowsAndDeletesEventsFromConnectors(t *testing.T) {
 		t.Fatalf("delete = %v %v", err, pg.deleted)
 	}
 }
-
-// A calendar sync started from the page ("Sync now") carries the signed-in person, and EmberOPS gives a person no delete on an
-// Event, so an event deleted at the provider stayed in Hearth. The sync removes it as the service identity, and a personal event
-// (Private, owned by the person) goes too.
-func TestConnectEventsDeleteWhenThePersonHasNoDelete(t *testing.T) {
-	e := newEnv(t)
-	e.f.PersonCannotDeleteEvents = true
-	pg := &pgEvents{rows: map[string]connect.LocalEvent{}}
-	s := &stores.ConnectEvents{EventStore: pg, Base: e.base, Dir: e.dir}
-	cal := &stores.Calendar{Base: e.base, Dir: e.dir, PG: calPeople{}}
-	d := time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC)
-	mine, err := cal.Create(e.as("ann-tok"), org, ann, calendar.Params{Title: "Made in Hearth", StartsAt: d, EndsAt: d.Add(time.Hour)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Delete(e.as("ann-tok"), org, mine.ID); err != nil {
-		t.Fatalf("delete as the signed-in person: %v", err)
-	}
-	if got, _ := s.Load(context.Background(), org, mine.ID); got != nil {
-		t.Fatalf("the event is still there: %+v", got)
-	}
-}

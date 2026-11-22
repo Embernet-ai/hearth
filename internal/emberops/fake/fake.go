@@ -30,9 +30,6 @@ type Frappe struct {
 	docs      map[string]map[string]map[string]any // doctype -> name -> doc
 	seq       int
 	bulkItems int
-	// PersonCannotDeleteEvents makes a delete of any Event by a person refused, as live EmberOPS does (found 2026-11-20 with a
-	// time off "Out" and 2026-11-22 with a calendar sync): only the service account may delete one.
-	PersonCannotDeleteEvents bool
 	// Tokens maps an accepted bearer token to the Frappe user it acts as.
 	Tokens map[string]string
 	// Calls records "METHOD path?query" for every request, for N+1 assertions.
@@ -199,7 +196,7 @@ func (f *Frappe) resource(w http.ResponseWriter, r *http.Request, rest, user str
 			fail(w, 404, "DoesNotExistError", doctype+" "+name+" not found")
 			return
 		}
-		if doctype == "Event" && (f.PersonCannotDeleteEvents || strings.HasPrefix(fmt.Sprint(d["subject"]), "Out: ")) {
+		if doctype == "Event" && strings.HasPrefix(fmt.Sprint(d["subject"]), "Out: ") {
 			// What live EmberOPS does with a time off "Out" (found on live 2026-11-20): a person has no delete on
 			// an Event, even their own, and a request that still links it keeps it.
 			if user != "svc@example.com" {

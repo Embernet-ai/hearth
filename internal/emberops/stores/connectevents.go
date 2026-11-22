@@ -32,7 +32,6 @@ func (s *ConnectEvents) fromRow(r emberops.Row) *connect.LocalEvent {
 
 // opsEvent finds an EmberOPS Event by the id Hearth gave it.
 func (s *ConnectEvents) opsEvent(ctx context.Context, id string) (*emberops.Row, error) {
-	ctx = emberops.WithUser(ctx, nil)
 	rows, err := s.C.ListAll(ctx, emberops.ListQuery{Doctype: "Event", Fields: eventFields,
 		Filters: []emberops.Filter{{Field: "hearth_id", Op: "=", Value: id}}}, 1)
 	if err != nil || len(rows) == 0 {
@@ -59,7 +58,6 @@ func (s *ConnectEvents) Candidates(ctx context.Context, orgID, principalID, spac
 	if err != nil {
 		return nil, err
 	}
-	ctx = emberops.WithUser(ctx, nil)
 	filters := []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"},
 		{Field: "starts_on", Op: ">=", Value: s.tsv(from)}, {Field: "starts_on", Op: "<", Value: s.tsv(to)}}
 	if space == "" {
@@ -100,7 +98,6 @@ func (s *ConnectEvents) Update(ctx context.Context, orgID, id string, e connect.
 	} else if cur != nil {
 		return s.EventStore.Update(ctx, orgID, id, e)
 	}
-	ctx = emberops.WithUser(ctx, nil)
 	allDay := 0
 	if e.AllDay {
 		allDay = 1
@@ -117,19 +114,7 @@ func (s *ConnectEvents) Delete(ctx context.Context, orgID, id string) error {
 	} else if cur != nil {
 		return s.EventStore.Delete(ctx, orgID, id)
 	}
-	// The service identity does it, not the person. EmberOPS gives a person no delete on an Event, not even their own, so a
-	// "Sync now" (which carries the signed-in person) was refused and the event stayed in Hearth after it was deleted at the
-	// provider (found live 2026-11-22). A personal event is Private and answers only to its owner, the service account
-	// included, so it is made Public first, which is only the step before it is deleted.
-	svc := emberops.WithUser(ctx, nil)
-	if r, err := s.opsEvent(ctx, id); err != nil {
-		return err
-	} else if r != nil && r.S("event_type") == "Private" {
-		if _, err := s.C.Upsert(svc, "Event", id, map[string]any{"event_type": "Public"}); err != nil {
-			return err
-		}
-	}
-	if err := s.C.DeleteByHearthID(svc, "Event", id); err != nil && !errors.Is(err, emberops.ErrNotFound) {
+	if err := s.C.DeleteByHearthID(ctx, "Event", id); err != nil && !errors.Is(err, emberops.ErrNotFound) {
 		return err
 	}
 	return nil
