@@ -44,6 +44,9 @@
                   <a  class="tag"  href={(S(d3?.Link))}  title="from Google">{d3?.Title}</a>
                 {:else}
                   <div  class="tag"  title={S(d3?.Notes)}>{d3?.Title}</div>
+                  {#if F.t(d3?.ID) && S(d3?.Kind) === "event" && !S(d3?.Title).startsWith("Out: ")}
+                    <form  method="post"  action={"/calendar/" + S(d3?.ID) + "/delete"}  data-confirm="Delete this event?"  data-event-delete={S(d3?.ID)}><button  class="ghost small">Delete</button></form>
+                  {/if}
                 {/if}
               {/each}
             </td>

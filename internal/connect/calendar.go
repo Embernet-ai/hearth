@@ -251,24 +251,37 @@ func (s *Service) syncOneCalendar(ctx context.Context, orgID, principalID string
 		}
 	}
 
-	// Linked here, gone there. Only events inside the window count: one outside it was never asked about.
+	// Linked here, gone there. Only events inside the window count: one outside it was never asked about. One event that
+	// cannot be removed never stops the others: its link stays so the next run tries it again, and the first error is
+	// returned once the rest are done. (Map order decided which events a single refusal used to leave behind.)
+	var firstErr error
 	for key, l := range links {
 		if seen[key] {
 			continue
 		}
 		le, err := s.loadEvent(ctx, orgID, l.entityID)
 		if err != nil {
-			return changed, err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
-		if le != nil && !le.Start.Before(from) && le.Start.Before(to) {
+		inWindow := le != nil && !le.Start.Before(from) && le.Start.Before(to)
+		if inWindow {
 			if err := s.events.Delete(ctx, orgID, l.entityID); err != nil {
-				return changed, fmt.Errorf("connect: delete event: %w", err)
+				if firstErr == nil {
+					firstErr = fmt.Errorf("connect: delete event: %w", err)
+				}
+				continue
 			}
 			changed++
 		}
-		if le == nil || (!le.Start.Before(from) && le.Start.Before(to)) {
+		if le == nil || inWindow {
 			s.dropLink(ctx, principalID, p, key)
 		}
+	}
+	if firstErr != nil {
+		return changed, firstErr
 	}
 
 	// New in Hearth: send it across.
