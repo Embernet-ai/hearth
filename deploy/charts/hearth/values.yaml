@@ -328,9 +328,8 @@ google:
 # reason Google does. The Entra app registration needs this exact redirect URI:
 #   <HEARTH_PUBLIC_BASE_URL>/integrations/microsoft/callback
 # and its client id and secret in existingSecret (secretKeys.microsoftClientID, microsoftClientSecret).
-# On by default, the same way.
 microsoft:
-  enabled: true
+  enabled: false
 
 # How often the connectors pull from Microsoft 365 and Google Workspace. Empty is every ten minutes; the least
 # accepted is one minute.
