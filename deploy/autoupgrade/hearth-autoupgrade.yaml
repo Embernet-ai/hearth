@@ -1,0 +1,230 @@
+# Auto-upgrade for a Hearth that runs from this chart (Helm release `hearth` in namespace `hearth`). Every 15 minutes it looks
+# for a newer 2.x chart and, when the image for that version is already on ghcr.io, runs `helm upgrade` to it, then asks Hearth
+# itself whether it serves (/healthz, then the sign-in page) and says so loudly if it does not. Nothing newer means it touches
+# nothing. It is the pattern of the dashboard's dashboard-autoupgrade, so a Hearth on a customer's own box follows our releases
+# the way every other box does, with no tag typed by hand.
+#
+#   kubectl apply -f deploy/autoupgrade/hearth-autoupgrade.yaml
+#
+# Change NS, RELEASE or the Service name only if the release is not the default. Pause it with `suspend: true` on the CronJob.
+# It never installs, never rolls back and never touches a release that is not `deployed`: a release a person has to look at
+# stays a person's. A failed health check ends the job as Failed and is the first thing seen on the CronJob; the next release
+# fixes forward.
+#
+# The ServiceAccount holds only what a `helm upgrade` of this chart touches, and no cluster-admin:
+#   - the built-in `admin` role in the hearth namespace (Deployments, StatefulSets, CronJobs, Jobs, Ingress, Services, PVCs,
+#     Secrets, ConfigMaps and the helm release Secrets),
+#   - a namespace Role to write the chart's own Role and RoleBinding for Garage (`escalate` and `bind`, because the Role grants
+#     the Garage CRD), the Garage resources themselves and the Traefik Middleware for the HTTPS redirect,
+#   - a ClusterRole for the only two cluster-scoped objects the chart renders, ClusterRole manage-crds-hearth-hearth and its
+#     ClusterRoleBinding allow-crds-for-hearth-hearth (from the Garage subchart), limited to those two names and to get, update,
+#     patch, plus `escalate` and `bind` on that one ClusterRole, because Kubernetes refuses to let an account change a role that
+#     grants more than it holds.
+# The names come from the release name and namespace (manage-crds-<namespace>-<release>). Change them with NS and RELEASE if the
+# release is not `hearth` in `hearth`. A future chart that renders another cluster-scoped kind makes the upgrade fail with a
+# clear message and leaves the release alone, which is the safe way to find out. Proven on the house cluster: a full upgrade
+# with exactly this, and a refusal of anything outside it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hearth-autoupgrade
+  namespace: hearth
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hearth-autoupgrade
+  namespace: hearth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: hearth-autoupgrade
+    namespace: hearth
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hearth-autoupgrade
+  namespace: hearth
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["escalate", "bind"]
+  - apiGroups: ["deuxfleurs.fr"]
+    resources: ["garagenodes"]
+    verbs: ["*"]
+  # The chart's HTTPS redirect is a Traefik Middleware, which the built-in admin role does not cover.
+  - apiGroups: ["traefik.io", "traefik.containo.us"]
+    resources: ["middlewares"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hearth-autoupgrade-extra
+  namespace: hearth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hearth-autoupgrade
+subjects:
+  - kind: ServiceAccount
+    name: hearth-autoupgrade
+    namespace: hearth
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hearth-autoupgrade
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: ["manage-crds-hearth-hearth"]
+    verbs: ["get", "update", "patch", "escalate", "bind"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterrolebindings"]
+    resourceNames: ["allow-crds-for-hearth-hearth"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hearth-autoupgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hearth-autoupgrade
+subjects:
+  - kind: ServiceAccount
+    name: hearth-autoupgrade
+    namespace: hearth
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hearth-autoupgrade
+  namespace: hearth
+data:
+  upgrade.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    log() { echo "$(date -u +%FT%TZ) $*"; }
+    # A name that will not resolve, or a registry that answers late, is the network and not a failed upgrade. Retry it, and
+    # when it still fails say so and leave the release alone: the next run is 15 minutes away.
+    cx() { curl -fsS --retry 5 --retry-all-errors --retry-delay 3 --connect-timeout 10 --max-time 40 "$@"; }
+    retry() { local i; for i in 1 2 3 4 5; do "$@" && return 0; sleep 4; done; return 1; }
+    export HELM_CACHE_HOME=/tmp/helm/cache HELM_CONFIG_HOME=/tmp/helm/config HELM_DATA_HOME=/tmp/helm/data
+
+    rel=$(helm list -n "$NS" --filter "^${RELEASE}\$" -o json)
+    if [ "$(jq length <<<"$rel")" != 1 ]; then
+      log "no release $RELEASE in $NS. Not installing anything, that is a person's job."; exit 1
+    fi
+    status=$(jq -r '.[0].status' <<<"$rel")
+    cur=$(jq -r '.[0].chart' <<<"$rel"); cur=${cur#"$CHART"-}
+    if [ "$status" != deployed ]; then
+      log "$RELEASE is $status at $cur. Hands off until a person sorts it out."; exit 1
+    fi
+
+    if ! retry helm repo add src "$REPO_URL" --force-update >/dev/null; then
+      log "could not read the chart repo $REPO_URL. $RELEASE stays at $cur. Trying again next run."; exit 0
+    fi
+    want=$(helm search repo "src/$CHART" --version ">$cur, $RANGE" -o json | jq -r '.[0].version // empty')
+    if [ -z "$want" ]; then
+      log "$RELEASE at $cur, nothing newer in $RANGE"; exit 0
+    fi
+
+    # The chart can land before its image does. Upgrading to a tag that is not there takes Hearth down, so wait for it.
+    # The image is public. A pull credential is used when one is mounted, so a private mirror works the same way.
+    reg=${IMAGE_REPO%%/*}; path=${IMAGE_REPO#*/}
+    auth=()
+    if [ -f /pull/.dockerconfigjson ]; then
+      a=$(jq -r --arg r "$reg" '.auths[$r].auth // empty' /pull/.dockerconfigjson)
+      [ -n "$a" ] && auth=(-H "Authorization: Basic $a")
+    fi
+    if ! tok=$(cx "${auth[@]}" "https://$reg/token?service=$reg&scope=repository:$path:pull" | jq -r .token) || [ -z "$tok" ] || [ "$tok" = null ]; then
+      log "could not get a registry token from $reg to look for the $want image. $RELEASE stays at $cur. Trying again next run."; exit 0
+    fi
+    code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 10 --max-time 40 -I \
+      -H "Authorization: Bearer $tok" \
+      -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json' \
+      "https://$reg/v2/$path/manifests/$want")
+    if [ "$code" != 200 ]; then
+      log "chart $want is out but $IMAGE_REPO:$want is not ($code). Trying again next run."; exit 0
+    fi
+
+    # After --wait the pod is Ready, which says the process started and not that it serves. Ask Hearth itself: /healthz, then the
+    # sign-in page, which needs the database and the interface behind it.
+    health() {
+      local svc="http://${SERVICE}.${NS}.svc.cluster.local" code="" i
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$svc/healthz" || true)
+        [ "$code" = 200 ] && break
+        sleep 6
+      done
+      if [ "$code" != 200 ]; then
+        log "HEALTH CHECK FAILED: $svc/healthz answered '${code:-nothing}' for a minute after $RELEASE was upgraded to $1. Not rolling back; fix forward."
+        return 1
+      fi
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$svc/login" || true)
+      if [ "$code" != 200 ] && [ "$code" != 303 ]; then
+        log "HEALTH CHECK FAILED: $svc/login answered '${code:-nothing}' at $1. Not rolling back; fix forward."
+        return 1
+      fi
+      log "health check passed at $1: /healthz 200 and the sign-in page $code"
+    }
+
+    log "upgrading $RELEASE $cur -> $want"
+    helm upgrade "$RELEASE" "src/$CHART" --version "$want" -n "$NS" \
+      --reset-then-reuse-values --set image.tag="$want" --wait --timeout 10m
+    kubectl -n "$NS" get pod -l app.kubernetes.io/name="$CHART",app.kubernetes.io/component=app \
+      -o jsonpath='{range .items[*]}{.spec.containers[0].image} {.status.phase} restarts={.status.containerStatuses[0].restartCount}{"\n"}{end}'
+    log "done: $RELEASE at $want"
+    health "$want"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hearth-autoupgrade
+  namespace: hearth
+spec:
+  schedule: "*/15 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1500
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          serviceAccountName: hearth-autoupgrade
+          restartPolicy: Never
+          containers:
+            - name: upgrade
+              image: docker.io/dtzar/helm-kubectl:3.16.2
+              command: ["bash", "/script/upgrade.sh"]
+              env:
+                - { name: NS, value: hearth }
+                - { name: RELEASE, value: hearth }
+                - { name: CHART, value: hearth }
+                - { name: SERVICE, value: hearth }
+                - { name: REPO_URL, value: "https://embernet-ai.github.io/hearth" }
+                - { name: RANGE, value: "<3.0.0" }
+                - { name: IMAGE_REPO, value: ghcr.io/embernet-ai/hearth }
+              resources:
+                requests: { cpu: 10m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              volumeMounts:
+                - { name: script, mountPath: /script, readOnly: true }
+                - { name: pull, mountPath: /pull, readOnly: true }
+          volumes:
+            - name: script
+              configMap: { name: hearth-autoupgrade, defaultMode: 0555 }
+            - name: pull
+              secret: { secretName: ghcr, optional: true }
