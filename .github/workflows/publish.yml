@@ -1,6 +1,6 @@
 name: Image build
 
-# Builds the container image with Podman, from the Containerfile, on every push to main and
+# Builds the container image with Podman, from the Containerfile, on every pull request, every push to main and
 # every release tag, and checks the binaries in it. A push to main only builds, to catch a broken
 # Containerfile or a binary that will not link on the commit that caused it.
 #
@@ -23,6 +23,8 @@ on:
   push:
     branches: ["main"]
     tags: ["v*"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -67,22 +69,28 @@ jobs:
           test -x /tmp/hearth && test -x /tmp/hearthctl
           echo "binaries ok"; ls -lh /tmp/hearth /tmp/hearthctl
 
-      - name: publish the public image
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: work out the image names, and push them on a release tag
         env:
           IMAGE: ghcr.io/embernet-ai/hearth-community
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          v="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v="${GITHUB_REF_NAME#v}"; push=1
+          else
+            v=$(sed -n 's/^version: *//p' deploy/charts/hearth/Chart.yaml | head -n1); push=0
+          fi
           short="${GITHUB_SHA::7}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           tags=("$v" "sha-$short")
-          newest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V | tail -n1)
+          newest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V | tail -n1 || true)
+          # a branch run has no tag yet, so it is checked as if the chart's version were the next release
+          if [ "$push" = 0 ]; then newest=$(printf '%s\n%s\n' "${newest:-0.0.0}" "$v" | sort -V | tail -n1); fi
           [ "$newest" = "$v" ] && tags+=(stable)
-          for t in "${tags[@]}"; do
-            podman tag hearth-build:test "$IMAGE:$t"
-            podman push "$IMAGE:$t"
-          done
+          for t in "${tags[@]}"; do podman tag hearth-build:test "$IMAGE:$t"; done
+          echo "image names: ${tags[*]}"
+          if [ "$push" = 0 ]; then echo "not a release tag: built and named, nothing pushed"; exit 0; fi
+          echo "$TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for t in "${tags[@]}"; do podman push "$IMAGE:$t"; done
           echo "published $IMAGE: ${tags[*]}"
 
       - name: the image pulls with no credentials
