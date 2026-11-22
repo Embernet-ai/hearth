@@ -41,6 +41,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/deptreq"
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/files"
+	"github.com/Embernet-ai/hearth/internal/forms"
 	"github.com/Embernet-ai/hearth/internal/google"
 	"github.com/Embernet-ai/hearth/internal/importer"
 	"github.com/Embernet-ai/hearth/internal/importer/clickup"
@@ -49,6 +50,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/mailint"
 	"github.com/Embernet-ai/hearth/internal/mailsettings"
 	"github.com/Embernet-ai/hearth/internal/maint"
+	"github.com/Embernet-ai/hearth/internal/mautic"
 	"github.com/Embernet-ai/hearth/internal/notify"
 	"github.com/Embernet-ai/hearth/internal/offline"
 	"github.com/Embernet-ai/hearth/internal/plant"
@@ -59,9 +61,11 @@ import (
 	"github.com/Embernet-ai/hearth/internal/rules"
 	"github.com/Embernet-ai/hearth/internal/scim"
 	"github.com/Embernet-ai/hearth/internal/search"
+	"github.com/Embernet-ai/hearth/internal/social"
 	"github.com/Embernet-ai/hearth/internal/teams"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 	"github.com/Embernet-ai/hearth/internal/timeoff"
+	"github.com/Embernet-ai/hearth/internal/tools"
 	"github.com/Embernet-ai/hearth/internal/views"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -127,8 +131,14 @@ type Server struct {
 	google *google.Service
 	// microsoft and connect are the Microsoft 365 connection and the connectors that run on both providers. Nil
 	// when a deployment has not set them up.
-	microsoft  *m365.Service
-	connect    *connect.Service
+	microsoft *m365.Service
+	connect   *connect.Service
+	// The Marketing, Forms and Social areas call the apps the installation runs for them, and tools is the launcher.
+	// Each is nil, or empty, when the installation has not set it up, and its page then says what to set.
+	marketing  *mautic.Client
+	forms      *forms.Client
+	social     *social.Client
+	tools      []tools.Tool
 	box        connect.Sealer
 	scim       *scim.Service
 	search     *search.Service
@@ -205,6 +215,10 @@ type Deps struct {
 	Google       *google.Service
 	Microsoft    *m365.Service
 	Connect      *connect.Service
+	Marketing    *mautic.Client
+	Forms        *forms.Client
+	Social       *social.Client
+	Tools        []tools.Tool
 	Box          connect.Sealer
 	SCIM         *scim.Service
 	Search       *search.Service
@@ -253,6 +267,10 @@ func New(d Deps) (*Server, error) {
 		calendar:   d.Calendar,
 		google:     d.Google,
 		microsoft:  d.Microsoft,
+		marketing:  d.Marketing,
+		forms:      d.Forms,
+		social:     d.Social,
+		tools:      d.Tools,
 		connect:    d.Connect,
 		box:        d.Box,
 		scim:       d.SCIM,
@@ -577,7 +595,13 @@ type page struct {
 	Connectors *ConnectorsView `json:",omitempty"`
 	Cloud      *CloudView      `json:",omitempty"`
 	Mailbox    *MailboxView    `json:",omitempty"`
-	CloudOn    bool            `json:",omitempty"`
+	// The Marketing, Forms and Social areas and the Tools launcher. ToolsOn shows the Tools entry in the rail.
+	Marketing  *MarketingView `json:",omitempty"`
+	FormsArea  *FormsView     `json:",omitempty"`
+	SocialArea *SocialView    `json:",omitempty"`
+	ToolsList  *ToolsView     `json:",omitempty"`
+	ToolsOn    bool           `json:",omitempty"`
+	CloudOn    bool           `json:",omitempty"`
 	// ConnectorsOn is whether the Settings page links to the Connectors page.
 	ConnectorsOn bool                 `json:",omitempty"`
 	CloudLinks   []connect.FileLink   `json:",omitempty"`
@@ -883,6 +907,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	p.Path = r.URL.Path
 	p.Version = s.version
 	p.SalesNav = s.sales != nil
+	p.ToolsOn = len(s.tools) > 0
 	p.Today = time.Now().Format("2006-01-02")
 	// The list page drives its space filter entirely from this query param and
 	// never sets SpaceID itself, so reading it here is the only place it comes
@@ -1091,6 +1116,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /sw.js", s.serviceWorker)
 	mux.HandleFunc("GET /manifest.webmanifest", s.manifest)
 	mux.HandleFunc("GET /offline", s.getOfflineShell)
+	// The phone app's server address: the page, and the answer that proves an address is a Hearth.
+	mux.HandleFunc("GET /connect", s.getConnect)
+	mux.HandleFunc("GET /.well-known/hearth", s.getWellKnown)
 	// The one endpoint a machine talks to. Outside the session middleware
 	// because an MTA has no cookies, and authenticated by a shared secret
 	// compared in constant time.
@@ -1244,6 +1272,25 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /settings/connectors/chat", s.postConnectorChat)
 	authed.HandleFunc("POST /integrations/microsoft/connect", s.startMicrosoft)
 	authed.HandleFunc("GET /integrations/microsoft/callback", s.microsoftCallback)
+	authed.HandleFunc("GET /tools", s.getTools)
+	authed.HandleFunc("GET /marketing", s.getMarketing)
+	authed.HandleFunc("POST /marketing/email", s.postMarketingEmail)
+	authed.HandleFunc("POST /marketing/email/{id}/publish", s.postMarketingEmailPublish)
+	authed.HandleFunc("POST /marketing/email/{id}/send", s.postMarketingEmailSend)
+	authed.HandleFunc("POST /marketing/email/{id}/delete", s.postMarketingEmailDelete)
+	authed.HandleFunc("POST /marketing/campaign", s.postMarketingCampaign)
+	authed.HandleFunc("POST /marketing/campaign/{id}/publish", s.postMarketingCampaignPublish)
+	authed.HandleFunc("POST /marketing/campaign/{id}/delete", s.postMarketingCampaignDelete)
+	authed.HandleFunc("POST /marketing/segment", s.postMarketingSegment)
+	authed.HandleFunc("POST /marketing/segment/{id}/delete", s.postMarketingSegmentDelete)
+	authed.HandleFunc("GET /forms", s.getForms)
+	authed.HandleFunc("POST /forms", s.postFormsSave)
+	authed.HandleFunc("POST /forms/{id}/status", s.postFormsStatus)
+	authed.HandleFunc("POST /forms/{id}/schedule", s.postFormsSchedule)
+	authed.HandleFunc("POST /forms/{id}/delete", s.postFormsDelete)
+	authed.HandleFunc("GET /social", s.getSocial)
+	authed.HandleFunc("POST /social/post", s.postSocialPost)
+	authed.HandleFunc("POST /social/post/{id}/delete", s.postSocialDelete)
 	authed.HandleFunc("GET /mailbox", s.getMailbox)
 	authed.HandleFunc("POST /mailbox/send", s.postMailSend)
 	authed.HandleFunc("POST /mailbox/reply", s.postMailReply)

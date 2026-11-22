@@ -5,6 +5,14 @@
 // what is still on the phone, and remembers whether somebody asked for the
 // daylight palette.
 (function () {
+  // A phone told to use another Hearth (the connect page) goes there for sign-in. /login?local=1 stays here.
+  try {
+    var saved = localStorage.getItem("hearth.server");
+    if (saved && location.pathname === "/login" && location.search.indexOf("local=1") < 0 && saved !== location.origin) {
+      location.replace(saved + "/login");
+      return;
+    }
+  } catch (err) { /* no storage: stay here */ }
   var badge = null;
 
   // ---- the worker ---------------------------------------------------------

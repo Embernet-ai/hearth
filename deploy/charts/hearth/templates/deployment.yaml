@@ -133,6 +133,49 @@ spec:
                   name: {{ .Values.existingSecret }}
                   key: {{ .Values.secretKeys.microsoftClientSecret }}
             {{- end }}
+            {{- with .Values.marketing }}
+            {{- if .url }}
+            # Marketing: the email marketing app's API client. The address is plain; the pair is secret.
+            - name: HEARTH_MARKETING_URL
+              value: {{ .url | quote }}
+            - name: HEARTH_MARKETING_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secret | default $.Values.existingSecret }}
+                  key: {{ .clientIDKey | default $.Values.secretKeys.marketingClientID }}
+            - name: HEARTH_MARKETING_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secret | default $.Values.existingSecret }}
+                  key: {{ .clientSecretKey | default $.Values.secretKeys.marketingClientSecret }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.forms }}
+            {{- if .url }}
+            - name: HEARTH_FORMS_URL
+              value: {{ .url | quote }}
+            - name: HEARTH_FORMS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secret | default $.Values.existingSecret }}
+                  key: {{ .apiKeyKey | default $.Values.secretKeys.formsAPIKey }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.social }}
+            {{- if .url }}
+            - name: HEARTH_SOCIAL_URL
+              value: {{ .url | quote }}
+            - name: HEARTH_SOCIAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secret | default $.Values.existingSecret }}
+                  key: {{ .apiKeyKey | default $.Values.secretKeys.socialAPIKey }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.tools }}
+            - name: HEARTH_TOOLS
+              value: {{ .Values.tools | toJson | quote }}
+            {{- end }}
             {{- if .Values.connectors.interval }}
             - name: HEARTH_CONNECTORS_INTERVAL
               value: {{ .Values.connectors.interval | quote }}

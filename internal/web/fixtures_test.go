@@ -30,9 +30,13 @@ import (
 	"github.com/Embernet-ai/hearth/internal/crm/csvimport"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
 	"github.com/Embernet-ai/hearth/internal/docs"
+	"github.com/Embernet-ai/hearth/internal/forms"
+	"github.com/Embernet-ai/hearth/internal/mautic"
 	"github.com/Embernet-ai/hearth/internal/plant"
+	"github.com/Embernet-ai/hearth/internal/social"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 	"github.com/Embernet-ai/hearth/internal/timeoff"
+	"github.com/Embernet-ai/hearth/internal/tools"
 )
 
 var updateFixtures = flag.Bool("update-fixtures", false, "write ui/src/views/fixtures")
@@ -174,6 +178,38 @@ func fixtures() map[string]page {
 			Labels: []string{"Quotes"},
 			Open:   &connect.Message{ID: "m1", Subject: "Quote 118", From: "priya@acme.test", To: []string{"dana@example.com"}, Body: "Hi Dana, the quote.", Attached: []string{"quote-118.pdf"}}}},
 		"mailbox-none": {Title: "Mailbox", Mailbox: &MailboxView{}},
+
+		"marketing-off": {Title: "Marketing", Marketing: &MarketingView{Tab: "emails"}},
+		"marketing-emails": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "emails",
+			Emails:   []mautic.Email{{ID: 1, Name: "Spring offer", Subject: "Spring is here", Type: "list", Published: true, Sent: 120, Read: 48}, {ID: 2, Name: "Welcome", Subject: "Welcome", Type: "template"}},
+			Segments: []mautic.Segment{{ID: 3, Name: "Customers", Contacts: 40}}}},
+		"marketing-email-edit": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "emails",
+			Email:    &mautic.Email{ID: 1, Name: "Spring offer", Subject: "Spring is here", Type: "list", HTML: "<p>Hi</p>", Segments: []int64{3}},
+			Segments: []mautic.Segment{{ID: 3, Name: "Customers"}}}},
+		"marketing-campaigns": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "campaigns",
+			Campaigns: []mautic.Campaign{{ID: 5, Name: "Onboarding", Description: "First week", Published: true, Contacts: 12}}}},
+		"marketing-campaign-new": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "campaigns", New: true,
+			Emails: []mautic.Email{{ID: 2, Name: "Welcome"}}, Segments: []mautic.Segment{{ID: 3, Name: "Customers"}}}},
+		"marketing-segments": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "segments",
+			Segments: []mautic.Segment{{ID: 3, Name: "Customers", Description: "Paying", Contacts: 40}}}},
+		"forms-off": {Title: "Forms", FormsArea: &FormsView{}},
+		"forms-list": {Title: "Forms", FormsArea: &FormsView{Configured: true, Forms: []FormRow{
+			{Form: forms.Form{ID: "f1", Name: "Feedback", Status: forms.InProgress, Questions: []forms.Question{{ID: "q1", Type: "openText", Headline: "Anything else?"}}}, Label: "Live"},
+			{Form: forms.Form{ID: "f2", Name: "Event", Status: forms.Draft}, Label: "Scheduled", PublishDate: "2026-12-01"}}}},
+		"forms-edit": {Title: "Forms", FormsArea: &FormsView{Configured: true,
+			Form:      &FormRow{Form: forms.Form{ID: "f1", Name: "Feedback", Status: forms.InProgress}, Label: "Live", PublishDate: "2026-12-01"},
+			Questions: "[text] Anything else?"}},
+		"forms-results": {Title: "Forms", FormsArea: &FormsView{Configured: true,
+			Form:     &FormRow{Form: forms.Form{ID: "f1", Name: "Feedback"}, Label: "Live"},
+			Results:  &forms.Results{Total: 2, Finished: 1, Responses: []forms.Response{{ID: "r1", Created: "2026-11-20T10:00:00Z", Finished: true, Answers: map[string]any{"q1": "Great"}}}},
+			Headings: map[string]string{"q1": "Anything else?"}, Order: []string{"q1"}}},
+		"social-off":  {Title: "Social", SocialArea: &SocialView{}},
+		"social-none": {Title: "Social", SocialArea: &SocialView{Configured: true}},
+		"social-posts": {Title: "Social", SocialArea: &SocialView{Configured: true,
+			Channels: []social.Channel{{ID: "c1", Name: "Fireball", Kind: "linkedin"}},
+			Posts:    []social.Post{{ID: "p1", Content: "Hello", PublishDate: "2026-11-22T10:00:00Z", State: "QUEUE"}}}},
+		"tools-list": {Title: "Tools", ToolsOn: true, ToolsList: &ToolsView{Tools: []tools.Tool{{Name: "Ops", Description: "Orders and invoices", Href: "https://ops.example"}, {Name: "Vord", Description: "Your account", Href: "https://vord.example", Note: "Sign in with Vord"}}}},
+		"tools-none": {Title: "Tools", ToolsList: &ToolsView{}},
 
 		"person-everything":   everything,
 		"person-not-admin":    notAdmin,

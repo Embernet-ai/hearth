@@ -36,6 +36,7 @@
       {#if pg.Next}<input type="hidden" name="next" value={pg.Next} />{/if}
       <button type="submit" class="primary" disabled={busy}>Sign in</button>
     </form>
+    <p class="muted small"><a href="/connect">Use a different Hearth server</a></p>
     <p class="muted small">
       Local accounts keep working whether or not single sign-on is configured, so an identity provider being down is not a locked door.
     </p>

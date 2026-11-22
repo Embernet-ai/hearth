@@ -155,6 +155,10 @@ secretKeys:
   googleClientSecret: GOOGLE_CLIENT_SECRET
   microsoftClientID: MICROSOFT_CLIENT_ID
   microsoftClientSecret: MICROSOFT_CLIENT_SECRET
+  marketingClientID: MARKETING_CLIENT_ID
+  marketingClientSecret: MARKETING_CLIENT_SECRET
+  formsAPIKey: FORMS_API_KEY
+  socialAPIKey: SOCIAL_API_KEY
 
 # ─── Bring your own Postgres ───────────────────────────────────────────────────
 # Set postgresql.enabled to false and say where yours is. Either give the pieces
@@ -717,3 +721,26 @@ dashboardIntegration:
   guiPort: ""
   displayName: Hearth
   launchUrl: https://hearth.example.com
+
+# The Marketing, Forms and Social areas call the apps you already run. Each area is in the rail on every install and says
+# what to set when its address is empty. Give the address of the app, and the key or client in the existing secret
+# (secretKeys above), and the area works with that app's records, reading and writing.
+# Each area can name its own Secret (secret) and the keys in it (clientIDKey, clientSecretKey or apiKeyKey); left empty it
+# reads existingSecret and the secretKeys above.
+marketing:
+  url: ""   # the email marketing app, for example https://marketing.example.com
+  secret: ""
+  clientIDKey: ""
+  clientSecretKey: ""
+forms:
+  url: ""   # the forms app, for example https://forms.example.com
+  secret: ""
+  apiKeyKey: ""
+social:
+  url: ""   # the social publishing app's public API, for example https://social.example.com
+  secret: ""
+  apiKeyKey: ""
+
+# The Tools section: a card for each app a company runs, each linking to the live service. A list of
+# {name, description, href, note}. Empty hides the section.
+tools: []
