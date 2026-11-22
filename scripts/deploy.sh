@@ -12,7 +12,7 @@ set -euo pipefail
 
 NS="${1:-hearth}"
 RELEASE="${HEARTH_RELEASE:-hearth}"
-REPO="${HEARTH_IMAGE_REPO:-ghcr.io/embernet-ai/hearth}"
+REPO="${HEARTH_IMAGE_REPO:-ghcr.io/embernet-ai/hearth-community}"
 
 cd "$(dirname "$0")/.."
 

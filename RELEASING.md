@@ -91,7 +91,7 @@ repeat it.
 gh run watch $(gh run list --workflow=publish.yml --limit 1 --json databaseId -q '.[0].databaseId')
 ```
 
-`publish.yml` builds on a `v*` tag and publishes two names for the same image, the
+`publish.yml` builds on a `v*` tag and publishes `ghcr.io/embernet-ai/hearth-community` under two names for the same image, the
 version and `sha-<short>`, so a values file pinned to either keeps resolving. There
 is no `:latest` and there is never going to be one.
 

@@ -1,13 +1,21 @@
 name: Image build
 
 # Builds the container image with Podman, from the Containerfile, on every push to main and
-# every release tag, and checks the binaries in it. It does not push.
+# every release tag, and checks the binaries in it. A push to main only builds, to catch a broken
+# Containerfile or a binary that will not link on the commit that caused it.
 #
-# Pushing happens in the relay (relay.yml in Embernet-ai/hearth-original), which builds this
-# repository's tagged source into ghcr.io/embernet-ai/hearth:X.Y.Z. The package was created
-# before this repository existed and only its own linked repository's token may write it, so
-# a push from here is refused. Building here still catches a broken Containerfile or a binary
-# that will not link on the commit that caused it, instead of at release.
+# A release tag (v*) also publishes the image to ghcr.io/embernet-ai/hearth-community:X.Y.Z, plus
+# :sha-<short>, and :stable when the tag is the newest release. This is the image a self-hoster
+# pulls, and it needs no pull secret. It is built from this public repository's code, with the
+# run's own GITHUB_TOKEN (packages: write) and the source label pointing here, so GitHub creates
+# the package linked to this public repository and it comes out public (proved 2026-11-22 with a
+# throwaway package; GitHub's docs say a first publish is private, and that is not what happened
+# for a public repository). The last step reads it back with no credentials and fails the release
+# if the package is not anonymously pullable.
+#
+# The private image ghcr.io/embernet-ai/hearth is separate. It is built from the private tree
+# (the Fireball Hub module) by relay.yml in Embernet-ai/hearth-original and is what our own
+# cluster runs. Nothing here writes it.
 #
 # No :latest, ever: a moving tag leaves the Deployment spec unchanged between deploys, so
 # Kubernetes has no reason to act and the pod keeps serving old code.
@@ -19,6 +27,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: image-build-${{ github.ref }}
@@ -29,6 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: a release tag matches the chart and the platforms file
         if: startsWith(github.ref, 'refs/tags/v')
@@ -55,3 +66,35 @@ jobs:
           podman cp probe:/usr/local/bin/hearthctl /tmp/hearthctl
           test -x /tmp/hearth && test -x /tmp/hearthctl
           echo "binaries ok"; ls -lh /tmp/hearth /tmp/hearthctl
+
+      - name: publish the public image
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          IMAGE: ghcr.io/embernet-ai/hearth-community
+        run: |
+          set -euo pipefail
+          v="${GITHUB_REF_NAME#v}"
+          short="${GITHUB_SHA::7}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          tags=("$v" "sha-$short")
+          newest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V | tail -n1)
+          [ "$newest" = "$v" ] && tags+=(stable)
+          for t in "${tags[@]}"; do
+            podman tag hearth-build:test "$IMAGE:$t"
+            podman push "$IMAGE:$t"
+          done
+          echo "published $IMAGE: ${tags[*]}"
+
+      - name: the image pulls with no credentials
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          IMAGE: ghcr.io/embernet-ai/hearth-community
+        run: |
+          set -euo pipefail
+          v="${GITHUB_REF_NAME#v}"
+          tok=$(curl -fsS "https://ghcr.io/token?service=ghcr.io&scope=repository:embernet-ai/hearth-community:pull" | jq -r .token)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -I -H "Authorization: Bearer $tok" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/embernet-ai/hearth-community/manifests/$v")
+          [ "$code" = 200 ] || { echo "::error::anonymous read of $IMAGE:$v returned $code, so the package is not public"; exit 1; }
+          echo "anonymous read of $IMAGE:$v ok"

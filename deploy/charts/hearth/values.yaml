@@ -16,9 +16,8 @@
 #     OIDC_CLIENT_SECRET. A chart that generates its own credentials either
 #     rotates them on every apply, breaking every session, or needs a guard that
 #     silently does nothing.
-#   - A ghcr pull secret, because the image is a private package. On this cluster
-#     kubernetes-replicator already copies ghcr-pat and ghcr-secret into every
-#     namespace, so usually there is nothing to do.
+#   - Nothing for the image: ghcr.io/embernet-ai/hearth-community is public, so
+#     no pull secret is needed.
 # ──────────────────────────────────────────────────────────────────────────────
 
 nameOverride: ""
@@ -30,10 +29,10 @@ fullnameOverride: ""
 # has no reason to do anything, and the pod keeps serving old code while every
 # probe reports healthy. That failure is completely silent and has happened once.
 image:
-  repository: ghcr.io/embernet-ai/hearth
+  repository: ghcr.io/embernet-ai/hearth-community
   tag: "2.23.2"
   pullPolicy: Always
-  # The ghcr.io image is a private package, so a pull secret with read access to it is needed (an anonymous pull is refused). Also used for a private mirror.
+  # Not needed for the default image, which is public. Set it only if you pull from a private mirror.
   pullSecrets: []
 
 replicaCount: 1

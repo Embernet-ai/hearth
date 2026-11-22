@@ -231,6 +231,7 @@ cd deploy/quadlet
 ```
 
 Hearth, Postgres 17 and Garage, each a rootless systemd user service, all updating themselves from their registry.
+Hearth's image is `ghcr.io/embernet-ai/hearth-community`, public, so no login or pull secret is needed.
 Needs Podman 5+, systemd, curl and openssl. Run it again and it keeps every secret and volume it already made. It
 doesn't rotate your passwords on a whim like some kind of SaaS.
 
@@ -240,7 +241,7 @@ doesn't rotate your passwords on a whim like some kind of SaaS.
 helm upgrade --install hearth deploy/charts/hearth -n hearth --create-namespace
 ```
 
-Postgres, OpenSearch and Garage come along for the ride. Read the header of
+The chart pulls the public image `ghcr.io/embernet-ai/hearth-community` with no pull secret. Postgres, OpenSearch and Garage come along for the ride. Read the header of
 [`values.yaml`](deploy/charts/hearth/values.yaml) first for the Secret it expects (Postgres, S3 and OIDC credentials).
 The chart doesn't generate its own credentials, because a chart that does either rotates them on every apply and kicks
 everyone out, or needs a guard that silently does nothing. I've been that guy. Never again.
