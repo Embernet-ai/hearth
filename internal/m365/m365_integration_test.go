@@ -810,3 +810,17 @@ func TestFilesAreUploadedReplacedRenamedMovedMadeAndDeletedAtMicrosoft(t *testin
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
+
+// A message with no Cc and no Bcc must not carry them as null: Graph answers 400 "A null value was found for the
+// property named 'ccRecipients'", found against a real tenant on 2026-11-21.
+func TestAMessageWithNoCcOrBccSendsNoNullLists(t *testing.T) {
+	f := setup(t)
+	f.connect(t)
+	if err := f.session(t).Mail().Send(context.Background(), connect.Outgoing{To: []string{"a@b.test"}, Subject: "x", Body: "y"}); err != nil {
+		t.Fatal(err)
+	}
+	body := f.fake.last().body
+	if strings.Contains(body, "null") || strings.Contains(body, "ccRecipients") || strings.Contains(body, "bccRecipients") {
+		t.Errorf("body %s carries a null or an empty optional recipient list", body)
+	}
+}
