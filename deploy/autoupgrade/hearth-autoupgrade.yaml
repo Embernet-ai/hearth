@@ -137,7 +137,8 @@ data:
     fi
 
     # The chart can land before its image does. Upgrading to a tag that is not there takes Hearth down, so wait for it.
-    # The image is a private package, so the pull credential mounted at /pull (secret `ghcr`) is what reads its tag list.
+    # The image is public and its tags read anonymously. A pull credential is used when one is mounted at /pull (secret `ghcr`),
+    # so a box that already has one, or a private mirror, works the same way.
     reg=${IMAGE_REPO%%/*}; path=${IMAGE_REPO#*/}
     auth=()
     if [ -f /pull/.dockerconfigjson ]; then

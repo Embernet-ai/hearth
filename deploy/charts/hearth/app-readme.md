@@ -18,7 +18,7 @@ breaking every session, or needs a guard that silently does nothing.
       --from-literal=S3_SECRET_KEY="$(openssl rand -hex 24)" \
       --from-literal=OIDC_CLIENT_SECRET="<from the app registration>"
 
-The image is a private package on ghcr.io today (an anonymous pull is refused with 401, checked 2026-11-22), so a cluster needs a pull secret with read access to it: set `image.pullSecrets`.
+The image is public on ghcr.io, so no pull secret is needed. `image.pullSecrets` stays available for a private mirror, or for a cluster that already uses one.
 
 ## TLS
 

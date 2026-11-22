@@ -16,9 +16,8 @@
 #     OIDC_CLIENT_SECRET. A chart that generates its own credentials either
 #     rotates them on every apply, breaking every session, or needs a guard that
 #     silently does nothing.
-#   - A ghcr pull secret, because the image is a private package. On this cluster
-#     kubernetes-replicator already copies ghcr-pat and ghcr-secret into every
-#     namespace, so usually there is nothing to do.
+#   - A ghcr pull secret is optional: the image is public, so nothing is needed to pull it. A cluster
+#     that already has one (Fireball's copies ghcr-secret into every namespace) can keep using it.
 # ──────────────────────────────────────────────────────────────────────────────
 
 nameOverride: ""
@@ -33,7 +32,7 @@ image:
   repository: ghcr.io/embernet-ai/hearth
   tag: "2.23.1"
   pullPolicy: Always
-  # The ghcr.io image is a private package, so a pull secret with read access to it is needed (an anonymous pull is refused). Also used for a private mirror.
+  # Optional. The ghcr.io image is public and pulls anonymously. Name a pull secret here only for a private mirror, or to keep using one you already have.
   pullSecrets: []
 
 replicaCount: 1
