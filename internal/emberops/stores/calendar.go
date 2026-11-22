@@ -84,6 +84,12 @@ func (s *Calendar) Create(ctx context.Context, orgID, actorID string, p calendar
 func (s *Calendar) Delete(ctx context.Context, orgID, actorID, id string) error {
 	err := s.C.DeleteByHearthID(ctx, "Event", id)
 	if errors.Is(err, emberops.ErrNotFound) || isForbidden(err) {
+		// Not an EmberOPS event: it may be one a connector brought into Hearth's own table.
+		if s.Store != nil {
+			if perr := s.Store.Delete(ctx, orgID, actorID, id); perr == nil {
+				return nil
+			}
+		}
 		return calendar.ErrNotFound
 	}
 	return err
@@ -177,10 +183,11 @@ func (s *Calendar) Between(ctx context.Context, orgID, principalID string, from,
 		}
 	}
 
-	// Google events are cached in Hearth.
+	// Google events are cached in Hearth, and so are the events the Microsoft 365 and Google Workspace connectors bring in
+	// (ConnectEvents), which Hearth keeps in its own table.
 	if all, err := s.PG.Between(ctx, orgID, principalID, from, to); err == nil {
 		for _, e := range all {
-			if e.Kind == calendar.KindGoogle {
+			if e.Kind == calendar.KindGoogle || e.Kind == calendar.KindEvent {
 				out = append(out, e)
 			}
 		}

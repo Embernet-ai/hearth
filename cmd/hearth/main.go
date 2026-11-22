@@ -393,10 +393,12 @@ func run() error {
 	// the same search, which is why this line is the whole wiring.
 	crmSvc := crm.New(pools.Web, azSvc)
 
-	// The Microsoft 365 and Google Workspace connectors. They write to Hearth's own tables, so they run only on
-	// the standalone back end; with EmberOPS holding the records there is nothing here for them to write to.
+	// The Microsoft 365 and Google Workspace connectors. On the standalone back end they write to Hearth's own tables. With
+	// EmberOPS holding the records they still run: the calendar sync reads and sends the events a person makes in Hearth from
+	// EmberOPS and keeps what a provider brings in in Hearth's own table, which the calendar already reads; contacts use Hearth's
+	// CRM while it holds the people; and the connectors that need records EmberOPS owns say they are not available here.
 	var connectSvc *connect.Service
-	if ops == nil && (googleSvc != nil || msSvc != nil) {
+	if googleSvc != nil || msSvc != nil {
 		var backends []connect.Backend
 		if googleSvc != nil {
 			backends = append(backends, googleSvc)
@@ -404,7 +406,17 @@ func run() error {
 		if msSvc != nil {
 			backends = append(backends, msSvc)
 		}
-		connectSvc = connect.New(connect.Deps{DB: pools.Web, Authz: azSvc, CRM: crmSvc, Docs: docsSvc, Files: filesSvc, Log: log}, backends...)
+		deps := connect.Deps{DB: pools.Web, Authz: azSvc, CRM: crmSvc, Docs: docsSvc, Files: filesSvc, Log: log}
+		if ops != nil {
+			deps.Events = &stores.ConnectEvents{EventStore: connect.NewPGEvents(pools.Web), Base: stores.Base{C: ops, Loc: cfg.EmberOPSTimezone}, Dir: stores.Directory{C: ops}}
+			deps.Unavailable = map[connect.Kind]string{
+				connect.Files: "On this installation documents are kept in EmberOps, so there is nothing in Hearth to attach cloud files to.",
+			}
+			if cfg.EmberOPSCRMParties == "emberops" {
+				deps.Unavailable[connect.Contacts] = "On this installation customers, suppliers and contacts are kept in EmberOps, not in Hearth."
+			}
+		}
+		connectSvc = connect.New(deps, backends...)
 		var next interface {
 			Notify(context.Context, push.Message)
 		}

@@ -63,6 +63,8 @@ type ConnectorView struct {
 	// Covered is whether the signed-in person's grant already covers it.
 	Covered bool
 	LastOK  *time.Time
+	// Unavailable is why this connector cannot run on this installation, or empty when it can.
+	Unavailable string
 }
 
 // MineView is the signed-in person's connection.
@@ -154,7 +156,7 @@ func (s *Server) getConnectors(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, k := range connect.Kinds {
 			st := settings[p][k]
-			cv := ConnectorView{Key: string(k), Label: k.Label(), Describes: connectorText[k], Enabled: st.Enabled, MeetLinks: st.MeetLinks}
+			cv := ConnectorView{Key: string(k), Label: k.Label(), Describes: connectorText[k], Enabled: st.Enabled && s.connect.UnavailableReason(k) == "", MeetLinks: st.MeetLinks, Unavailable: s.connect.UnavailableReason(k)}
 			if b != nil {
 				cv.Covered = k == connect.Chat || connect.HasScopes(granted, b.Scopes(k))
 			}

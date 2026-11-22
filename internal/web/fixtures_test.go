@@ -41,6 +41,19 @@ import (
 
 var updateFixtures = flag.Bool("update-fixtures", false, "write ui/src/views/fixtures")
 
+// connectorsEmberOps is the Connectors page of an installation whose records are in EmberOps: Files has no home there.
+func connectorsEmberOps() *ConnectorsView {
+	v := connectorsFixture(true)
+	for i := range v.Providers {
+		if v.Providers[i].Key != "microsoft" {
+			continue
+		}
+		v.Providers[i].Connectors = append(v.Providers[i].Connectors, ConnectorView{Key: "files", Label: "Files", Describes: "Browse and change files.",
+			Unavailable: "On this installation documents are kept in EmberOps, so there is nothing in Hearth to attach cloud files to."})
+	}
+	return v
+}
+
 // connectorsFixture is the Connectors page for an administrator or an ordinary member: Microsoft 365 set up, with
 // the calendar on and the person connected, and Google Workspace not set up on this installation.
 func connectorsFixture(admin bool) *ConnectorsView {
@@ -156,8 +169,9 @@ func fixtures() map[string]page {
 		"settings-owner":      {Title: "Settings", IsAdmin: true},
 		"settings-connectors": {Title: "Settings", ConnectorsOn: true},
 
-		"connectors-admin":  {Title: "Connectors", Connectors: connectorsFixture(true)},
-		"connectors-member": {Title: "Connectors", Connectors: connectorsFixture(false)},
+		"connectors-admin":    {Title: "Connectors", Connectors: connectorsFixture(true)},
+		"connectors-member":   {Title: "Connectors", Connectors: connectorsFixture(false)},
+		"connectors-emberops": {Title: "Connectors", Connectors: connectorsEmberOps()},
 		"cloud-browse": {Title: "Cloud files", Cloud: &CloudView{
 			Providers: []CloudProvider{{Key: "microsoft", Label: "Microsoft 365"}}, Provider: "microsoft", Label: "Microsoft 365",
 			Drives: []connect.Drive{{ID: "d1", Name: "OneDrive", Kind: "personal"}}, DriveID: "d1",

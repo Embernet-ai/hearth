@@ -44,8 +44,8 @@
             <li  data-connector={c.Key}>
               <div  class="row">
                 <strong>{c.Label}</strong>
-                <span  class="muted small">{c.Enabled ? 'On' : 'Off'}</span>
-                {#if dot?.Connectors?.Admin}
+                <span  class="muted small">{c.Unavailable ? 'Not available' : c.Enabled ? 'On' : 'Off'}</span>
+                {#if dot?.Connectors?.Admin && !c.Unavailable}
                   {#if c.Enabled}
                     {#if c.Key === 'calendar'}
                       <form  method="post"  action="/settings/connectors/toggle"  class="inline row">
@@ -73,6 +73,7 @@
                 {/if}
               </div>
               <p  class="muted small">{c.Describes}</p>
+              {#if c.Unavailable}<p  class="muted small"  data-unavailable>{c.Unavailable}</p>{/if}
               {#if dot?.Connectors?.Admin && c.Enabled}
                 <p  class="muted small">
                   {c.Connections} connected{#if c.Failing}, <span  class="err">{c.Failing} failing</span>{/if}

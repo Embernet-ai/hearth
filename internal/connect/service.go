@@ -25,6 +25,8 @@ type Service struct {
 	crm      crm.Store
 	docs     *docs.Service
 	files    *files.Service
+	events   EventStore
+	off      map[Kind]string
 	log      *slog.Logger
 	backends map[Provider]Backend
 	now      func() time.Time
@@ -38,11 +40,19 @@ type Deps struct {
 	Docs  *docs.Service
 	Files *files.Service
 	Log   *slog.Logger
+	// Events is where the calendar sync keeps Hearth's events. Empty means Hearth's own calendar_events table.
+	Events EventStore
+	// Unavailable names the connectors this installation cannot run and why, for example Files when the documents live in
+	// EmberOPS. They show on the page with the reason, cannot be switched on, and are never synced.
+	Unavailable map[Kind]string
 }
 
 func New(d Deps, backends ...Backend) *Service {
-	s := &Service{db: d.DB, authz: d.Authz, crm: d.CRM, docs: d.Docs, files: d.Files, log: d.Log,
+	s := &Service{db: d.DB, authz: d.Authz, crm: d.CRM, docs: d.Docs, files: d.Files, log: d.Log, events: d.Events, off: d.Unavailable,
 		backends: map[Provider]Backend{}, now: time.Now}
+	if s.events == nil {
+		s.events = NewPGEvents(d.DB)
+	}
 	if s.log == nil {
 		s.log = slog.Default()
 	}
@@ -197,6 +207,9 @@ func (s *Service) Enabled(ctx context.Context, orgID string, p Provider, k Kind)
 // reads as if it worked.
 func (s *Service) SetEnabled(ctx context.Context, orgID, actorID string, p Provider, k Kind, on, meetLinks bool) error {
 	if on {
+		if why := s.UnavailableReason(k); why != "" {
+			return fmt.Errorf("%s is not available here: %s", k.Label(), why)
+		}
 		if s.Backend(p) == nil {
 			return fmt.Errorf("%s is not set up on this installation", p.Label())
 		}
@@ -366,3 +379,6 @@ func (s *Service) connected(ctx context.Context, p Provider) ([]Conn, error) {
 	}
 	return all, nil
 }
+
+// UnavailableReason says why a connector cannot run on this installation, or "" when it can.
+func (s *Service) UnavailableReason(k Kind) string { return s.off[k] }

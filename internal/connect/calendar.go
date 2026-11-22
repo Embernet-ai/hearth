@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -93,27 +92,9 @@ func fromRemote(r Event) (start, end time.Time, place string) {
 	return start, end, place
 }
 
+// loadEvent reads a Hearth event as the sync needs it, from wherever this installation keeps events.
 func (s *Service) loadEvent(ctx context.Context, orgID, id string) (*localEvent, error) {
-	e := &localEvent{ID: id}
-	var space, person *string
-	err := s.db.QueryRow(ctx, `
-		SELECT title, notes, location, starts_at, ends_at, all_day, principal_id::text, space_id::text
-		  FROM calendar_events WHERE org_id = $1 AND id = $2`, orgID, id).
-		Scan(&e.Title, &e.Notes, &e.Place, &e.Start, &e.End, &e.AllDay, &person, &space)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("connect: read event: %w", err)
-	}
-	e.Start, e.End = e.Start.UTC(), e.End.UTC()
-	if space != nil {
-		e.Space = *space
-	}
-	if person != nil {
-		e.Personal = *person
-	}
-	return e, nil
+	return s.events.Load(ctx, orgID, id)
 }
 
 type calLink struct {
@@ -280,7 +261,7 @@ func (s *Service) syncOneCalendar(ctx context.Context, orgID, principalID string
 			return changed, err
 		}
 		if le != nil && !le.Start.Before(from) && le.Start.Before(to) {
-			if _, err := s.db.Exec(ctx, `DELETE FROM calendar_events WHERE org_id=$1 AND id=$2`, orgID, l.entityID); err != nil {
+			if err := s.events.Delete(ctx, orgID, l.entityID); err != nil {
 				return changed, fmt.Errorf("connect: delete event: %w", err)
 			}
 			changed++
@@ -318,37 +299,32 @@ func likePrefix(id string) string {
 // unlinkedLocal finds Hearth events that have never been sent anywhere. For a person's own calendar that is what
 // they created; for a department's calendar it is everything in the department.
 func (s *Service) unlinkedLocal(ctx context.Context, orgID, principalID string, t calendarTarget, from, to time.Time) ([]localEvent, error) {
-	var q string
-	var args []any
-	if t.space == "" {
-		q = `SELECT e.id::text FROM calendar_events e
-		      WHERE e.org_id=$1 AND e.principal_id=$2 AND e.created_by=$2
-		        AND e.starts_at >= $3 AND e.starts_at < $4
-		        AND NOT EXISTS (SELECT 1 FROM connector_links l WHERE l.entity_type='event' AND l.entity_id=e.id)`
-		args = []any{orgID, principalID, from, to}
-	} else {
-		q = `SELECT e.id::text FROM calendar_events e
-		      WHERE e.org_id=$1 AND e.space_id=$2::uuid
-		        AND e.starts_at >= $3 AND e.starts_at < $4
-		        AND NOT EXISTS (SELECT 1 FROM connector_links l WHERE l.entity_type='event' AND l.entity_id=e.id)`
-		args = []any{orgID, t.space, from, to}
-	}
-	rows, err := s.db.Query(ctx, q, args...)
+	ids, err := s.events.Candidates(ctx, orgID, principalID, t.space, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("connect: find new events: %w", err)
 	}
-	var ids []string
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	linked := map[string]bool{}
+	rows, err := s.db.Query(ctx, `SELECT entity_id::text FROM connector_links WHERE entity_type='event' AND entity_id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("connect: find new events: %w", err)
+	}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		ids = append(ids, id)
+		linked[id] = true
 	}
 	rows.Close()
 	var out []localEvent
 	for _, id := range ids {
+		if linked[id] {
+			continue
+		}
 		le, err := s.loadEvent(ctx, orgID, id)
 		if err != nil {
 			return nil, err
@@ -366,18 +342,8 @@ func (s *Service) createLocal(ctx context.Context, orgID, principalID string, p 
 	if title == "" {
 		title = "(no title)"
 	}
-	id := uuid.NewString()
-	var person, space any
-	if t.space == "" {
-		person = principalID
-	} else {
-		space = t.space
-	}
-	if _, err := s.db.Exec(ctx, `
-		INSERT INTO calendar_events (id, org_id, principal_id, space_id, title, notes, location,
-		                             starts_at, ends_at, all_day, created_by)
-		VALUES ($1,$2,$3::uuid,$4::uuid,$5,$6,$7,$8,$9,$10,$11)`,
-		id, orgID, person, space, title, r.Notes, place, start, end, r.AllDay, principalID); err != nil {
+	id, err := s.events.Create(ctx, orgID, principalID, t.space, localEvent{Title: title, Notes: r.Notes, Place: place, Start: start, End: end, AllDay: r.AllDay})
+	if err != nil {
 		return fmt.Errorf("connect: create event: %w", err)
 	}
 	le, err := s.loadEvent(ctx, orgID, id)
@@ -393,11 +359,7 @@ func (s *Service) updateLocal(ctx context.Context, orgID, principalID string, p 
 	if title == "" {
 		title = "(no title)"
 	}
-	if _, err := s.db.Exec(ctx, `
-		UPDATE calendar_events SET title=$3, notes=$4, location=$5, starts_at=$6, ends_at=$7,
-		       all_day=$8, updated_at=now()
-		 WHERE org_id=$1 AND id=$2`,
-		orgID, id, title, r.Notes, place, start, end, r.AllDay); err != nil {
+	if err := s.events.Update(ctx, orgID, id, localEvent{Title: title, Notes: r.Notes, Place: place, Start: start, End: end, AllDay: r.AllDay}); err != nil {
 		return fmt.Errorf("connect: update event: %w", err)
 	}
 	le, err := s.loadEvent(ctx, orgID, id)
