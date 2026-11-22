@@ -141,7 +141,10 @@ func (s Security) policy() string {
 		// YouTube link on its own line renders as (markdown.go). Nothing else
 		// may be framed.
 		"frame-src https://www.youtube-nocookie.com",
-		"form-action 'self'",
+		// A form posts to this site only, with one exception: Connect my Google Workspace account and its Microsoft twin post here and
+		// are answered with a redirect to the provider's consent page. The browser checks every hop of that redirect against this
+		// directive, so the two sign-in hosts are named, and nothing else is.
+		"form-action 'self' https://accounts.google.com https://login.microsoftonline.com",
 		"script-src 'self'",
 		"style-src 'self' 'unsafe-inline'",
 		"img-src " + strings.Join(img, " "),

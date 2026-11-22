@@ -224,3 +224,17 @@ func TestTheCheckStandsDownWhenTheSiteDoesNotKnowItsOwnAddress(t *testing.T) {
 		t.Errorf("with no configured origin the check refused a write with %d", rec.Code)
 	}
 }
+
+func TestFormActionAllowsTheConsentRedirectAndNothingElse(t *testing.T) {
+	csp := testGuard().policy()
+	var got string
+	for _, d := range strings.Split(csp, "; ") {
+		if strings.HasPrefix(d, "form-action ") {
+			got = d
+		}
+	}
+	want := "form-action 'self' https://accounts.google.com https://login.microsoftonline.com"
+	if got != want {
+		t.Errorf("form-action is %q, want %q: the connect posts redirect to the provider's consent page and the browser blocks a hop this does not name", got, want)
+	}
+}
