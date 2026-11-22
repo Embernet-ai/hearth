@@ -4,6 +4,8 @@ Title
 Identity
 Build
 SSO
+SSOName
+HideLocalLogin
 Next
 Dash
 SpaceID

@@ -150,8 +150,11 @@ type Server struct {
 	relay      *jobs.Relay
 	hub        *realtime.Hub
 	oidc       *auth.OIDC
-	auth       *auth.Service
-	log        *slog.Logger
+	oidcName   string
+	// hideLocalLogin leaves the email and password form off the sign-in page.
+	hideLocalLogin bool
+	auth           *auth.Service
+	log            *slog.Logger
 
 	// searchDB reads the index bookkeeping for the operations page. The web
 	// pool, because it is a page render and belongs under its statement
@@ -235,8 +238,13 @@ type Deps struct {
 	Relay        *jobs.Relay
 	Hub          *realtime.Hub
 	OIDC         *auth.OIDC
-	NotifyDB     *pgxpool.Pool
-	WorkerOn     bool
+	// OIDCName is what the sign-in button calls the provider; HideLocalLogin takes the email and
+	// password form off the sign-in page (the one button is then the whole door). Zero values keep
+	// today's page: the form shown, the button reading "single sign-on".
+	OIDCName       string
+	HideLocalLogin bool
+	NotifyDB       *pgxpool.Pool
+	WorkerOn       bool
 	// InboundKey authenticates the estate's MTA on the one endpoint a machine
 	// talks to. Empty disables inbound mail entirely, which is the right
 	// default: a path that files anything it is sent as work is not a path to
@@ -277,6 +285,7 @@ func New(d Deps) (*Server, error) {
 		inboundKey: d.InboundKey, mailReady: d.MailReady, baseURL: d.BaseURL,
 		version: d.Version,
 		queue:   d.Queue, relay: d.Relay, hub: d.Hub, oidc: d.OIDC,
+		oidcName: d.OIDCName, hideLocalLogin: d.HideLocalLogin,
 		notifyDB: d.NotifyDB, searchDB: d.NotifyDB, workerOn: d.WorkerOn, log: d.Log,
 	}
 	return s, nil
@@ -290,6 +299,10 @@ type page struct {
 	// SSO reports whether single sign-on is configured, so the login page can
 	// offer it without the template knowing anything about the provider.
 	SSO bool
+	// SSOName is what the sign-in button calls the provider, and HideLocalLogin is whether the page
+	// leaves the email and password form off. Both are for the sign-in page only.
+	SSOName        string
+	HideLocalLogin bool
 	// Next is where to land after signing in, already filtered to a path on
 	// this site. It is what makes scanning an asset code work on a phone that
 	// signed out last week.
@@ -904,6 +917,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	p.Identity = auth.From(r.Context())
 	p.Build = buildinfo.Get()
 	p.SSO = s.oidc != nil
+	p.SSOName = s.oidcName
+	p.HideLocalLogin = s.oidc != nil && s.hideLocalLogin
 	p.Path = r.URL.Path
 	p.Version = s.version
 	p.SalesNav = s.sales != nil

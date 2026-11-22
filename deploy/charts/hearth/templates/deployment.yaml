@@ -238,6 +238,10 @@ spec:
               value: {{ .Values.oidc.allowedDomains | quote }}
             - name: HEARTH_OIDC_REQUIRED_ROLES
               value: {{ .Values.oidc.requiredRoles | default "" | quote }}
+            - name: HEARTH_OIDC_NAME
+              value: {{ .Values.oidc.name | default "" | quote }}
+            - name: HEARTH_LOCAL_LOGIN_FORM
+              value: {{ ternary "false" "true" (eq (toString .Values.oidc.localLoginForm) "false") | quote }}
             {{- if .Values.emberops.enabled }}
             - name: HEARTH_BACKEND
               value: emberops
