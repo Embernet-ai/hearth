@@ -14,7 +14,8 @@
       {#each list as t}
         <div  class="card"  data-tool={t.Name}>
           <h3>{t.Name}</h3>
-          <a  class="settinglink"  href={t.Href}  target="_blank"  rel="noopener noreferrer"><span  class="sl-title">Open {t.Name}</span><span  class="sl-note">{t.Description}</span></a>
+          <p  class="muted">{t.Description}</p>
+          <a  class="button"  href={t.Href}  target="_blank"  rel="noopener noreferrer">Open {t.Name}</a>
           {#if t.Note}<p  class="muted small">{t.Note}</p>{/if}
         </div>
       {/each}
