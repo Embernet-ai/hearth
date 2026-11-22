@@ -5,7 +5,7 @@ Requires=hearth-postgres.service hearth-garage.service
 
 [Container]
 ContainerName=hearth
-Image=ghcr.io/embernet-ai/hearth:stable
+Image=ghcr.io/embernet-ai/hearth-community:stable
 AutoUpdate=registry
 Network=hearth.network
 PublishPort=127.0.0.1:8080:8080

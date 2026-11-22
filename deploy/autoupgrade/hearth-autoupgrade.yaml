@@ -137,7 +137,7 @@ data:
     fi
 
     # The chart can land before its image does. Upgrading to a tag that is not there takes Hearth down, so wait for it.
-    # The image is a private package, so the pull credential mounted at /pull (secret `ghcr`) is what reads its tag list.
+    # Our own cluster runs the private image (IMAGE_REPO below), so the pull credential mounted at /pull (secret `ghcr`) is what reads its tag list.
     reg=${IMAGE_REPO%%/*}; path=${IMAGE_REPO#*/}
     auth=()
     if [ -f /pull/.dockerconfigjson ]; then
@@ -178,7 +178,7 @@ data:
 
     log "upgrading $RELEASE $cur -> $want"
     helm upgrade "$RELEASE" "src/$CHART" --version "$want" -n "$NS" \
-      --reset-then-reuse-values --set image.tag="$want" --wait --timeout 10m
+      --reset-then-reuse-values --set image.repository="$IMAGE_REPO" --set image.tag="$want" --wait --timeout 10m
     kubectl -n "$NS" get pod -l app.kubernetes.io/name="$CHART",app.kubernetes.io/component=app \
       -o jsonpath='{range .items[*]}{.spec.containers[0].image} {.status.phase} restarts={.status.containerStatuses[0].restartCount}{"\n"}{end}'
     log "done: $RELEASE at $want"
