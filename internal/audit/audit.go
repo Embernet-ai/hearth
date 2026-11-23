@@ -80,6 +80,8 @@ const (
 	ActionApproverSet      = "person.approver"
 	ActionTimeImport       = "time.import"
 	ActionDailyReportFile  = "daily_report.file"
+	// ActionDailyReportAppend is more text added to a report already filed for a day (hearthctl daily-report -append).
+	ActionDailyReportAppend = "daily_report.append"
 	// ActionTaskCloseWithParent is a subtask moved to a new status (done,
 	// cancelled, in progress, blocked or to do) because the task it sits under
 	// was. One entry per subtask, naming whoever changed the parent; the entry's

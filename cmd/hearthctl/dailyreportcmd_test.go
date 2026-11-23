@@ -3,15 +3,18 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/Embernet-ai/hearth/internal/authz"
+	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
 )
@@ -138,10 +141,150 @@ func TestDailyReportFilerAgainstPostgres(t *testing.T) {
 			t.Fatalf("second report (apply=%v): %v, want ErrReportExists", apply, err)
 		}
 	}
+	// -append: the afternoon goes after the morning on the same document, as the person, with the audit row.
+	ar, err := f.appendTo(ctx, reportJob{Day: "2026-10-02", Body: "and then more"}, true)
+	if err != nil || ar.DocID != id || ar.NewVersion != ar.Version+1 {
+		t.Fatalf("append = %+v %v", ar, err)
+	}
+	var body string
+	var ver int64
+	var updatedBy string
+	if err := db.QueryRow(ctx, `SELECT body, version, updated_by::text FROM documents WHERE id = $1`, id).Scan(&body, &ver, &updatedBy); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(body, "did a thing") || !strings.HasSuffix(body, "and then more\n") || ver != ar.NewVersion || updatedBy != pat {
+		t.Fatalf("after append: body %q version %d updated_by %s", body, ver, updatedBy)
+	}
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE org_id=$1 AND actor_id=$2
+		AND action='daily_report.append' AND entity_id=$3`, org, pat, id).Scan(&audits); err != nil || audits != 1 {
+		t.Fatalf("append audit rows = %d, %v", audits, err)
+	}
 	if _, _, err := f.file(ctx, reportJob{Day: "2026-11-20", Body: "tomorrow"}, true); err == nil {
 		t.Fatal("a report for a day that has not happened was filed")
 	}
 	if _, _, err := f.file(ctx, reportJob{Day: "2026-10-05", Body: "  \n"}, true); err == nil {
 		t.Fatal("an empty report was filed")
+	}
+}
+
+// memReports is a docs Store holding one report, with Update's own version rule.
+type memReports struct {
+	docs.Store
+	id, body    string
+	version     int64
+	has         bool
+	updates     int
+	lastExpects int64
+	// raceOnGet bumps the version after Get returns, the way a concurrent edit would.
+	raceOnGet bool
+}
+
+func (m *memReports) ReportOn(context.Context, string, string, string) (string, error) {
+	if !m.has {
+		return "", nil
+	}
+	return m.id, nil
+}
+func (m *memReports) Get(context.Context, string, core.Subjects, string) (*docs.Document, error) {
+	d := &docs.Document{ID: m.id, Body: m.body, Version: m.version}
+	if m.raceOnGet {
+		m.version++
+	}
+	return d, nil
+}
+func (m *memReports) Update(_ context.Context, _ string, _ core.Subjects, _ string, p docs.UpdateParams) (*docs.Document, error) {
+	if p.ExpectedVersion != 0 && p.ExpectedVersion != m.version {
+		return nil, fmt.Errorf("%w: you edited version %d, current is %d", docs.ErrConflict, p.ExpectedVersion, m.version)
+	}
+	m.updates++
+	m.lastExpects = p.ExpectedVersion
+	m.body = *p.Body
+	m.version++
+	return &docs.Document{ID: m.id, Body: m.body, Version: m.version}, nil
+}
+
+func appendFiler(m *memReports) *dailyReportFiler {
+	return &dailyReportFiler{az: personFinder{annID}, svc: m, org: "org", who: annID,
+		now: func() time.Time { return time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC) }}
+}
+
+func TestAppendKeepsTheMorningAndAddsTheAfternoon(t *testing.T) {
+	ctx := context.Background()
+	morning := "# Morning\n\nshipped a thing.\n"
+	m := &memReports{id: "d1", body: morning, version: 3, has: true}
+	f := appendFiler(m)
+
+	// A dry run says what it would do and writes nothing.
+	r, err := f.appendTo(ctx, reportJob{Day: "2026-11-22", Body: "# Afternoon\n\nshipped more.\n"}, false)
+	if err != nil || m.updates != 0 || m.body != morning {
+		t.Fatalf("dry run = %+v %v updates=%d", r, err, m.updates)
+	}
+	want := morning + "\n# Afternoon\n\nshipped more.\n"
+	if r.OldLen != len(morning) || r.NewLen != len(want) || r.AddedLen != len(want)-len(morning) || r.Version != 3 {
+		t.Fatalf("dry run lengths = %+v, want new %d", r, len(want))
+	}
+
+	r, err = f.appendTo(ctx, reportJob{Day: "2026-11-22", Body: "# Afternoon\n\nshipped more.\n"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.body != want || !strings.HasPrefix(m.body, morning) {
+		t.Fatalf("body = %q, want %q", m.body, want)
+	}
+	if m.lastExpects != 3 || r.NewVersion != 4 || m.updates != 1 {
+		t.Fatalf("expected version %d, new %d, updates %d", m.lastExpects, r.NewVersion, m.updates)
+	}
+
+	// The same text again adds nothing.
+	if _, err := f.appendTo(ctx, reportJob{Day: "2026-11-22", Body: "# Afternoon\n\nshipped more.\n"}, true); !errors.Is(err, errAlreadyAppended) || m.updates != 1 {
+		t.Fatalf("second append: %v updates=%d", err, m.updates)
+	}
+}
+
+func TestAppendSeparatorWhateverTheOldTextEndsWith(t *testing.T) {
+	for old, want := range map[string]string{"": "", "a": "\n\n", "a\n": "\n", "a\n\n": "", "a\n\n\n": ""} {
+		if got := appendSeparator(old); got != want {
+			t.Errorf("appendSeparator(%q) = %q, want %q", old, got, want)
+		}
+	}
+}
+
+func TestAppendRefusesWhatItCannotDoSafely(t *testing.T) {
+	ctx := context.Background()
+	// No report for the day: nothing to append to, and nothing is filed.
+	m := &memReports{id: "d1"}
+	if _, err := appendFiler(m).appendTo(ctx, reportJob{Day: "2026-11-22", Body: "x"}, true); err == nil || m.updates != 0 {
+		t.Fatalf("append with no report: %v", err)
+	}
+	// An empty text, and a day that has not happened.
+	m = &memReports{id: "d1", body: "a\n", version: 1, has: true}
+	f := appendFiler(m)
+	if _, err := f.appendTo(ctx, reportJob{Day: "2026-11-22", Body: " \n"}, true); err == nil {
+		t.Error("an empty append was accepted")
+	}
+	if _, err := f.appendTo(ctx, reportJob{Day: "2026-11-24", Body: "x"}, true); err == nil {
+		t.Error("an append to a day that has not happened was accepted")
+	}
+	// Someone saves between the read and the write: ErrConflict, their text kept, ours not written.
+	m = &memReports{id: "d1", body: "theirs\n", version: 5, has: true, raceOnGet: true}
+	if _, err := appendFiler(m).appendTo(ctx, reportJob{Day: "2026-11-22", Body: "mine"}, true); !errors.Is(err, docs.ErrConflict) || m.updates != 0 || m.body != "theirs\n" {
+		t.Fatalf("concurrent edit: err=%v updates=%d body=%q", err, m.updates, m.body)
+	}
+}
+
+func TestAppendReportsDryRunWritesNothingAndApplyWritesOnce(t *testing.T) {
+	ctx := context.Background()
+	m := &memReports{id: "d1", body: "morning\n", version: 1, has: true}
+	f := appendFiler(m)
+	jobs := []reportJob{{Day: "2026-11-22", Body: "afternoon\n"}}
+	if err := appendReports(ctx, f, jobs, "p@x", false); err != nil || m.updates != 0 {
+		t.Fatalf("dry run: %v updates=%d", err, m.updates)
+	}
+	if err := appendReports(ctx, f, jobs, "p@x", true); err != nil || m.updates != 1 || m.body != "morning\n\nafternoon\n" {
+		t.Fatalf("apply: %v updates=%d body=%q", err, m.updates, m.body)
+	}
+	// A rerun skips what is already in, with no error and no second write.
+	if err := appendReports(ctx, f, jobs, "p@x", true); err != nil || m.updates != 1 {
+		t.Fatalf("rerun: %v updates=%d", err, m.updates)
 	}
 }

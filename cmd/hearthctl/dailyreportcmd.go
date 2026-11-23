@@ -6,6 +6,7 @@ package main
 //	hearthctl daily-report -as EMAIL -date YYYY-MM-DD [-file PATH]     read the body from PATH, or standard input
 //	hearthctl daily-report -as EMAIL -dir DIR                          every DIR/YYYY-MM-DD.md, one report per file
 //	hearthctl daily-report ... -apply                                  write it; without -apply nothing is written
+//	hearthctl daily-report ... -append                                 the day is already filed: add the text to the end of that report
 //
 // The web form files today and the API has no day field, so a report that was
 // owed last week has no way in. This goes through the same docs.Create call the
@@ -13,6 +14,13 @@ package main
 // one-a-day rule is the database's own (ErrReportExists), the department is the
 // same DefaultReportSpace the form starts from, and the report is the person's:
 // they are its author, owner and admin, exactly as if they had filed it that day.
+//
+// -append is for a day that grew after it was filed, an afternoon written once
+// the morning's report was in. It goes through docs.Service.Update as the same
+// person, against the version it just read, so an edit made in the meantime
+// stops it with ErrConflict instead of being written over. The text already
+// there is kept exactly and the new text follows a blank line. Running it twice
+// with the same text adds nothing the second time.
 //
 // Nothing is faked. The document's created_at is when this ran, not the day it
 // is for, and every report writes a daily_report.file audit row naming the
@@ -123,6 +131,89 @@ func (f *dailyReportFiler) file(ctx context.Context, j reportJob, apply bool) (d
 	return d.ID, space, nil
 }
 
+// errAlreadyAppended says the report already holds the text being added.
+var errAlreadyAppended = errors.New("the report already holds this text")
+
+// appendSeparator is what goes between the report as it stands and the text
+// added to it: a blank line, however the old text ended.
+func appendSeparator(old string) string {
+	switch {
+	case old == "", strings.HasSuffix(old, "\n\n"):
+		return ""
+	case strings.HasSuffix(old, "\n"):
+		return "\n"
+	}
+	return "\n\n"
+}
+
+// appendResult is what an append did, or with apply false would do.
+type appendResult struct {
+	DocID      string
+	Version    int64
+	OldLen     int
+	AddedLen   int
+	NewLen     int
+	NewVersion int64
+}
+
+// appendTo adds j.Body to the end of the person's report for j.Day. With apply
+// false it reads and checks and writes nothing. The write is docs Update with
+// ExpectedVersion set to the version this read, so a concurrent edit fails with
+// docs.ErrConflict. The audit row is written after it, as file does.
+func (f *dailyReportFiler) appendTo(ctx context.Context, j reportJob, apply bool) (appendResult, error) {
+	var r appendResult
+	if _, err := parseReportDay(j.Day, f.now()); err != nil {
+		return r, err
+	}
+	add := strings.TrimSpace(j.Body)
+	if add == "" {
+		return r, fmt.Errorf("%s: the text to append is empty", j.Day)
+	}
+	id, err := f.svc.ReportOn(ctx, f.org, f.who, j.Day)
+	if err != nil {
+		return r, err
+	}
+	if id == "" {
+		return r, fmt.Errorf("%s: there is no report filed for that day to append to (leave off -append to file it)", j.Day)
+	}
+	actor, err := f.az.SubjectsFor(ctx, f.org, f.who)
+	if err != nil {
+		return r, fmt.Errorf("resolve the person's access: %w", err)
+	}
+	cur, err := f.svc.Get(ctx, f.org, actor, id)
+	if err != nil {
+		return r, fmt.Errorf("%s: read document %s: %w", j.Day, id, err)
+	}
+	r = appendResult{DocID: id, Version: cur.Version, OldLen: len(cur.Body)}
+	if strings.Contains(cur.Body, add) {
+		return r, fmt.Errorf("%s: %w (document %s)", j.Day, errAlreadyAppended, id)
+	}
+	body := cur.Body + appendSeparator(cur.Body) + add + "\n"
+	r.AddedLen, r.NewLen = len(body)-len(cur.Body), len(body)
+	if !apply {
+		return r, nil
+	}
+	d, err := f.svc.Update(ctx, f.org, actor, id, docs.UpdateParams{Body: &body, ExpectedVersion: cur.Version})
+	if err != nil {
+		return r, fmt.Errorf("%s: %w", j.Day, err)
+	}
+	if d != nil {
+		r.NewVersion = d.Version
+	}
+	if f.db == nil { // a test with no database
+		return r, nil
+	}
+	if err := audit.Record(ctx, f.db, audit.Entry{
+		OrgID: f.org, ActorID: f.who, Action: audit.ActionDailyReportAppend,
+		EntityType: "document", EntityID: id,
+		Before: map[string]any{"version": cur.Version, "length": r.OldLen},
+		After:  map[string]any{"day": j.Day, "version": r.NewVersion, "length": r.NewLen, "added": r.AddedLen, "via": "hearthctl daily-report -append"},
+	}); err != nil {
+		return r, fmt.Errorf("%s: appended to document %s but the audit row failed: %w", j.Day, id, err)
+	}
+	return r, nil
+}
+
 // readReportDir returns the reports in dir, oldest day first. A file whose name
 // is not a day is an error, so a typo does not file nothing silently.
 func readReportDir(dir string) ([]reportJob, error) {
@@ -157,6 +248,7 @@ func runDailyReport(ctx context.Context, args []string) error {
 	file := fs.String("file", "", "read the body from this file; default standard input (with -date)")
 	dir := fs.String("dir", "", "file every YYYY-MM-DD.md in this directory (instead of -date)")
 	apply := fs.Bool("apply", false, "write it. Without this nothing is written")
+	appendTo := fs.Bool("append", false, "the day's report is already filed: add the text to the end of it, as that person, instead of filing a new one")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -218,6 +310,10 @@ func runDailyReport(ctx context.Context, args []string) error {
 	}
 	f := &dailyReportFiler{db: pools.Web, az: az, svc: ds, org: orgID, who: who, now: time.Now}
 
+	if *appendTo {
+		return appendReports(ctx, f, jobs, *as, *apply)
+	}
+
 	// Check every report before the first is written, so one bad day stops the
 	// run with nothing filed rather than leaving half a month.
 	taken := 0
@@ -249,5 +345,39 @@ func runDailyReport(ctx context.Context, args []string) error {
 		}
 	}
 	fmt.Printf("%d reports filed as %s\n", filed, *as)
+	return nil
+}
+
+// appendReports is -append: every day must already have a report and the text
+// must not already be in it, checked before the first is written, so one bad
+// day stops the run with nothing changed.
+func appendReports(ctx context.Context, f *dailyReportFiler, jobs []reportJob, as string, apply bool) error {
+	var todo []reportJob
+	for _, j := range jobs {
+		r, err := f.appendTo(ctx, j, false)
+		if errors.Is(err, errAlreadyAppended) {
+			fmt.Printf("already appended, will skip: %v\n", err)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s document %s version %d: would append %d bytes to %d, resulting length %d bytes\n", j.Day, r.DocID, r.Version, r.AddedLen, r.OldLen, r.NewLen)
+		todo = append(todo, j)
+	}
+	if !apply {
+		fmt.Printf("%d reports checked as %s, %d to append to; nothing was written, add -apply\n", len(jobs), as, len(todo))
+		return nil
+	}
+	done := 0
+	for _, j := range todo {
+		r, err := f.appendTo(ctx, j, true)
+		if err != nil {
+			return fmt.Errorf("%w (appended %d before this)", err, done)
+		}
+		done++
+		fmt.Printf("appended %s document %s version %d to %d, length %d to %d bytes\n", j.Day, r.DocID, r.Version, r.NewVersion, r.OldLen, r.NewLen)
+	}
+	fmt.Printf("%d reports appended to as %s\n", done, as)
 	return nil
 }
