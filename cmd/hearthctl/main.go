@@ -137,7 +137,7 @@ func usage() {
   zoho-contacts-import -file X.xlsx -url U -owner ID [-dry-run]  add a Zoho Contacts export to the CRM through the API
   hubspot-import [-apply] [-since T]  bring what changed in HubSpot since the last import into the CRM (dry run by default)
   reassign -csv PLAN [-apply -reverse-out FILE]  put work on its assignees from a plan
-  daily-report -as EMAIL (-date D [-file F] | -dir DIR) [-apply]  file a past day's report as that person (dry run by default)
+  daily-report -as EMAIL (-date D [-file F] | -dir DIR) [-apply] [-append]  file a past day's report as that person, or add to one already filed (dry run by default)
   time-import -as EMAIL -file F.csv [-apply]  put a person's past time in as reconstructed entries, once (dry run by default)
   service-token -as ADMIN -name NAME [-team Sales] [-scope write|read] [-days N] -out FILE  make a service its own agent principal on a team with an API token (write by default, -scope read for read only)
   person-time -as ADMIN -person EMAIL [-approver EMAIL|none] [-auto-approve on|off]  set who signs off a person's time, and whether it approves itself
