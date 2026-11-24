@@ -39,16 +39,21 @@ table.list th.col-md, table.list td.col-md, table.list th.col-lg, table.list td.
 main[data-screen='dashboard'] .dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4) var(--s-5); align-items: start; }
 main[data-screen='dashboard'] .dash > * { min-width: 0; margin: 0; }
 main[data-screen='dashboard'] .dash > .notice { margin: 0; }
-main[data-screen='dashboard'] .dashcols { display: flex; flex-direction: column; gap: var(--s-5); align-items: stretch; }
-main[data-screen='dashboard'] .dashcols > * { min-width: 0; }
-main[data-screen='dashboard'] .colside, main[data-screen='dashboard'] .colwork, main[data-screen='dashboard'] .colextra { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
-main[data-screen='dashboard'] .colside h2, main[data-screen='dashboard'] .dashtime h2, main[data-screen='dashboard'] .dashfollow h2 { margin: 0 0 var(--s-2); }
-main[data-screen='dashboard'] .colwork { gap: var(--s-2); }
-main[data-screen='dashboard'] .colwork h2:not(:first-child) { margin-top: var(--s-5); }
-main[data-screen='dashboard'] .colwork table.list, main[data-screen='dashboard'] .colwork .empty { margin: 0; }
-main[data-screen='dashboard'] .colwork > p { margin: 0; }
-main[data-screen='dashboard'] .numbers { margin: 0; container-type: inline-size; }
-main[data-screen='dashboard'] .numbers .numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--s-5) var(--s-5); align-items: start; grid-auto-flow: row dense; }
+/* Everything under the week strip is one flow of blocks (the numbers groups, the lists, the calendar, my time) laid out in columns, so
+   the columns fill from the top and end together on any screen: as many as the width has room for at 22rem each, up to six. A block
+   never splits between two columns. */
+main[data-screen='dashboard'] .dashcols { display: block; columns: 28rem 5; column-gap: var(--s-5); }
+main[data-screen='dashboard'] .dashcols .numbers, main[data-screen='dashboard'] .dashcols .numgrid { display: contents; }
+main[data-screen='dashboard'] .dashcols .numbers > header { break-inside: avoid; break-after: avoid; margin: 0 0 var(--s-2); }
+main[data-screen='dashboard'] .dashcols .numgroup, main[data-screen='dashboard'] .dashcols .dashblock { break-inside: avoid; margin: 0 0 var(--s-5); min-width: 0; }
+/* A block that is a plain list may split between columns (a line never does, and its heading stays with its first line), so the
+   columns can end together instead of leaving a short one. */
+main[data-screen='dashboard'] .dashcols .dashfollow, main[data-screen='dashboard'] .dashcols .numrecent, main[data-screen='dashboard'] .dashcols .numstages, main[data-screen='dashboard'] .dashcols .dashwhatson { break-inside: auto; }
+main[data-screen='dashboard'] .dashcols li, main[data-screen='dashboard'] .dashcols tr, main[data-screen='dashboard'] .dashcols .stagebars a { break-inside: avoid; }
+main[data-screen='dashboard'] .dashcols h2, main[data-screen='dashboard'] .dashcols h3 { break-after: avoid; }
+main[data-screen='dashboard'] .dashblock h2 { margin: 0 0 var(--s-2); }
+main[data-screen='dashboard'] .dashblock table.list, main[data-screen='dashboard'] .dashblock .empty { margin: 0; }
+main[data-screen='dashboard'] .dashblock > p { margin: 0; }
 main[data-screen='dashboard'] .numbers .numgroup { min-width: 0; container-type: inline-size; }
 main[data-screen='dashboard'] .numbers .numgroup .grouptitle { margin: 0 0 var(--s-2); display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); }
 /* One even grid of tiles, sized by the width of the block they sit in, so a row is always full and no tile is wider than it needs to be:
@@ -63,10 +68,6 @@ main[data-screen='dashboard'] .numbers .stat .period { overflow-wrap: anywhere; 
   main[data-screen='dashboard'] .numbers .stats[data-n='6'], main[data-screen='dashboard'] .numbers .stats[data-n='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   main[data-screen='dashboard'] .numbers .stats[data-n='5'] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
-@container (min-width: 46rem) {
-  /* a block of six tiles, and the eight weeks, take two columns of the numbers; a block of four stays one */
-  main[data-screen='dashboard'] .numbers .numgroup:has(> .stats[data-n='6']), main[data-screen='dashboard'] .numbers .numgroup.numweeks { grid-column: span 2; }
-}
 @container (min-width: 60rem) { main[data-screen='dashboard'] .numbers .stats[data-n='6'] { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 /* Assigned to me is a list that can be long: it scrolls inside its own card instead of making the page as tall as the list. */
 main[data-screen='dashboard'] .assignedscroll { max-height: 26rem; overflow: auto; border: 1px solid var(--line); border-radius: var(--en-r-card, 12px); }
@@ -75,14 +76,6 @@ main[data-screen='dashboard'] .assignedscroll thead th { position: sticky; top: 
 main[data-screen='dashboard'] .assignedscroll td:first-child { overflow-wrap: anywhere; }
 main[data-screen='dashboard'] .dashfollow .watchlist li { display: flex; gap: var(--s-3); justify-content: space-between; align-items: baseline; }
 main[data-screen='dashboard'] .dashfollow .watchlist li .muted { white-space: nowrap; flex: none; }
-@media (min-width: 1200px) {
-  main[data-screen='dashboard'] .dashcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem); gap: var(--s-5); align-items: start; }
-}
-@media (min-width: 1800px) {
-  main[data-screen='dashboard'] .dashcols { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.5fr); }
-  main[data-screen='dashboard'] .colside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5); align-items: start; }
-  main[data-screen='dashboard'] .assignedscroll { max-height: 34rem; }
-}
 /* the week strip: Sunday to Saturday, seven days across wherever there is room, each day showing everything on it */
 main[data-screen='dashboard'] .weekhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-2); }
 main[data-screen='dashboard'] .weekhead h2, main[data-screen='dashboard'] .monthcard h2 { margin: 0; }

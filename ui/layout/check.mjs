@@ -68,9 +68,11 @@ function inspect() {
   for (const el of parts) { const p = el.parentElement; if (!byParent.has(p)) byParent.set(p, []); byParent.get(p).push(el); }
   for (const kids of byParent.values()) {
     for (let i = 0; i < kids.length; i++) for (let j = i + 1; j < kids.length; j++) {
-      const a = kids[i].getBoundingClientRect(), b = kids[j].getBoundingClientRect();
-      const w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-      if (w > 2 && h > 2) problems.push(`overlap ${Math.round(w)}x${Math.round(h)}: ${label(kids[i])} / ${label(kids[j])}`);
+      // a box split between columns is one fragment in each column, and only the fragments can overlap another box
+      for (const a of kids[i].getClientRects()) for (const b of kids[j].getClientRects()) {
+        const w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (w > 2 && h > 2) problems.push(`overlap ${Math.round(w)}x${Math.round(h)}: ${label(kids[i])} / ${label(kids[j])}`);
+      }
     }
   }
   // text that spills out of its own box

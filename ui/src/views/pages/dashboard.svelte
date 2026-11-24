@@ -66,11 +66,7 @@
   </div>
 
   <div  class="dashcols">
-    <div  class="colmain">
-      <Stats stats={dot?.Dash?.Stats} />
-    </div>
-    <div  class="colside">
-      <div  class="colwork dashwork">
+      <div  class="dashblock dashwork">
       <h2>Assigned to me</h2>
       {#if F.t(dot?.Dash?.Mine)}
         <div  class="assignedscroll"><table  class="list">
@@ -91,6 +87,52 @@
           Work assigned to you appears here, soonest first.
         </div>
       {/if}
+      </div>
+    <Stats stats={dot?.Dash?.Stats} />
+    <div  class="dashblock dashfollow">
+      <h2>Things you follow</h2>
+      {#if F.t(dot?.Dash?.Watching)}
+        <ul  class="plain watchlist">
+          {#each F.rng(dot?.Dash?.Watching) as [k9, d9]}
+            <li>
+              <a  href={("/documents/" + S(d9?.ID))}>{d9?.Title}</a>
+              <span  class="muted small">{F.date(d9?.UpdatedAt)}</span>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <div  class="empty">
+          <strong>You are not following anything</strong>
+          Follow a job to hear about it without being assigned to it.
+        </div>
+      {/if}
+    </div>
+      <div  class="dashblock monthcard">
+        {#if dot?.Dash?.Month}
+          <h2>{dot?.Dash?.Month?.Title}
+            <span  class="weeknav">
+              <a  class="chip"  href={S(dot?.Dash?.Month?.Prev)}  aria-label="Earlier month">&lsaquo;</a>
+              <a  class="chip"  href={S(dot?.Dash?.Today)}>Today</a>
+              <a  class="chip"  href={S(dot?.Dash?.Month?.Next)}  aria-label="Later month">&rsaquo;</a>
+            </span></h2>
+          <div  class="monthgrid"  role="grid"  aria-label={"Calendar for " + S(dot?.Dash?.Month?.Title)}>
+            {#each (dot?.Dash?.Month?.Names ?? []) as n}<span  class="mname"  role="columnheader">{n}</span>{/each}
+            {#each (dot?.Dash?.Month?.Weeks ?? []) as wk}
+              {#each wk as c}
+                <a  role="gridcell"  href={S(c?.Href)}  class={"mday" + S((F.t(c?.InMonth) ? "" : " other")) + S((F.t(c?.Today) ? " today" : "")) + S((F.t(c?.Selected) ? " picked" : "")) + S((F.t(c?.Weekend) ? " weekend" : ""))}
+                  title={F.t(c?.Count) ? (S(c?.Count) + " on: " + (c?.Titles ?? []).join(", ")) : "Nothing on"}
+                  aria-label={S(c?.Day) + (F.t(c?.Count) ? ", " + S(c?.Count) + " on" : "")}>
+                  <span  class="mnum">{c?.Day}</span>
+                  {#if F.t(c?.Count)}<span  class="mdots">{#each Array(Math.min(c?.Count, 3)) as _}<i></i>{/each}</span>{/if}
+                </a>
+              {/each}
+            {/each}
+          </div>
+          <p  class="muted small mfoot"><a  href={("/calendar")}>Open the calendar</a> to add or change events.</p>
+        {/if}
+      </div>
+
+      <div  class="dashblock dashwhatson">
       <h2>What's on <a  class="chip"  href={("/calendar")}>Open the calendar</a></h2>
       {#if F.t(dot?.Dash?.Upcoming)}
         <table  class="list">
@@ -122,33 +164,7 @@
         </p>
       {/if}
       </div>
-      <div  class="colextra">
-      <div  class="monthcard">
-        {#if dot?.Dash?.Month}
-          <h2>{dot?.Dash?.Month?.Title}
-            <span  class="weeknav">
-              <a  class="chip"  href={S(dot?.Dash?.Month?.Prev)}  aria-label="Earlier month">&lsaquo;</a>
-              <a  class="chip"  href={S(dot?.Dash?.Today)}>Today</a>
-              <a  class="chip"  href={S(dot?.Dash?.Month?.Next)}  aria-label="Later month">&rsaquo;</a>
-            </span></h2>
-          <div  class="monthgrid"  role="grid"  aria-label={"Calendar for " + S(dot?.Dash?.Month?.Title)}>
-            {#each (dot?.Dash?.Month?.Names ?? []) as n}<span  class="mname"  role="columnheader">{n}</span>{/each}
-            {#each (dot?.Dash?.Month?.Weeks ?? []) as wk}
-              {#each wk as c}
-                <a  role="gridcell"  href={S(c?.Href)}  class={"mday" + S((F.t(c?.InMonth) ? "" : " other")) + S((F.t(c?.Today) ? " today" : "")) + S((F.t(c?.Selected) ? " picked" : "")) + S((F.t(c?.Weekend) ? " weekend" : ""))}
-                  title={F.t(c?.Count) ? (S(c?.Count) + " on: " + (c?.Titles ?? []).join(", ")) : "Nothing on"}
-                  aria-label={S(c?.Day) + (F.t(c?.Count) ? ", " + S(c?.Count) + " on" : "")}>
-                  <span  class="mnum">{c?.Day}</span>
-                  {#if F.t(c?.Count)}<span  class="mdots">{#each Array(Math.min(c?.Count, 3)) as _}<i></i>{/each}</span>{/if}
-                </a>
-              {/each}
-            {/each}
-          </div>
-          <p  class="muted small mfoot"><a  href={("/calendar")}>Open the calendar</a> to add or change events.</p>
-        {/if}
-      </div>
-
-      <div  class="dashtime">
+      <div  class="dashblock dashtime">
       
       <h2>My time <a  class="chip"  href={("/time")}>All of it</a></h2>
       {#if F.t(dot?.Timer)}
@@ -181,26 +197,6 @@
         <p  class="muted small">{F.hours(dot?.MyPending)} waiting on approval.</p>
       {/if}
 
-    </div>
-    <div  class="dashfollow">
-      <h2>Things you follow</h2>
-      {#if F.t(dot?.Dash?.Watching)}
-        <ul  class="plain watchlist">
-          {#each F.rng(dot?.Dash?.Watching) as [k9, d9]}
-            <li>
-              <a  href={("/documents/" + S(d9?.ID))}>{d9?.Title}</a>
-              <span  class="muted small">{F.date(d9?.UpdatedAt)}</span>
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <div  class="empty">
-          <strong>You are not following anything</strong>
-          Follow a job to hear about it without being assigned to it.
-        </div>
-      {/if}
-    </div>
-      </div>
     </div>
   </div>
 </section>
