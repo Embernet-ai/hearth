@@ -49,6 +49,29 @@ the rest of the group is offered to the Sales team and to super admins only, and
   an email or book a meeting with a Meet or Teams link, with the invitation mailed to the other side. Both land on the timeline of the
   record and of the company or person it belongs with. Meetings and emails can also be logged after the fact, beside notes and calls.
 
+## The tools beside the CRM
+
+Hearth does not rebuild what EmberOps, Mautic, Formbricks and Cascade already do. It shows their data on the record and reaches into
+them where a salesperson needs to.
+
+- **EmberOps quotes and call logs.** A deal shows the quotations on its Opportunity, a company the quotations for its Customer or Lead,
+  and a person the calls EmberOps logged for their numbers or their Customer. **New quote in EmberOps** opens a new Quotation there with
+  the party and the opportunity filled in, because building a quote (items, price lists, the CPQ configurator) is EmberOps's job. The
+  sales report adds what was quoted in the period. Hearth reads these with its own EmberOps service account, so the Sales team and super
+  admins see them whatever their EmberOps permissions are.
+- **Mautic.** What Mautic recorded for a person (sent, opened, clicked, forms, unsubscribed, bounced) is on their timeline. Their page
+  now also lists their Mautic segments and campaigns, and a salesperson adds or removes them by hand. Segments the marketing sync keeps
+  ("Hearth: ...") are shown and cannot be changed there, because the next sync would undo it.
+- **Formbricks.** A person's page lists the answers they gave on any form, matched on their email addresses.
+- **Cascade.** Companies, people and deals publish created, updated and deleted events to webhook receivers, and a follow-up added or
+  finished is an update of the record it is about (`payload.followup` is `created`, `done` or `reopened`). A Cascade flow starts from
+  a webhook (Settings, API, webhooks), reads the record from `/v1`, and writes back through `/v1`, so every change it makes goes through
+  the same checks and reaches EmberOps through the sync like any other.
+- **Duplicates.** `/crm/duplicates` finds people and companies that look like one (same name at the same company, the same number, one
+  person's address among another's, the same company name or website). Merge keeps one record and folds the rest into it: deals, notes,
+  follow-ups, people, tags and favorites move across, blanks are filled, email addresses and numbers become the survivor's extra ones,
+  and an unsubscribe is never undone. Each merge is recorded, with what the removed record held.
+
 ## Types and tags
 
 A company can be several things at once: client, prospect, vendor, partner,
@@ -85,6 +108,6 @@ Sales team the same way once it exists.
 - Needs Postgres. With `HEARTH_BACKEND=emberops` the pages are not offered, and
   nothing else changes; the existing `crm.Store` interface is untouched.
 - Migration 00048 only adds columns with defaults and new tables. No existing row
-  is rewritten. Migration 00067 adds meetings and emails to the timeline, a deal's lost reason and the time it
+  is rewritten. Migration 00068 records merges. Migration 00067 adds meetings and emails to the timeline, a deal's lost reason and the time it
   entered its stage (kept by a trigger, so every writer is covered), and the follow-ups table.
 - Deals, notes, and calls are not in global search yet, only on their own pages.
