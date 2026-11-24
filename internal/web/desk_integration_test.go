@@ -363,7 +363,7 @@ func TestADealPageShowsItsEmberOpsQuotesAndReportsTotalQuoted(t *testing.T) {
 	f.ops.Put("Quotation", map[string]any{"name": "SAL-QTN-9", "quotation_to": "Lead", "party_name": "LEAD-9", "customer_name": "Desk Co", "status": "Open",
 		"currency": "USD", "grand_total": 4200, "transaction_date": time.Now().Format("2006-01-02"), "opportunity": "CRM-OPP-9"})
 	f.ops.Put("Quotation", map[string]any{"name": "SAL-QTN-10", "customer_name": "Elsewhere", "status": "Open", "currency": "USD", "grand_total": 1, "transaction_date": time.Now().Format("2006-01-02"), "opportunity": "CRM-OPP-10"})
-	if _, err := f.pool.Exec(ctx, `INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id, external_url) VALUES ($1,'emberops-record','Opportunity/CRM-OPP-9','deal',$2,'https://ops.example/app/opportunity/CRM-OPP-9')`, f.org, f.deal); err != nil {
+	if _, err := f.pool.Exec(ctx, `INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id, external_url) VALUES ($1,'emberops-record','Opportunity/'||$2::text,'deal',$2::uuid,'https://ops.example/app/opportunity/CRM-OPP-9')`, f.org, f.deal); err != nil {
 		t.Fatal(err)
 	}
 	var env struct {
