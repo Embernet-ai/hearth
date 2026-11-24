@@ -155,22 +155,29 @@ data:
       log "chart $want is out but $IMAGE_REPO:$want is not ($code). Trying again next run."; exit 0
     fi
 
-    # After --wait the pod is Ready, which says the process started and not that it serves. Ask Hearth itself: /healthz, then the
-    # sign-in page, which needs the database and the interface behind it.
-    health() {
-      local svc="http://${SERVICE}.${NS}.svc.cluster.local" code="" i
-      for i in 1 2 3 4 5 6 7 8 9 10; do
-        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$svc/healthz" || true)
-        [ "$code" = 200 ] && break
+    # After --wait the pod is Ready, which says the process started and not that it serves, and the Service can still be handing a
+    # connection to the pod that is going away for a moment after the roll. Ask Hearth itself, and ask patiently: wait for the
+    # rollout to finish, then try /healthz and the sign-in page each for about two minutes. A first answer of nothing ('000') is a
+    # connection that was reset or a page that was not warm yet, not a failed release, so it is retried and only a steady failure
+    # is reported. /healthz, then the sign-in page, which needs the database and the interface behind it.
+    probe() { # probe URL max-time accepted-codes...
+      local url=$1 mt=$2 code="" i; shift 2
+      for i in $(seq 1 20); do
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$mt" "$url" || true)
+        for ok in "$@"; do [ "$code" = "$ok" ] && { echo "$code"; return 0; }; done
         sleep 6
       done
-      if [ "$code" != 200 ]; then
-        log "HEALTH CHECK FAILED: $svc/healthz answered '${code:-nothing}' for a minute after $RELEASE was upgraded to $1. Not rolling back; fix forward."
+      echo "${code:-nothing}"; return 1
+    }
+    health() {
+      local svc="http://${SERVICE}.${NS}.svc.cluster.local" code
+      kubectl -n "$NS" rollout status deployment -l app.kubernetes.io/name="$CHART",app.kubernetes.io/component=app --timeout=180s || true
+      if ! code=$(probe "$svc/healthz" 10 200); then
+        log "HEALTH CHECK FAILED: $svc/healthz answered '$code' for two minutes after $RELEASE was upgraded to $1. Not rolling back; fix forward."
         return 1
       fi
-      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$svc/login" || true)
-      if [ "$code" != 200 ] && [ "$code" != 303 ]; then
-        log "HEALTH CHECK FAILED: $svc/login answered '${code:-nothing}' at $1. Not rolling back; fix forward."
+      if ! code=$(probe "$svc/login" 30 200 303); then
+        log "HEALTH CHECK FAILED: $svc/login answered '$code' for two minutes at $1. Not rolling back; fix forward."
         return 1
       fi
       log "health check passed at $1: /healthz 200 and the sign-in page $code"
