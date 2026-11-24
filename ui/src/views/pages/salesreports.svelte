@@ -9,6 +9,9 @@
     t.setDate(t.getDate() - n);
     return t.toISOString().slice(0, 10);
   };
+  const cents = (a: any[]) => (a || []).reduce((t: number, x: any) => t + (x.Cents || 0), 0);
+  const maxOf = (rows: any[], f: (x: any) => number) => Math.max(1, ...(rows || []).map(f));
+  const pct = (v: number, m: number) => Math.round((v / m) * 100) + '%';
   const range = (n: number) => '/crm/reports?from=' + days(n) + '&to=' + days(0) + (pg.OwnerSel ? '&owner=' + pg.OwnerSel : '');
 </script>
 
@@ -43,6 +46,28 @@
     <h2>Quoted in EmberOps</h2>
     <p data-report-quoted>{d.Quoted.Count} quotations in this period, {money(d.Quoted.ByCurrency)}. {#each d.Quoted.ByStatus || [] as s}<span class="tag">{s.Status} {s.Count}</span> {/each}</p>
   {/if}
+  <h2>Where the money is</h2>
+  <div class="bars" data-chart-stages>
+    {#each r.Pipeline as s}
+      <div class="barrow"><span class="barlabel">{s.Label}</span>
+        <span class="bar" style={'width:' + pct(cents(s.Value), maxOf(r.Pipeline, (x) => cents(x.Value)))} title={money(s.Value)}></span>
+        <span class="muted small">{money(s.Value)} ({s.Count})</span></div>
+    {/each}
+  </div>
+  <h2>How long deals have sat in their stage</h2>
+  <table class="list" data-report-age>
+    <thead><tr><th>Stage</th><th>Open deals</th><th>Average days</th><th>Oldest, days</th></tr></thead>
+    <tbody>{#each r.StageAge || [] as a}<tr><td>{a.Label}</td><td>{a.Count}</td><td>{a.AvgDays}</td><td>{a.OldestDays}</td></tr>
+      {:else}<tr><td colspan="4" class="muted">No open deals.</td></tr>{/each}</tbody>
+  </table>
+  <h2>Why deals were lost</h2>
+  <div class="bars" data-chart-lost>
+    {#each r.LostReasons || [] as l}
+      <div class="barrow"><span class="barlabel">{l.Reason}</span>
+        <span class="bar lost" style={'width:' + pct(l.Count, maxOf(r.LostReasons, (x) => x.Count))}></span>
+        <span class="muted small">{l.Count} deals, {money(l.Value)}</span></div>
+    {:else}<p class="muted">No deals lost in this period.</p>{/each}
+  </div>
   <h2>Pipeline by stage</h2>
   <table class="list" data-report-stages>
     <thead><tr><th>Stage</th><th>Chance</th><th>Deals</th><th>Value</th><th>Weighted</th></tr></thead>

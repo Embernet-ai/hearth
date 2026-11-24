@@ -1,0 +1,7 @@
+/* The sales desk: the report's bars. One row is a label, a bar sized to its share of the biggest, and the figures. */
+.bars { display: grid; gap: var(--s-1, 0.35rem); }
+.barrow { display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto; align-items: center; gap: var(--s-2, 0.5rem); }
+.barlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar { display: block; height: 0.9rem; min-width: 2px; background: var(--accent, #d92d20); border-radius: 3px; }
+.bar.lost { background: var(--muted, #8a8a8a); }
+@media (max-width: 640px) { .barrow { grid-template-columns: minmax(0, 1fr); } }

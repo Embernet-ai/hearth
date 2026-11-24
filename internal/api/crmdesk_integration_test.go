@@ -70,6 +70,12 @@ func TestTheSalesDeskOverTheAPI(t *testing.T) {
 	if code != http.StatusOK || rep["open"].(map[string]any)["count"].(float64) != 1 || rep["win_rate_percent"] != nil {
 		t.Errorf("report = %d %v", code, rep)
 	}
+	if reasons, ok := rep["lost_reasons"].([]any); !ok || len(reasons) != 0 {
+		t.Errorf("lost reasons = %v, want an empty list (the deal was moved back to proposal)", rep["lost_reasons"])
+	}
+	if ages, ok := rep["stage_age"].([]any); !ok || len(ages) != 1 || ages[0].(map[string]any)["stage"] != "proposal" {
+		t.Errorf("stage age = %v, want the open deal in proposal", rep["stage_age"])
+	}
 
 	// Bulk.
 	code, res, _ := f.call(t, bob, "POST", "/v1/crm/bulk", map[string]any{"type": "deal", "ids": []string{id}, "stage": "meeting", "owner_id": f.bob})

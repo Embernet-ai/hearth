@@ -52,6 +52,22 @@ type MonthLine struct {
 	Value []Amt
 }
 
+// ReasonLine is the deals lost for one reason in the period.
+type ReasonLine struct {
+	Reason string
+	Count  int
+	Value  []Amt
+}
+
+// AgeLine is how long the open deals in one stage have been there.
+type AgeLine struct {
+	Stage      string
+	Label      string
+	Count      int
+	AvgDays    int
+	OldestDays int
+}
+
 // SalesReport is how the pipeline and the team are doing.
 type SalesReport struct {
 	From, To  time.Time
@@ -71,6 +87,10 @@ type SalesReport struct {
 	Owners       []OwnerLine
 	Activity     []ActivityLine
 	Created      []MonthLine
+	// LostReasons is why the deals lost in the period were lost, most common first, and StageAge how long the deals open now
+	// have sat in their stage.
+	LostReasons []ReasonLine
+	StageAge    []AgeLine
 }
 
 // SalesReport reads the deals and the timeline the caller may see. Everybody's by default; owner narrows deals to
@@ -314,6 +334,84 @@ func (s *Service) SalesReport(ctx context.Context, orgID string, actor core.Subj
 		r.Created = append(r.Created, *ml)
 	}
 	sort.Slice(r.Created, func(i, j int) bool { return r.Created[i].Month < r.Created[j].Month })
+
+	// Why deals were lost in the period.
+	args = []any{orgID, keys, from, end}
+	own = ownerFilter("d.owner_id", owner, &args)
+	rows, err = s.db.Query(ctx, `SELECT coalesce((array_agg(btrim(d.lost_reason) ORDER BY d.closed_at DESC))[1], ''), d.currency, count(*)::int,
+		       coalesce(sum(d.amount_cents),0)::bigint
+		FROM deals d WHERE d.org_id=$1 AND d.deleted_at IS NULL AND `+visible("deal", "d", 2)+own+`
+		  AND d.stage = 'lost' AND d.closed_at >= $3 AND d.closed_at < $4
+		GROUP BY lower(btrim(d.lost_reason)), d.currency`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("crm: report lost reasons: %w", err)
+	}
+	type racc struct {
+		line ReasonLine
+		v    map[string]int64
+	}
+	reasons := map[string]*racc{}
+	for rows.Next() {
+		var why, cur string
+		var n int
+		var c int64
+		if err := rows.Scan(&why, &cur, &n, &c); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		key := strings.ToLower(why)
+		a := reasons[key]
+		if a == nil {
+			label := why
+			if label == "" {
+				label = "No reason given"
+			}
+			a = &racc{line: ReasonLine{Reason: label}, v: map[string]int64{}}
+			reasons[key] = a
+		}
+		a.line.Count += n
+		addAmt(a.v, cur, c)
+	}
+	rows.Close()
+	for _, a := range reasons {
+		a.line.Value = amts(a.v)
+		r.LostReasons = append(r.LostReasons, a.line)
+	}
+	sort.Slice(r.LostReasons, func(i, j int) bool {
+		if r.LostReasons[i].Count != r.LostReasons[j].Count {
+			return r.LostReasons[i].Count > r.LostReasons[j].Count
+		}
+		return r.LostReasons[i].Reason < r.LostReasons[j].Reason
+	})
+
+	// How long the open deals have sat in their stage.
+	args = []any{orgID, keys}
+	own = ownerFilter("d.owner_id", owner, &args)
+	rows, err = s.db.Query(ctx, `SELECT d.stage, count(*)::int,
+		       coalesce(avg(extract(epoch FROM (now() - d.stage_changed_at)) / 86400), 0)::float8,
+		       coalesce(max(extract(epoch FROM (now() - d.stage_changed_at)) / 86400), 0)::float8
+		FROM deals d WHERE d.org_id=$1 AND d.deleted_at IS NULL AND `+visible("deal", "d", 2)+own+`
+		  AND d.stage NOT IN ('won','lost','no_response') GROUP BY d.stage`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("crm: report stage age: %w", err)
+	}
+	age := map[string]AgeLine{}
+	for rows.Next() {
+		var st string
+		var n int
+		var avg, oldest float64
+		if err := rows.Scan(&st, &n, &avg, &oldest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		age[st] = AgeLine{Stage: st, Label: StageLabel(st), Count: n, AvgDays: int(avg + 0.5), OldestDays: int(oldest)}
+	}
+	rows.Close()
+	for _, st := range Stages {
+		if a, ok := age[st]; ok {
+			r.StageAge = append(r.StageAge, a)
+		}
+	}
 	return r, nil
 }
 
