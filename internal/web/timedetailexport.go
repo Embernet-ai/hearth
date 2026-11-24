@@ -125,6 +125,7 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 			refuse(err)
 			return
 		}
+		s.log.InfoContext(r.Context(), "time details export", "principal", id.PrincipalID, "format", "xlsx", "rows", n-1, "people", len(people), "from", from.Format("2006-01-02"), "to", to.AddDate(0, 0, -1).Format("2006-01-02"))
 		if n == 1 {
 			// Only the header row: say so on the page instead of handing over a file that looks empty.
 			s.detailNothing(w, r, from, to)
@@ -181,6 +182,7 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 		s.log.ErrorContext(r.Context(), "time details export", "error", err, "rows", n)
 		return
 	}
+	s.log.InfoContext(r.Context(), "time details export", "principal", id.PrincipalID, "format", "csv", "rows", n, "people", len(people), "from", from.Format("2006-01-02"), "to", to.AddDate(0, 0, -1).Format("2006-01-02"))
 	if cw == nil {
 		// No row at all: the page says so, with the range, instead of a file that is only a header.
 		s.detailNothing(w, r, from, to)

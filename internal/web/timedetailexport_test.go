@@ -215,3 +215,20 @@ func TestReportPeopleOffersEveryActivePerson(t *testing.T) {
 		t.Errorf("without a directory: %+v", got)
 	}
 }
+
+// Every export leaves one log line saying who asked, for which dates and how many people, and how many rows came back, so a
+// report of "it came back empty" can be answered from the log.
+func TestDetailExportLeavesALogLine(t *testing.T) {
+	var buf strings.Builder
+	st := &detailStore{rows: detailFixture()}
+	s := &Server{time: st, log: slog.New(slog.NewTextHandler(&buf, nil))}
+	req := httptest.NewRequest(http.MethodGet, "/reports/time?detail=1&format=csv&from=2026-11-01&to=2026-11-30&people=p1", nil)
+	req = req.WithContext(auth.WithIdentity(req.Context(), &auth.Identity{OrgID: "o", PrincipalID: "me"}))
+	s.getTimeReport(httptest.NewRecorder(), req)
+	out := buf.String()
+	for _, want := range []string{`msg="time report"`, `principal=me`, `from=2026-11-01`, `to=2026-11-30`, `detail=true`, `people=1`, `msg="time details export"`, `rows=2`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the log lacks %s:\n%s", want, out)
+		}
+	}
+}

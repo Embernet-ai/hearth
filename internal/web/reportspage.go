@@ -174,6 +174,15 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		return false
 	}
 
+	// One line per request for the report, so what somebody asked for and what came back can be read from the log afterwards:
+	// who, the dates, which shape (totals, one person, details), the format and how many people were chosen.
+	picked, all := 0, r.URL.Query().Get("all") == "1"
+	if ids, ok := detailPeople(r); ok && !all {
+		picked = len(ids)
+	}
+	s.log.InfoContext(r.Context(), "time report", "principal", id.PrincipalID, "from", reportFrom, "to", reportTo,
+		"detail", r.URL.Query().Get("detail") == "1", "format", format, "person", person, "people", picked, "all", all)
+
 	// Details for a set of people, in one file. A separate choice from the totals
 	// and the per-person export below, which are untouched.
 	if r.URL.Query().Get("detail") == "1" && (format == "csv" || format == "xlsx") {
