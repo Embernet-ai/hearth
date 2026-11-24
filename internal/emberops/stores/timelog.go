@@ -1646,6 +1646,41 @@ func (s *TimeLog) TimeReport(ctx context.Context, orgID, actorID, principalID st
 	return out, nil
 }
 
+// TimeReportRows is the detail export's read: every finished entry for the people
+// named (everybody when none are), in the order TimeReport gives them. EmberOPS
+// answers a range in one read, so this walks what it returned.
+func (s *TimeLog) TimeReportRows(ctx context.Context, orgID, actorID string, principalIDs []string, from, to time.Time, fn func(timelog.ReportRow) error) error {
+	rows, err := s.TimeReport(ctx, orgID, actorID, "", from, to)
+	if err != nil {
+		return err
+	}
+	// Grouped by person and then by time, the order the Postgres store reads in, so
+	// a file for several people sorts the same whichever back end made it.
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if a.PersonName != b.PersonName {
+			return a.PersonName < b.PersonName
+		}
+		if a.PrincipalID != b.PrincipalID {
+			return a.PrincipalID < b.PrincipalID
+		}
+		return a.StartedAt.Before(b.StartedAt)
+	})
+	want := map[string]bool{}
+	for _, id := range principalIDs {
+		want[id] = true
+	}
+	for _, r := range rows {
+		if len(want) > 0 && !want[r.PrincipalID] {
+			continue
+		}
+		if err := fn(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ---- imported time ----
 
 func (s *TimeLog) Imported(ctx context.Context, orgID, actorID, note string) ([]timelog.ImportedEntry, error) {
