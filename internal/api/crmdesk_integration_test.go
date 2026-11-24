@@ -11,7 +11,9 @@ import (
 
 func TestTheSalesDeskOverTheAPI(t *testing.T) {
 	f := crmSetup(t)
-	t.Cleanup(func() { _, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM crm_followups WHERE org_id=$1`, f.org) })
+	t.Cleanup(func() {
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM crm_followups WHERE org_id=$1`, f.org)
+	})
 	alice, bob := f.token(t, f.alice, "write"), f.token(t, f.bob, "write")
 	carol, aliceRead := f.token(t, f.carol, "write"), f.token(t, f.alice, "read")
 
