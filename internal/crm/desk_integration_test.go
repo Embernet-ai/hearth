@@ -592,7 +592,9 @@ func TestDuplicateCompaniesAreMergedWithTheirPeopleAndDeals(t *testing.T) {
 func TestAnEmberOpsLinkCarriesTheDocumentsOwnName(t *testing.T) {
 	f := setup(t)
 	f.deskCleanup(t)
-	t.Cleanup(func() { _, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM external_refs WHERE org_id=$1`, f.org) })
+	t.Cleanup(func() {
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM external_refs WHERE org_id=$1`, f.org)
+	})
 	ctx := context.Background()
 	id := uuid.NewString()
 	for _, r := range [][3]string{{"Opportunity/" + id, "https://ops.example/app/opportunity/CRM-OPP-2026-00001", "Opportunity"}, {"Contact/" + id, "https://ops.example/app/contact/Opshome%20Mailproof", "Contact"}} {
