@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { followupspanel, mailpanel, timeline, addactivity, ownerselect, favstar } from './shared.svelte';
+  import { formspanel, mauticpanel, emberopspanel, followupspanel, mailpanel, timeline, addactivity, ownerselect, favstar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -75,6 +75,9 @@
     <p  class="muted small">No deals with this person as the contact.</p>
   {/if}
 
+  {@render mauticpanel(dot)}
+  {@render formspanel(dot)}
+  {@render emberopspanel(dot)}
   {@render followupspanel(dot)}
   {@render mailpanel(dot)}
   {@render timeline(dot)}

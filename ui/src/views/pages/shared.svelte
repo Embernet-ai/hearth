@@ -1,7 +1,7 @@
 <script lang="ts" module>
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  export { bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -238,5 +238,90 @@
   {#if type === "company"}<input  name="add_tag"  placeholder="add a tag"  aria-label="Add a tag">{/if}
   <button  type="submit"  class="ghost small">Apply</button>
 </form>
+{/if}
+{/snippet}
+
+{#snippet emberopspanel(dot)}
+{#if dot?.Desk?.EmberOps}
+<h3  id="emberops">In EmberOps</h3>
+{#if dot.Desk.EmberOps.Quotes?.length}
+  <table  class="list"  data-emberops-quotes>
+    <thead><tr><th>Quote</th><th>For</th><th>Status</th><th>Total</th><th>Valid till</th></tr></thead>
+    <tbody>
+      {#each dot.Desk.EmberOps.Quotes as q (q.Name)}
+        <tr><td><a  href={q.URL}  target="_blank"  rel="noopener">{q.Name}</a></td><td>{q.Party}</td><td><span  class="tag">{q.Status}</span></td>
+          <td class="muted small">{q.Total.toLocaleString(undefined, { style: 'currency', currency: q.Currency || 'USD' })}</td><td class="muted small">{q.ValidTill}</td></tr>
+      {/each}
+    </tbody>
+  </table>
+{:else}
+  <p  class="muted small">No quotes yet.</p>
+{/if}
+{#if dot.Desk.EmberOps.NewQuoteURL}<p><a  class="chip"  href={dot.Desk.EmberOps.NewQuoteURL}  target="_blank"  rel="noopener"  data-new-quote>New quote in EmberOps</a></p>{/if}
+{#if dot.Desk.EmberOps.Calls?.length}
+  <h4>Calls EmberOps logged</h4>
+  <ul  class="files"  data-emberops-calls>
+    {#each dot.Desk.EmberOps.Calls as c (c.Name)}
+      <li><span  class="tag">{c.Type}</span> <a  href={c.URL}  target="_blank"  rel="noopener">{c.Start}</a> <span  class="muted small">{c.From} to {c.To}{c.Seconds ? ', ' + Math.ceil(c.Seconds / 60) + ' min' : ''}{c.Status ? ', ' + c.Status : ''}</span></li>
+    {/each}
+  </ul>
+{/if}
+{/if}
+{/snippet}
+
+{#snippet mauticpanel(dot)}
+{#if dot?.Desk?.Mautic || dot?.Desk?.MauticNote}
+<h3  id="mautic">In Mautic</h3>
+{#if dot.Desk.MauticNote}<p  class="muted small">{dot.Desk.MauticNote}</p>{/if}
+{#if dot.Desk.Mautic}
+  {#if dot.Desk.Mautic.OptedOut}<p  class="muted small"  data-mautic-optout>Marketing email is off for this person. Mautic will not send to them.</p>{/if}
+  <p  class="muted small">What Mautic recorded for them (sent, opened, clicked, forms, unsubscribed) is on the timeline.</p>
+  <ul  class="files"  data-mautic-segments>
+    {#each dot.Desk.Mautic.Segments || [] as sg (sg.ID)}
+      <li>
+        <span  class={'tag' + (sg.Member ? ' on' : '')}>{sg.Member ? 'in' : 'not in'}</span> {sg.Name}
+        {#if sg.Locked}<span  class="muted small">kept by the sync</span>
+        {:else}
+          <form  method="post"  action="/crm/mautic/segment"  class="inline">
+            <input  type="hidden"  name="contact_id"  value={dot.Contact?.ID} />
+            <input  type="hidden"  name="id"  value={sg.ID} />
+            <input  type="hidden"  name="on"  value={sg.Member ? '0' : '1'} />
+            <button  type="submit"  class="ghost small">{sg.Member ? 'Remove' : 'Add'}</button>
+          </form>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+  {#if dot.Desk.Mautic.Campaigns?.length}
+    <h4>Campaigns</h4>
+    <ul  class="files"  data-mautic-campaigns>
+      {#each dot.Desk.Mautic.Campaigns as c (c.ID)}
+        <li>
+          <span  class={'tag' + (c.Member ? ' on' : '')}>{c.Member ? 'in' : 'not in'}</span> {c.Name}
+          <form  method="post"  action="/crm/mautic/campaign"  class="inline">
+            <input  type="hidden"  name="contact_id"  value={dot.Contact?.ID} />
+            <input  type="hidden"  name="id"  value={c.ID} />
+            <input  type="hidden"  name="on"  value={c.Member ? '0' : '1'} />
+            <button  type="submit"  class="ghost small">{c.Member ? 'Remove' : 'Add'}</button>
+          </form>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+{/if}
+{/if}
+{/snippet}
+
+{#snippet formspanel(dot)}
+{#if dot?.Desk?.Forms?.length}
+<h3  id="forms">Form responses</h3>
+<ul  class="files"  data-form-responses>
+  {#each dot.Desk.Forms as e}
+    <li>
+      <strong>{e.Form}</strong> <span  class="muted small">{(e.Created || '').slice(0, 10)}{e.Finished ? '' : ', not finished'}</span>
+      {#each e.Answers || [] as a}<div  class="muted small">{a.Question}: {a.Answer}</div>{/each}
+    </li>
+  {/each}
+</ul>
 {/if}
 {/snippet}

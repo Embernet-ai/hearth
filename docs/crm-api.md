@@ -36,10 +36,19 @@ not a quietly empty record.
 | `GET /v1/crm/forecast` | `owner` (a person id, `me`, or `none`). Open deals weighted by stage chance, in buckets: `overdue`, each month, `none`; per owner; won this month |
 | `GET /v1/crm/reports` | `from`, `to` (YYYY-MM-DD, the last 30 days by default), `owner`. Pipeline by stage, won, lost, win rate, average won deal, days to win, owners, activity by person, deals made by month |
 | `POST /v1/crm/bulk` | `type` (company, contact, deal), `ids` (at most 500), and any of `owner_id` (empty clears), `stage` (deals), `add_tag`, `add_type` (companies). Returns `{changed, failed}`; a record the caller may not edit is named in `failed` and the rest are changed |
+| `GET /v1/crm/duplicates` | `type` (`contact`, or `company`). Groups of records that look like one, each with a reason |
+| `POST /v1/crm/merge` | `type`, `survivor_id`, `merge_ids` (at most 20). Folds them into the survivor; the caller needs edit on all of them. Answers `{merged, survivor_id}` |
 | `GET /v1/crm/stats` | companies, contacts, deals, open deals (not won, lost, or no response), open value in cents, and count and value by stage, over what the caller can see |
 
 The follow-up, forecast, report and bulk routes are for people who work sales (the Sales team) and super admins. A token whose person
 does not is told 404 on all of them. A read token can list and read them and cannot write.
+
+## Webhook events
+
+A webhook receiver is sent `{id, event, entity_type, entity_id, occurred_at}`, signed, for documents and for `company`, `contact` and
+`deal` (events `created`, `updated`, `deleted`). A follow-up added, finished or reopened is an `updated` of the record it is about.
+Fetch the record with the `entity_id`. An automation (a Cascade flow) that finds the record with a token for a Sales team member sees
+what the Sales team sees.
 
 ## Sending a create twice
 

@@ -97,3 +97,38 @@ func TestTheSalesDeskOverTheAPI(t *testing.T) {
 		t.Errorf("delete = %d", code)
 	}
 }
+
+func TestDuplicatesAndMergeOverTheAPI(t *testing.T) {
+	f := crmSetup(t)
+	t.Cleanup(func() { _, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM crm_merges WHERE org_id=$1`, f.org) })
+	alice, bob, carol := f.token(t, f.alice, "write"), f.token(t, f.bob, "write"), f.token(t, f.carol, "write")
+	aliceRead := f.token(t, f.alice, "read")
+	_, a, _ := f.call(t, alice, "POST", "/v1/contacts", map[string]any{"name": "Dana API", "email": "dana@api.example"})
+	_, b, _ := f.call(t, alice, "POST", "/v1/contacts", map[string]any{"name": "dana api", "email": "d.api@api.example", "phone": "(216) 555-0100"})
+	code, dups, _ := f.call(t, bob, "GET", "/v1/crm/duplicates?type=contact", nil)
+	if code != http.StatusOK || len(dups["groups"].([]any)) != 1 {
+		t.Fatalf("duplicates = %d %v", code, dups)
+	}
+	if code, _, _ := f.call(t, carol, "GET", "/v1/crm/duplicates", nil); code != http.StatusNotFound {
+		t.Errorf("duplicates for a person outside sales = %d, want 404", code)
+	}
+	body := map[string]any{"type": "contact", "survivor_id": a["id"], "merge_ids": []any{b["id"]}}
+	if code, _, _ := f.call(t, carol, "POST", "/v1/crm/merge", body); code != http.StatusNotFound {
+		t.Errorf("merge by a person outside sales = %d, want 404", code)
+	}
+	if code, _, _ := f.call(t, aliceRead, "POST", "/v1/crm/merge", body); code != http.StatusForbidden {
+		t.Errorf("merge with a read token = %d, want 403", code)
+	}
+	if code, _, _ := f.call(t, bob, "POST", "/v1/crm/merge", map[string]any{"type": "contact", "survivor_id": a["id"]}); code != http.StatusBadRequest {
+		t.Errorf("merge with nothing to merge = %d, want 400", code)
+	}
+	if code, res, _ := f.call(t, bob, "POST", "/v1/crm/merge", body); code != http.StatusOK || res["merged"].(float64) != 1 {
+		t.Fatalf("merge = %d %v", code, res)
+	}
+	if code, _, _ := f.call(t, bob, "GET", "/v1/contacts/"+b["id"].(string), nil); code != http.StatusNotFound {
+		t.Errorf("the merged contact = %d, want 404", code)
+	}
+	if _, got, _ := f.call(t, bob, "GET", "/v1/contacts/"+a["id"].(string), nil); got["phone"] != "(216) 555-0100" {
+		t.Errorf("survivor = %v, want the duplicate's phone", got)
+	}
+}

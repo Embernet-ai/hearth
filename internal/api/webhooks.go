@@ -243,6 +243,13 @@ func Routes() []jobs.Route {
 			Event: event, EntityType: string(core.EntityDocument), JobKind: FanKind,
 		})
 	}
+	// The CRM too: a company, a person or a deal made, changed or removed, and what is owed on one. A Cascade flow that
+	// enrols a lead, or opens a follow-up when a deal moves, starts from these.
+	for _, typ := range []core.EntityType{core.EntityCompany, core.EntityContact, core.EntityDeal} {
+		for _, event := range []string{jobs.EventCreated, jobs.EventUpdated, jobs.EventDeleted} {
+			out = append(out, jobs.Route{Event: event, EntityType: string(typ), JobKind: FanKind})
+		}
+	}
 	return out
 }
 
@@ -287,7 +294,7 @@ func (d *Dispatcher) handleFan(ctx context.Context, j *jobs.Job) error {
 			INSERT INTO webhook_deliveries (id, org_id, webhook_id, event_id, event,
 			                                entity_type, entity_id)
 			VALUES ($1,$2,$3,$4,$5,$6,$7)
-			ON CONFLICT (webhook_id, event_id) DO NOTHING
+			ON CONFLICT (webhook_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
 			RETURNING id::text`,
 			deliveryID, j.OrgID, id, p.EventID, p.Event, p.EntityType, nullable(p.EntityID)).
 			Scan(&stored)

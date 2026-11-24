@@ -11,7 +11,7 @@ describe('the CRM group of the rail', () => {
     expect(labels('Chat', page())).toEqual(['Channels']);
   });
   test('offers the sales pages to a person who works sales', () => {
-    expect(labels('CRM', page({ SalesNav: true }))).toEqual(['Contacts', 'Companies', 'Deals', 'Follow-ups', 'Forecast', 'Sales reports', 'Unassigned']);
+    expect(labels('CRM', page({ SalesNav: true }))).toEqual(['Contacts', 'Companies', 'Deals', 'Follow-ups', 'Forecast', 'Sales reports', 'Unassigned', 'Duplicates']);
   });
   test('offers a person outside sales only the contacts and companies they always had', () => {
     expect(labels('CRM', page({ SalesNav: false }))).toEqual(['Contacts', 'Companies']);
@@ -44,5 +44,60 @@ describe('the forecast and the report', () => {
     const d = draw('salesreports', page({ Owners: owners, Desk: { From: '2026-10-26', To: '2026-11-24', Report: { OpenCount: 0, Open: [], Weighted: [], WonCount: 0, Won: [], LostCount: 0, Lost: [], WinRate: -1, AvgWon: [], AvgCycleDays: 0, Pipeline: [], Owners: [], Activity: [], Created: [] } } }));
     expect(text(d)).toContain('none closed');
     expect(text(d)).toContain('Nothing logged in this period.');
+  });
+});
+
+describe('the duplicates page', () => {
+  test('offers each group with a keeper and the others to merge in', () => {
+    const d = draw('duplicates', page({ Desk: { DupType: 'contact', Dups: [{ Reason: 'Same phone number', Records: [{ ID: 'a', Name: 'Dana', Detail: 'dana@x.example', Owner: 'Pat', Deals: 2 }, { ID: 'b', Name: 'Dana W', Detail: '', Owner: '', Deals: 0 }] }] } }));
+    expect(text(d)).toContain('Same phone number');
+    expect(d.querySelectorAll('[data-dup-group] input[name="merge"]').length).toBe(2);
+    expect(d.querySelector('input[name="survivor"][value="a"]')).not.toBeNull();
+    expect(d.querySelector('a[href="/contacts/b"]')).not.toBeNull();
+  });
+  test('says so when there are none', () => {
+    expect(text(draw('duplicates', page({ Desk: { DupType: 'company', Dups: [] } })))).toContain('No duplicates found.');
+  });
+});
+
+describe('what EmberOps adds to a record', () => {
+  const panel = { Quotes: [{ Name: 'SAL-QTN-1', Party: 'Acme', Status: 'Open', Total: 1250.5, Currency: 'USD', ValidTill: '2026-12-10', URL: 'https://ops.example/app/quotation/SAL-QTN-1' }],
+    Calls: [{ Name: 'CL-1', Type: 'Incoming', Status: 'Completed', From: '+12165550142', To: '100', Start: '2026-11-20 10:00:00', Seconds: 125, URL: 'https://ops.example/app/call-log/CL-1' }], NewQuoteURL: 'https://ops.example/app/quotation/new?opportunity=CRM-OPP-1' };
+  test('a deal shows its quotes, its calls and a way to make a quote', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'proposal' }, DealStages: ['new', 'proposal'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24', EmberOps: panel } }));
+    expect(d.querySelector('[data-emberops-quotes] a[href="https://ops.example/app/quotation/SAL-QTN-1"]')).not.toBeNull();
+    expect(d.querySelector('[data-emberops-calls]')?.textContent).toContain('3 min');
+    expect(d.querySelector('a[data-new-quote]')?.getAttribute('href')).toContain('opportunity=CRM-OPP-1');
+  });
+  test('a deal with nothing from EmberOps shows no EmberOps heading', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24' } }));
+    expect(text(d)).not.toContain('In EmberOps');
+  });
+  test('the report shows what was quoted', () => {
+    const d = draw('salesreports', page({ Owners: [], Desk: { From: '2026-11-01', To: '2026-11-30', Quoted: { Count: 3, ByCurrency: [{ Text: '$1,349.50' }], ByStatus: [{ Status: 'Open', Count: 2 }] }, Report: { OpenCount: 0, Open: [], Weighted: [], WonCount: 0, Won: [], LostCount: 0, Lost: [], WinRate: -1, AvgWon: [], AvgCycleDays: 0, Pipeline: [], Owners: [], Activity: [], Created: [] } } }));
+    expect(d.querySelector('[data-report-quoted]')?.textContent).toContain('3 quotations');
+  });
+});
+
+describe('a contact in Mautic', () => {
+  const base = { Contact: { ID: 'c1', Name: 'Dana' }, Companies: [], Activities: [], Owners: [], Details: {}, SalesOn: true };
+  test('shows the segments with a way in or out, and the ones the sync keeps without one', () => {
+    const d = draw('contact', page({ ...base, Desk: { Followups: [], Today: '2026-11-24', Mautic: { OptedOut: true, Segments: [{ ID: 1, Name: 'Expo', Member: false, Locked: false }, { ID: 2, Name: 'Hearth: all contacts', Member: true, Locked: true }], Campaigns: [{ ID: 7, Name: 'Welcome', Member: true }] } } }));
+    expect(d.querySelectorAll('[data-mautic-segments] form').length).toBe(1);
+    expect(text(d)).toContain('kept by the sync');
+    expect(d.querySelector('[data-mautic-optout]')).not.toBeNull();
+    expect(d.querySelector('[data-mautic-campaigns] input[name="on"]')?.getAttribute('value')).toBe('0');
+  });
+  test('says when the person is not in Mautic yet', () => {
+    const d = draw('contact', page({ ...base, Desk: { Followups: [], Today: '2026-11-24', MauticNote: 'This person is not in Mautic yet. The marketing sync adds anybody with an email address.' } }));
+    expect(text(d)).toContain('not in Mautic yet');
+  });
+});
+
+describe('a contacts form responses', () => {
+  test('are listed with the question and the answer', () => {
+    const d = draw('contact', page({ Contact: { ID: 'c1', Name: 'Dana' }, Companies: [], Activities: [], Owners: [], Details: {}, SalesOn: true,
+      Desk: { Followups: [], Today: '2026-11-24', Forms: [{ Form: 'Expo lead form', Created: '2026-11-01T10:00:00Z', Finished: true, Answers: [{ Question: 'What do you need?', Answer: 'Rewinds' }] }] } }));
+    expect(d.querySelector('[data-form-responses]')?.textContent).toContain('What do you need?: Rewinds');
   });
 });

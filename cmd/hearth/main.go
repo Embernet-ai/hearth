@@ -29,6 +29,9 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
+	"github.com/Embernet-ai/hearth/internal/crmforms"
+	"github.com/Embernet-ai/hearth/internal/crmmarketing"
+	"github.com/Embernet-ai/hearth/internal/crmops"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/emberops"
@@ -532,7 +535,7 @@ func run() error {
 		engine.UseStore(set.Rules, rs)
 	}
 	site, err := web.New(web.Deps{
-		Docs: set.Docs, Files: filesSvc, Auth: authSvc, Views: set.Views, Channels: channelsSvc, Notify: notifySvc, Push: pushSvc, Rules: set.Rules, Engine: engine, Time: set.Time, Maint: set.Maint, PM: pm, Plant: set.Plant, CRM: set.CRM, Sales: salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc), CRMViews: crmviews.New(pools.Web), Mail: mailSvc, MailSettings: mailSettings, OrgMailer: orgMailer, Calls: callsSvc,
+		Ops: opsLister(ops), Docs: set.Docs, Files: filesSvc, Auth: authSvc, Views: set.Views, Channels: channelsSvc, Notify: notifySvc, Push: pushSvc, Rules: set.Rules, Engine: engine, Time: set.Time, Maint: set.Maint, PM: pm, Plant: set.Plant, CRM: set.CRM, Sales: salesFor(ops == nil || cfg.EmberOPSCRMParties != "emberops", crmSvc), CRMViews: crmviews.New(pools.Web), Mail: mailSvc, MailSettings: mailSettings, OrgMailer: orgMailer, Calls: callsSvc,
 		Agents: agentsSvc, Connector: mcpSrv, Canvas: set.Canvas, API: apiSvc,
 		Offline: offlineSvc, Search: searchSvc,
 		Playground:   playground.New(pools.Web, azSvc, set.Plant, set.Docs, channelsSvc, set.Time, set.TimeOff),
@@ -540,7 +543,7 @@ func run() error {
 		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
-		Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
+		CRMForms: crmFormsFor(formsClient), CRMMarketing: crmMarketingFor(pools, marketingClient), Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
 		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
 		OIDCName: cfg.OIDCName, HideLocalLogin: !cfg.LocalLoginForm,
@@ -943,4 +946,29 @@ func sealerOf(b *secret.Box) connect.Sealer {
 		return nil
 	}
 	return b
+}
+
+// opsLister hands the web layer the EmberOps client for the CRM panel, or a true nil when there is none: a nil
+// *emberops.Client inside the interface is not nil, and the web layer tests for nil before reading.
+func opsLister(c *emberops.Client) crmops.Lister {
+	if c == nil {
+		return nil
+	}
+	return c
+}
+
+// crmMarketingFor is the contact page's Mautic panel, or a true nil when Mautic is not connected.
+func crmMarketingFor(pools *pg.Pools, c *mautic.Client) *crmmarketing.Service {
+	if c == nil {
+		return nil
+	}
+	return crmmarketing.New(pools.Web, c)
+}
+
+// crmFormsFor is the contact page's form responses, or a true nil when Formbricks is not connected.
+func crmFormsFor(c *forms.Client) *crmforms.Service {
+	if c == nil || !c.Enabled() {
+		return nil
+	}
+	return crmforms.New(c)
 }

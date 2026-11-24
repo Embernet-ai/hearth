@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Embernet-ai/hearth/internal/core"
+	"github.com/Embernet-ai/hearth/internal/jobs"
 )
 
 // stageProbability is how likely a deal in each stage is to close, in percent. A deal in Customer has agreed and is
@@ -154,12 +155,25 @@ func (s *Service) AddFollowup(ctx context.Context, orgID string, actor core.Subj
 	}
 	f := &Followup{ID: uuid.NewString(), Title: p.Title, Body: strings.TrimSpace(p.Body), Status: "open",
 		DueAt: p.DueAt, AssigneeID: assignee, Target: p.Target}
-	err := s.db.QueryRow(ctx, `
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("crm: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	err = tx.QueryRow(ctx, `
 		INSERT INTO crm_followups (id, org_id, title, body, due_at, assignee_id, target_type, target_id, created_by)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING created_at`,
 		f.ID, orgID, f.Title, f.Body, f.DueAt, assignee, string(p.Target.Type), p.Target.ID, principal).Scan(&f.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("crm: add follow-up: %w", err)
+	}
+	// The record changed: what is owed on it. Webhook receivers (Cascade flows) hear it like any other change.
+	if err := jobs.Publish(ctx, tx, jobs.EventSpec{OrgID: orgID, EntityType: string(p.Target.Type), EntityID: p.Target.ID,
+		Event: jobs.EventUpdated, ActorID: principal, Payload: map[string]any{"followup": "created", "title": f.Title}}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("crm: commit: %w", err)
 	}
 	f.TargetHref = hrefOfTarget(p.Target.Type, p.Target.ID)
 	f.Overdue = f.DueAt != nil && f.DueAt.Before(time.Now())
@@ -192,13 +206,22 @@ func (s *Service) SetFollowupDone(ctx context.Context, orgID string, actor core.
 	if err := s.authz.Require(ctx, actor, ref, core.AccessEdit); err != nil {
 		return ErrNotFound
 	}
-	_, err = s.db.Exec(ctx, `UPDATE crm_followups SET status=$3, updated_at=now(),
-		completed_at = CASE WHEN $4 THEN now() END, completed_by = CASE WHEN $4 THEN $5::uuid END
-		WHERE id=$1 AND org_id=$2`, id, orgID, map[bool]string{true: "done", false: "open"}[done], done, actor.Principal())
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
+		return fmt.Errorf("crm: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err = tx.Exec(ctx, `UPDATE crm_followups SET status=$3, updated_at=now(),
+		completed_at = CASE WHEN $4 THEN now() END, completed_by = CASE WHEN $4 THEN $5::uuid END
+		WHERE id=$1 AND org_id=$2`, id, orgID, map[bool]string{true: "done", false: "open"}[done], done, actor.Principal()); err != nil {
 		return fmt.Errorf("crm: complete follow-up: %w", err)
 	}
-	return nil
+	what := map[bool]string{true: "done", false: "reopened"}[done]
+	if err := jobs.Publish(ctx, tx, jobs.EventSpec{OrgID: orgID, EntityType: string(ref.Type), EntityID: ref.ID,
+		Event: jobs.EventUpdated, ActorID: actor.Principal(), Payload: map[string]any{"followup": what}}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // RescheduleFollowup changes when a follow-up is due (nil clears it), and who has it when assignee is not empty.
@@ -476,6 +499,8 @@ type Desk interface {
 	Forecast(ctx context.Context, orgID string, actor core.Subjects, owner string, now time.Time) (*Forecast, error)
 	SalesReport(ctx context.Context, orgID string, actor core.Subjects, from, to time.Time, owner string) (*SalesReport, error)
 	BulkApply(ctx context.Context, orgID string, actor core.Subjects, b BulkSpec) (*BulkResult, error)
+	Duplicates(ctx context.Context, orgID string, actor core.Subjects, t core.EntityType) ([]DupGroup, error)
+	Merge(ctx context.Context, orgID string, actor core.Subjects, t core.EntityType, survivor string, losers []string) error
 }
 
 var _ Desk = (*Service)(nil)

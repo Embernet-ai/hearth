@@ -39,6 +39,10 @@
     <div class="card"><div class="muted small">Average won deal</div><strong>{money(r.AvgWon)}</strong></div>
     <div class="card"><div class="muted small">Days from made to won</div><strong>{r.WonCount ? r.AvgCycleDays : 'none won'}</strong></div>
   </div>
+  {#if d.Quoted}
+    <h2>Quoted in EmberOps</h2>
+    <p data-report-quoted>{d.Quoted.Count} quotations in this period, {money(d.Quoted.ByCurrency)}. {#each d.Quoted.ByStatus || [] as s}<span class="tag">{s.Status} {s.Count}</span> {/each}</p>
+  {/if}
   <h2>Pipeline by stage</h2>
   <table class="list" data-report-stages>
     <thead><tr><th>Stage</th><th>Chance</th><th>Deals</th><th>Value</th><th>Weighted</th></tr></thead>

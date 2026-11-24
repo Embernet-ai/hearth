@@ -52,6 +52,7 @@ export const groups: RailGroup[] = [
       { label: 'Forecast', href: '/crm/forecast', show: (pg) => !!pg.SalesNav },
       { label: 'Sales reports', href: '/crm/reports', show: (pg) => !!pg.SalesNav },
       { label: 'Unassigned', href: '/crm/unassigned', show: (pg) => !!pg.SalesNav },
+      { label: 'Duplicates', href: '/crm/duplicates', show: (pg) => !!pg.SalesNav },
     ],
   },
   {

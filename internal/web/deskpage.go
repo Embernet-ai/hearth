@@ -22,6 +22,9 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crmforms"
+	"github.com/Embernet-ai/hearth/internal/crmmarketing"
+	"github.com/Embernet-ai/hearth/internal/crmops"
 )
 
 // deskData is what the sales desk pages carry, in one field of the page.
@@ -38,6 +41,17 @@ type deskData struct {
 	MailOn bool
 	Today  string
 	Me     string
+	// Dups is the groups of probable duplicates on the duplicates page, of the kind DupType.
+	Dups    []crm.DupGroup
+	DupType string
+	// EmberOps is the record's quotes and call logs from EmberOps, and Quoted what has been quoted in the report's period.
+	EmberOps *crmops.Panel
+	Quoted   *crmops.Totals
+	// Mautic is a contact's segments and campaigns, and MauticNote says why there are none to show.
+	Mautic     *crmmarketing.Panel
+	MauticNote string
+	// Forms is the form responses this person gave on Formbricks.
+	Forms []crmforms.Entry
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -51,6 +65,10 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /crm/forecast.csv", s.forecastCSV)
 	mux.HandleFunc("GET /crm/reports", s.reportsPage)
 	mux.HandleFunc("POST /crm/bulk", s.bulkChange)
+	mux.HandleFunc("GET /crm/duplicates", s.duplicatesPage)
+	mux.HandleFunc("POST /crm/merge", s.mergeRecords)
+	mux.HandleFunc("POST /crm/mautic/segment", s.mauticSegment)
+	mux.HandleFunc("POST /crm/mautic/campaign", s.mauticCampaign)
 	mux.HandleFunc("POST /crm/email", s.emailFromRecord)
 	mux.HandleFunc("POST /crm/meeting", s.meetingFromRecord)
 }
@@ -290,7 +308,46 @@ func (s *Server) deskFor(r *http.Request, ref core.Ref, p *page) {
 		s.log.WarnContext(r.Context(), "load follow-ups", "error", err)
 	}
 	d.Followups = rows
+	d.EmberOps = s.emberOpsPanel(r, ref, p)
+	if ref.Type == core.EntityContact {
+		d.Mautic, d.MauticNote = s.mauticPanel(r, ref, p)
+		d.Forms = s.formResponses(r, p)
+	}
 	p.Desk = d
+}
+
+// newCRMOps is the EmberOps reader, or nil when there is no EmberOps client: a nil client inside the interface would not be nil.
+func newCRMOps(l crmops.Lister) *crmops.Service {
+	if l == nil {
+		return nil
+	}
+	return crmops.New(l)
+}
+
+// emberOpsPanel is what EmberOps holds about this record: its quotations and the calls it logged. A failure leaves the
+// panel out and the page whole.
+func (s *Server) emberOpsPanel(r *http.Request, ref core.Ref, p *page) *crmops.Panel {
+	if s.crmOps == nil {
+		return nil
+	}
+	var phones []string
+	if ref.Type == core.EntityContact {
+		if p.Contact != nil {
+			phones = append(phones, p.Contact.Phone)
+		}
+		if p.Details != nil {
+			phones = append(phones, p.Details.ExtraPhones...)
+		}
+	}
+	panel, err := s.crmOps.For(r.Context(), p.EmberOps, phones)
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load EmberOps quotes and calls", "error", err)
+		return nil
+	}
+	if len(panel.Quotes) == 0 && len(panel.Calls) == 0 && panel.NewQuoteURL == "" {
+		return nil
+	}
+	return panel
 }
 
 // -----------------------------------------------------------------------------
@@ -366,8 +423,16 @@ func (s *Server) reportsPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusInternalServerError, "could not build the report")
 		return
 	}
+	var quoted *crmops.Totals
+	if s.crmOps != nil {
+		if q, err := s.crmOps.QuotedBetween(r.Context(), from.Format("2006-01-02"), to.Format("2006-01-02")); err != nil {
+			s.log.WarnContext(r.Context(), "read quoted totals", "error", err)
+		} else {
+			quoted = q
+		}
+	}
 	s.render(w, r, "salesreports", page{Title: "Sales reports", SalesOn: true, Owners: s.owners(r), OwnerSel: owner,
-		Desk: &deskData{Report: rep, From: from.Format("2006-01-02"), To: to.Format("2006-01-02")}})
+		Desk: &deskData{Report: rep, Quoted: quoted, From: from.Format("2006-01-02"), To: to.Format("2006-01-02")}})
 }
 
 // -----------------------------------------------------------------------------
@@ -472,7 +537,7 @@ func (s *Server) mailPrecheck(w http.ResponseWriter, r *http.Request) (*auth.Ide
 
 func (s *Server) connectFail(w http.ResponseWriter, r *http.Request, err error, what string) {
 	switch {
-	case errors.Is(err, connect.ErrDisabled), errors.Is(err, connect.ErrScope):
+	case errors.Is(err, connect.ErrNotConnected), errors.Is(err, connect.ErrReconnect), errors.Is(err, connect.ErrDisabled), errors.Is(err, connect.ErrScope):
 		s.fail(w, r, http.StatusConflict, "Connect your account first: "+what+" needs it. Settings, Connectors.")
 	default:
 		s.log.WarnContext(r.Context(), "connector", "what", what, "error", err)
@@ -565,4 +630,132 @@ func (s *Server) meetingFromRecord(w http.ResponseWriter, r *http.Request) {
 		s.log.WarnContext(ctx, "log meeting", "error", err)
 	}
 	http.Redirect(w, r, recordPath(ref)+"#timeline", http.StatusSeeOther)
+}
+
+// -----------------------------------------------------------------------------
+// Duplicates and merging
+// -----------------------------------------------------------------------------
+
+func (s *Server) duplicatesPage(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	typ := core.EntityContact
+	if r.URL.Query().Get("type") == "company" {
+		typ = core.EntityCompany
+	}
+	groups, err := desk.Duplicates(r.Context(), id.OrgID, id.Subjects, typ)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "find duplicates", "error", err)
+		s.fail(w, r, http.StatusInternalServerError, "could not look for duplicates")
+		return
+	}
+	s.render(w, r, "duplicates", page{Title: "Duplicates", SalesOn: true, Desk: &deskData{Dups: groups, DupType: string(typ)}})
+}
+
+func (s *Server) mergeRecords(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	typ := core.EntityType(r.FormValue("type"))
+	survivor := strings.TrimSpace(r.FormValue("survivor"))
+	if err := desk.Merge(r.Context(), id.OrgID, id.Subjects, typ, survivor, r.Form["merge"]); err != nil {
+		s.crmFail(w, r, err, "you cannot merge those")
+		return
+	}
+	http.Redirect(w, r, recordPath(core.Ref{Type: typ, ID: survivor}), http.StatusSeeOther)
+}
+
+// -----------------------------------------------------------------------------
+// A contact's place in Mautic
+// -----------------------------------------------------------------------------
+
+func (s *Server) mauticPanel(r *http.Request, ref core.Ref, p *page) (*crmmarketing.Panel, string) {
+	if s.crmMkt == nil {
+		return nil, ""
+	}
+	id := auth.From(r.Context())
+	optedOut := p.Details != nil && p.Details.MarketingOptOutAt != nil
+	panel, err := s.crmMkt.For(r.Context(), id.OrgID, ref.ID, optedOut)
+	if errors.Is(err, crmmarketing.ErrNotLinked) {
+		return nil, "This person is not in Mautic yet. The marketing sync adds anybody with an email address."
+	}
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load the Mautic panel", "error", err)
+		return nil, ""
+	}
+	return panel, ""
+}
+
+func (s *Server) mauticMove(w http.ResponseWriter, r *http.Request, set func(ctx context.Context, org, contact string, n int64, on bool) error) {
+	if _, ok := s.salesAccess(w, r); !ok {
+		return
+	}
+	if s.crmMkt == nil {
+		s.fail(w, r, http.StatusNotFound, "Mautic is not connected on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	id := auth.From(r.Context())
+	ref := core.Ref{Type: core.EntityContact, ID: strings.TrimSpace(r.FormValue("contact_id"))}
+	if err := s.az.Require(r.Context(), id.Subjects, ref, core.AccessEdit); err != nil {
+		s.fail(w, r, http.StatusNotFound, "no such thing")
+		return
+	}
+	n, err := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "which one?")
+		return
+	}
+	switch err := set(r.Context(), id.OrgID, ref.ID, n, r.FormValue("on") != "0"); {
+	case err == nil:
+	case errors.Is(err, crmmarketing.ErrNotLinked), errors.Is(err, crmmarketing.ErrLocked):
+		s.fail(w, r, http.StatusConflict, strings.TrimPrefix(err.Error(), "crmmarketing: "))
+		return
+	default:
+		s.log.WarnContext(r.Context(), "move a contact in Mautic", "error", err)
+		s.fail(w, r, http.StatusBadGateway, "Mautic would not do that: "+err.Error())
+		return
+	}
+	http.Redirect(w, r, "/contacts/"+ref.ID+"#mautic", http.StatusSeeOther)
+}
+
+func (s *Server) mauticSegment(w http.ResponseWriter, r *http.Request) {
+	s.mauticMove(w, r, func(ctx context.Context, org, c string, n int64, on bool) error {
+		return s.crmMkt.SetSegment(ctx, org, c, n, on)
+	})
+}
+
+func (s *Server) mauticCampaign(w http.ResponseWriter, r *http.Request) {
+	s.mauticMove(w, r, func(ctx context.Context, org, c string, n int64, on bool) error {
+		return s.crmMkt.SetCampaign(ctx, org, c, n, on)
+	})
+}
+
+// formResponses is what this person answered on Formbricks forms, matched on their email addresses. A failure leaves it out.
+func (s *Server) formResponses(r *http.Request, p *page) []crmforms.Entry {
+	if s.crmForms == nil || p.Contact == nil {
+		return nil
+	}
+	emails := []string{p.Contact.Email}
+	if p.Details != nil {
+		emails = append(emails, p.Details.ExtraEmails...)
+	}
+	got, err := s.crmForms.ForEmails(r.Context(), emails)
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load form responses", "error", err)
+		return nil
+	}
+	return got
 }
