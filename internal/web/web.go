@@ -38,6 +38,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
+	"github.com/Embernet-ai/hearth/internal/crmforms"
 	"github.com/Embernet-ai/hearth/internal/crmmarketing"
 	"github.com/Embernet-ai/hearth/internal/crmops"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
@@ -103,6 +104,8 @@ type Server struct {
 	crmOps *crmops.Service
 	// crmMkt is the contact page's Mautic panel.
 	crmMkt *crmmarketing.Service
+	// crmForms is the contact page's form responses.
+	crmForms *crmforms.Service
 	// crmViews are the saved views of the companies, contacts and deals lists. Nil switches the saving off.
 	crmViews *crmviews.Service
 	mail     *mailint.Service
@@ -230,11 +233,13 @@ type Deps struct {
 	Ops crmops.Lister
 	// CRMMarketing shows a contact's Mautic segments and campaigns on their page. Nil when Mautic is not connected.
 	CRMMarketing *crmmarketing.Service
-	Social       *social.Client
-	Tools        []tools.Tool
-	Box          connect.Sealer
-	SCIM         *scim.Service
-	Search       *search.Service
+	// CRMForms shows a contact's Formbricks responses on their page. Nil when Formbricks is not connected.
+	CRMForms *crmforms.Service
+	Social   *social.Client
+	Tools    []tools.Tool
+	Box      connect.Sealer
+	SCIM     *scim.Service
+	Search   *search.Service
 	// Playground is Settings -> Tutorial's personal practice organisation.
 	Playground *playground.Service
 	// TimeOff is requesting and deciding days away.
@@ -288,6 +293,7 @@ func New(d Deps) (*Server, error) {
 		marketing:  d.Marketing,
 		crmOps:     newCRMOps(d.Ops),
 		crmMkt:     d.CRMMarketing,
+		crmForms:   d.CRMForms,
 		forms:      d.Forms,
 		social:     d.Social,
 		tools:      d.Tools,

@@ -93,3 +93,11 @@ describe('a contact in Mautic', () => {
     expect(text(d)).toContain('not in Mautic yet');
   });
 });
+
+describe('a contacts form responses', () => {
+  test('are listed with the question and the answer', () => {
+    const d = draw('contact', page({ Contact: { ID: 'c1', Name: 'Dana' }, Companies: [], Activities: [], Owners: [], Details: {}, SalesOn: true,
+      Desk: { Followups: [], Today: '2026-11-24', Forms: [{ Form: 'Expo lead form', Created: '2026-11-01T10:00:00Z', Finished: true, Answers: [{ Question: 'What do you need?', Answer: 'Rewinds' }] }] } }));
+    expect(d.querySelector('[data-form-responses]')?.textContent).toContain('What do you need?: Rewinds');
+  });
+});

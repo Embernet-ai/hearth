@@ -22,6 +22,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crmforms"
 	"github.com/Embernet-ai/hearth/internal/crmmarketing"
 	"github.com/Embernet-ai/hearth/internal/crmops"
 )
@@ -49,6 +50,8 @@ type deskData struct {
 	// Mautic is a contact's segments and campaigns, and MauticNote says why there are none to show.
 	Mautic     *crmmarketing.Panel
 	MauticNote string
+	// Forms is the form responses this person gave on Formbricks.
+	Forms []crmforms.Entry
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -308,6 +311,7 @@ func (s *Server) deskFor(r *http.Request, ref core.Ref, p *page) {
 	d.EmberOps = s.emberOpsPanel(r, ref, p)
 	if ref.Type == core.EntityContact {
 		d.Mautic, d.MauticNote = s.mauticPanel(r, ref, p)
+		d.Forms = s.formResponses(r, p)
 	}
 	p.Desk = d
 }
@@ -737,4 +741,21 @@ func (s *Server) mauticCampaign(w http.ResponseWriter, r *http.Request) {
 	s.mauticMove(w, r, func(ctx context.Context, org, c string, n int64, on bool) error {
 		return s.crmMkt.SetCampaign(ctx, org, c, n, on)
 	})
+}
+
+// formResponses is what this person answered on Formbricks forms, matched on their email addresses. A failure leaves it out.
+func (s *Server) formResponses(r *http.Request, p *page) []crmforms.Entry {
+	if s.crmForms == nil || p.Contact == nil {
+		return nil
+	}
+	emails := []string{p.Contact.Email}
+	if p.Details != nil {
+		emails = append(emails, p.Details.ExtraEmails...)
+	}
+	got, err := s.crmForms.ForEmails(r.Context(), emails)
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load form responses", "error", err)
+		return nil
+	}
+	return got
 }

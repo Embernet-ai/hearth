@@ -1,7 +1,7 @@
 <script lang="ts" module>
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  export { mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -309,5 +309,19 @@
     </ul>
   {/if}
 {/if}
+{/if}
+{/snippet}
+
+{#snippet formspanel(dot)}
+{#if dot?.Desk?.Forms?.length}
+<h3  id="forms">Form responses</h3>
+<ul  class="files"  data-form-responses>
+  {#each dot.Desk.Forms as e}
+    <li>
+      <strong>{e.Form}</strong> <span  class="muted small">{(e.Created || '').slice(0, 10)}{e.Finished ? '' : ', not finished'}</span>
+      {#each e.Answers || [] as a}<div  class="muted small">{a.Question}: {a.Answer}</div>{/each}
+    </li>
+  {/each}
+</ul>
 {/if}
 {/snippet}

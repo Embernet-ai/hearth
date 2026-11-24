@@ -26,14 +26,26 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crmforms"
 	"github.com/Embernet-ai/hearth/internal/crmmarketing"
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/fake"
+	"github.com/Embernet-ai/hearth/internal/forms"
 	"github.com/Embernet-ai/hearth/internal/mautic"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
 	"github.com/Embernet-ai/hearth/internal/platform/pg/pgtest"
 )
+
+type fakeForms struct{}
+
+func (fakeForms) Forms(context.Context) ([]forms.Form, error) {
+	return []forms.Form{{ID: "f1", Name: "Expo lead form", Status: forms.InProgress, Questions: []forms.Question{{ID: "q1", Headline: "Your email"}, {ID: "q2", Headline: "What do you need?"}}}}, nil
+}
+func (fakeForms) Responses(context.Context, string, int, int) ([]forms.Response, error) {
+	return []forms.Response{{ID: "r1", Created: "2026-11-01T10:00:00Z", Finished: true, Answers: map[string]any{"q1": "in@m.example", "q2": "Rewinds"}},
+		{ID: "r2", Created: "2026-11-02T10:00:00Z", Answers: map[string]any{"q1": "other@x.example", "q2": "Nope"}}}, nil
+}
 
 type fakeMautic struct{ calls []string }
 
@@ -97,7 +109,7 @@ func newDeskFx(t *testing.T) *deskFx {
 	t.Cleanup(ops.Close)
 	opsURL, _ := url.Parse(ops.URL)
 	mkt := &fakeMautic{}
-	srv, err := New(Deps{Calls: calls.New(pools.Web, az, nil), Docs: docs.New(pools.Web, az), CRMMarketing: crmmarketing.New(pools.Web, mkt), Log: log, Sales: svc, CRM: svc, Authz: az, Ops: emberops.New(emberops.Config{BaseURL: opsURL, Service: emberops.StaticToken("svc")})})
+	srv, err := New(Deps{CRMForms: crmforms.New(fakeForms{}), Calls: calls.New(pools.Web, az, nil), Docs: docs.New(pools.Web, az), CRMMarketing: crmmarketing.New(pools.Web, mkt), Log: log, Sales: svc, CRM: svc, Authz: az, Ops: emberops.New(emberops.Config{BaseURL: opsURL, Service: emberops.StaticToken("svc")})})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,6 +435,19 @@ func TestAContactsMauticPanelAndMovingThem(t *testing.T) {
 	}
 	if err := json.Unmarshal(f.do(f.other, "GET", "/contacts/"+linked.ID, nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.Mautic.Segments) != 2 || !env.Page.Desk.Mautic.Segments[1].Locked || !env.Page.Desk.Mautic.Segments[1].Member {
 		t.Fatalf("panel = %+v (%v)", env, err)
+	}
+	var fr struct {
+		Page struct {
+			Desk struct {
+				Forms []struct {
+					Form    string
+					Answers []struct{ Question, Answer string }
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/contacts/"+linked.ID, nil).Body.Bytes(), &fr); err != nil || len(fr.Page.Desk.Forms) != 1 || fr.Page.Desk.Forms[0].Answers[1].Answer != "Rewinds" {
+		t.Errorf("form responses = %+v (%v), want only the contact's own", fr, err)
 	}
 	env.Page.Desk.MauticNote = ""
 	if err := json.Unmarshal(f.do(f.other, "GET", "/contacts/"+loose.ID, nil).Body.Bytes(), &env); err != nil || !strings.Contains(env.Page.Desk.MauticNote, "not in Mautic yet") {
