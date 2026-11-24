@@ -86,6 +86,8 @@ type Syncer struct {
 	byID map[string]map[string]emberops.Row
 	// leadOf is the Lead made or found for each company this run.
 	leadOf map[string]string
+	// limited is a run scoped to named companies, which never touches a deal that belongs to none of them.
+	limited bool
 }
 
 // all reads every record of a doctype once per run. Asking about thousands of
@@ -614,6 +616,7 @@ func (s *Syncer) Run(ctx context.Context, o Options) (*Report, error) {
 		s.company(ctx, rep, c, o.Write)
 	}
 	if o.Deals && !o.Show && !o.Remove {
+		s.limited = len(o.Only) > 0
 		s.syncDeals(ctx, rep, cos, o.Write)
 	}
 	if !o.Show && !o.Remove {

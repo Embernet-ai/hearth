@@ -122,7 +122,7 @@ func TestDealsGoAcrossOnlyWhenAskedAndOnlyWithAPartyEmberOpsKnows(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Count("opportunity", "would create") != 2 || rep.Count("lead", "would create") != 1 {
+	if rep.Count("opportunity", "would create") != 3 || rep.Count("lead", "would create") != 2 {
 		t.Errorf("dry run with deals: %+v", rep.Actions)
 	}
 	if len(x.f.All("Opportunity"))+len(x.f.All("Lead")) != 0 {
@@ -135,11 +135,19 @@ func TestDealsGoAcrossOnlyWhenAskedAndOnlyWithAPartyEmberOpsKnows(t *testing.T) 
 	if err != nil || rep.Failed() {
 		t.Fatalf("write deals: %v %+v", err, rep.Actions)
 	}
-	if n := len(x.f.All("Opportunity")); n != 2 {
-		t.Fatalf("%d Opportunities, want 2 (a deal with no company and a removed deal do not go)", n)
+	if n := len(x.f.All("Opportunity")); n != 3 {
+		t.Fatalf("%d Opportunities, want 3 (every live deal, the one with no company too; a removed deal does not go)", n)
 	}
-	if n := len(x.f.All("Lead")); n != 1 {
-		t.Fatalf("%d Leads, want 1 (only the prospect with a deal)", n)
+	if n := len(x.f.All("Lead")); n != 2 {
+		t.Fatalf("%d Leads, want 2 (the prospect with a deal, and one for the deal with no company)", n)
+	}
+	o3, err := x.ops.GetByHearthID(x.ctx, "Opportunity", d3)
+	if err != nil {
+		t.Fatalf("the deal with no company did not reach EmberOps: %v", err)
+	}
+	own, err := x.ops.GetByHearthID(x.ctx, "Lead", d3)
+	if err != nil || o3["opportunity_from"] != "Lead" || o3["party_name"] != own["name"] || own["company_name"] != "Floating idea" {
+		t.Errorf("the deal with no company: Opportunity %v, its Lead %v (%v)", o3, own, err)
 	}
 	o1, err := x.ops.GetByHearthID(x.ctx, "Opportunity", d1)
 	if err != nil {
@@ -170,7 +178,7 @@ func TestDealsGoAcrossOnlyWhenAskedAndOnlyWithAPartyEmberOpsKnows(t *testing.T) 
 	// Again: still one of each. A stage moved in Hearth is the next run's update.
 	x.exec(`UPDATE deals SET stage='won' WHERE id=$1`, d1)
 	rep, _ = x.sync.Run(x.ctx, crmsync.Options{Write: true, Deals: true})
-	if rep.Count("", "create") != 0 || len(x.f.All("Opportunity")) != 2 || len(x.f.All("Lead")) != 1 {
+	if rep.Count("", "create") != 0 || len(x.f.All("Opportunity")) != 3 || len(x.f.All("Lead")) != 2 {
 		t.Errorf("a second run made something: %+v", rep.Actions)
 	}
 	o1, _ = x.ops.GetByHearthID(x.ctx, "Opportunity", d1)
@@ -190,7 +198,7 @@ func TestDealsGoAcrossOnlyWhenAskedAndOnlyWithAPartyEmberOpsKnows(t *testing.T) 
 	// A deal removed in Hearth leaves its Opportunity alone and says so.
 	x.exec(`UPDATE deals SET deleted_at = now() WHERE id=$1`, d2)
 	rep, _ = x.sync.Run(x.ctx, crmsync.Options{Write: true, Deals: true})
-	if rep.Count("opportunity", "keep") != 1 || len(x.f.All("Opportunity")) != 2 {
+	if rep.Count("opportunity", "keep") != 1 || len(x.f.All("Opportunity")) != 3 {
 		t.Errorf("a removed deal was not kept: %+v", rep.Actions)
 	}
 }
