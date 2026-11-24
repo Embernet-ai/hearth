@@ -476,6 +476,8 @@ type Desk interface {
 	Forecast(ctx context.Context, orgID string, actor core.Subjects, owner string, now time.Time) (*Forecast, error)
 	SalesReport(ctx context.Context, orgID string, actor core.Subjects, from, to time.Time, owner string) (*SalesReport, error)
 	BulkApply(ctx context.Context, orgID string, actor core.Subjects, b BulkSpec) (*BulkResult, error)
+	Duplicates(ctx context.Context, orgID string, actor core.Subjects, t core.EntityType) ([]DupGroup, error)
+	Merge(ctx context.Context, orgID string, actor core.Subjects, t core.EntityType, survivor string, losers []string) error
 }
 
 var _ Desk = (*Service)(nil)

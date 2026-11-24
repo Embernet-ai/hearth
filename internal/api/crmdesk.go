@@ -21,6 +21,8 @@ func (s *Service) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/crm/forecast", s.crmDesk(s.forecast))
 	mux.HandleFunc("GET /v1/crm/reports", s.crmDesk(s.salesReport))
 	mux.HandleFunc("POST /v1/crm/bulk", s.crmDesk(s.bulk))
+	mux.HandleFunc("GET /v1/crm/duplicates", s.crmDesk(s.duplicates))
+	mux.HandleFunc("POST /v1/crm/merge", s.crmDesk(s.merge))
 }
 
 // crmDesk hands a handler the desk, after checking the caller works sales.
@@ -326,4 +328,46 @@ func (s *Service) bulk(w http.ResponseWriter, r *http.Request, d crm.Desk) {
 		failed = append(failed, map[string]any{"id": f.ID, "why": f.Why})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"changed": res.Done, "failed": failed})
+}
+
+func (s *Service) duplicates(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	typ := core.EntityContact
+	if r.URL.Query().Get("type") == "company" {
+		typ = core.EntityCompany
+	}
+	groups, err := d.Duplicates(r.Context(), c.OrgID, c.Subjects, typ)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "could not look for duplicates")
+		return
+	}
+	out := make([]map[string]any, 0, len(groups))
+	for _, g := range groups {
+		recs := make([]map[string]any, 0, len(g.Records))
+		for _, x := range g.Records {
+			recs = append(recs, map[string]any{"id": x.ID, "name": x.Name, "detail": x.Detail, "owner_name": x.Owner, "deals": x.Deals, "updated_at": x.UpdatedAt})
+		}
+		out = append(out, map[string]any{"reason": g.Reason, "records": recs})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"type": string(typ), "groups": out})
+}
+
+type mergeBody struct {
+	Type     string   `json:"type"`
+	Survivor string   `json:"survivor_id"`
+	Merge    []string `json:"merge_ids"`
+}
+
+func (s *Service) merge(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	var b mergeBody
+	if err := decode(r, &b); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := d.Merge(r.Context(), c.OrgID, c.Subjects, core.EntityType(b.Type), b.Survivor, b.Merge); err != nil {
+		crmErr(w, err, "you cannot merge those")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"merged": len(b.Merge), "survivor_id": b.Survivor})
 }

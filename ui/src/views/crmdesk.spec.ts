@@ -11,7 +11,7 @@ describe('the CRM group of the rail', () => {
     expect(labels('Chat', page())).toEqual(['Channels']);
   });
   test('offers the sales pages to a person who works sales', () => {
-    expect(labels('CRM', page({ SalesNav: true }))).toEqual(['Contacts', 'Companies', 'Deals', 'Follow-ups', 'Forecast', 'Sales reports', 'Unassigned']);
+    expect(labels('CRM', page({ SalesNav: true }))).toEqual(['Contacts', 'Companies', 'Deals', 'Follow-ups', 'Forecast', 'Sales reports', 'Unassigned', 'Duplicates']);
   });
   test('offers a person outside sales only the contacts and companies they always had', () => {
     expect(labels('CRM', page({ SalesNav: false }))).toEqual(['Contacts', 'Companies']);
@@ -44,5 +44,18 @@ describe('the forecast and the report', () => {
     const d = draw('salesreports', page({ Owners: owners, Desk: { From: '2026-10-26', To: '2026-11-24', Report: { OpenCount: 0, Open: [], Weighted: [], WonCount: 0, Won: [], LostCount: 0, Lost: [], WinRate: -1, AvgWon: [], AvgCycleDays: 0, Pipeline: [], Owners: [], Activity: [], Created: [] } } }));
     expect(text(d)).toContain('none closed');
     expect(text(d)).toContain('Nothing logged in this period.');
+  });
+});
+
+describe('the duplicates page', () => {
+  test('offers each group with a keeper and the others to merge in', () => {
+    const d = draw('duplicates', page({ Desk: { DupType: 'contact', Dups: [{ Reason: 'Same phone number', Records: [{ ID: 'a', Name: 'Dana', Detail: 'dana@x.example', Owner: 'Pat', Deals: 2 }, { ID: 'b', Name: 'Dana W', Detail: '', Owner: '', Deals: 0 }] }] } }));
+    expect(text(d)).toContain('Same phone number');
+    expect(d.querySelectorAll('[data-dup-group] input[name="merge"]').length).toBe(2);
+    expect(d.querySelector('input[name="survivor"][value="a"]')).not.toBeNull();
+    expect(d.querySelector('a[href="/contacts/b"]')).not.toBeNull();
+  });
+  test('says so when there are none', () => {
+    expect(text(draw('duplicates', page({ Desk: { DupType: 'company', Dups: [] } })))).toContain('No duplicates found.');
   });
 });

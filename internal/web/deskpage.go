@@ -38,6 +38,9 @@ type deskData struct {
 	MailOn bool
 	Today  string
 	Me     string
+	// Dups is the groups of probable duplicates on the duplicates page, of the kind DupType.
+	Dups    []crm.DupGroup
+	DupType string
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -51,6 +54,8 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /crm/forecast.csv", s.forecastCSV)
 	mux.HandleFunc("GET /crm/reports", s.reportsPage)
 	mux.HandleFunc("POST /crm/bulk", s.bulkChange)
+	mux.HandleFunc("GET /crm/duplicates", s.duplicatesPage)
+	mux.HandleFunc("POST /crm/merge", s.mergeRecords)
 	mux.HandleFunc("POST /crm/email", s.emailFromRecord)
 	mux.HandleFunc("POST /crm/meeting", s.meetingFromRecord)
 }
@@ -565,4 +570,46 @@ func (s *Server) meetingFromRecord(w http.ResponseWriter, r *http.Request) {
 		s.log.WarnContext(ctx, "log meeting", "error", err)
 	}
 	http.Redirect(w, r, recordPath(ref)+"#timeline", http.StatusSeeOther)
+}
+
+// -----------------------------------------------------------------------------
+// Duplicates and merging
+// -----------------------------------------------------------------------------
+
+func (s *Server) duplicatesPage(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	typ := core.EntityContact
+	if r.URL.Query().Get("type") == "company" {
+		typ = core.EntityCompany
+	}
+	groups, err := desk.Duplicates(r.Context(), id.OrgID, id.Subjects, typ)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "find duplicates", "error", err)
+		s.fail(w, r, http.StatusInternalServerError, "could not look for duplicates")
+		return
+	}
+	s.render(w, r, "duplicates", page{Title: "Duplicates", SalesOn: true, Desk: &deskData{Dups: groups, DupType: string(typ)}})
+}
+
+func (s *Server) mergeRecords(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	typ := core.EntityType(r.FormValue("type"))
+	survivor := strings.TrimSpace(r.FormValue("survivor"))
+	if err := desk.Merge(r.Context(), id.OrgID, id.Subjects, typ, survivor, r.Form["merge"]); err != nil {
+		s.crmFail(w, r, err, "you cannot merge those")
+		return
+	}
+	http.Redirect(w, r, recordPath(core.Ref{Type: typ, ID: survivor}), http.StatusSeeOther)
 }

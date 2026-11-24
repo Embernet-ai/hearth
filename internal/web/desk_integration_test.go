@@ -121,7 +121,7 @@ func (f *deskFx) do(as, method, path string, form url.Values) *httptest.Response
 
 func TestDeskRoutesAreForSalesAndSuperAdminsOnly(t *testing.T) {
 	f := newDeskFx(t)
-	gets := []string{"/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
+	gets := []string{"/crm/duplicates", "/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
 	for _, p := range gets {
 		if w := f.do(f.out, "GET", p, nil); w.Code != http.StatusNotFound {
 			t.Errorf("GET %s as an outsider = %d, want 404", p, w.Code)
@@ -258,5 +258,46 @@ func TestAMailActionOnAnAccountThatIsNotConnectedSaysToConnectIt(t *testing.T) {
 	srv.connectFail(w, httptest.NewRequest("POST", "/crm/email", nil), errors.New("quota exceeded"), "sending mail")
 	if w.Code != http.StatusBadGateway {
 		t.Errorf("a real provider failure = %d, want 502", w.Code)
+	}
+}
+
+func TestMergeThroughTheRoutes(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	t.Cleanup(func() {})
+	svc := f.srv.sales.(*crm.Service)
+	a, err := svc.CreateContact(ctx, f.org, f.subj(f.member), crm.Contact{Name: "Dana Route", Email: "dana@route.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.CreateContact(ctx, f.org, f.subj(f.member), crm.Contact{Name: "dana route", Email: "d.route@route.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []*crm.Contact{a, b} {
+		if err := svc.Share(ctx, f.org, f.subj(f.member), c.Ref()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var env struct {
+		Page struct {
+			Desk struct{ Dups []struct{ Reason string } }
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/crm/duplicates", nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.Dups) != 1 {
+		t.Fatalf("duplicates page = %+v (%v)", env, err)
+	}
+	if w := f.do(f.out, "POST", "/crm/merge", url.Values{"type": {"contact"}, "survivor": {a.ID}, "merge": {b.ID}}); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider merging = %d, want 404", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/merge", url.Values{"type": {"contact"}, "survivor": {a.ID}}); w.Code != http.StatusBadRequest {
+		t.Errorf("a merge with nothing to merge = %d, want 400", w.Code)
+	}
+	w := f.do(f.other, "POST", "/crm/merge", url.Values{"type": {"contact"}, "survivor": {a.ID}, "merge": {b.ID}})
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/contacts/"+a.ID {
+		t.Fatalf("merge = %d to %q", w.Code, w.Header().Get("Location"))
+	}
+	if _, err := svc.GetContact(ctx, f.org, f.subj(f.member), b.ID); err == nil {
+		t.Error("the merged contact still opens")
 	}
 }

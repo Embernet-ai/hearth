@@ -6,6 +6,7 @@ package crm_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -449,5 +450,140 @@ func TestSuperAdminSeesThePartiesOfADocument(t *testing.T) {
 	parties, err := f.svc.PartiesFor(ctx, f.org, admin, d.ID)
 	if err != nil || len(parties) != 1 {
 		t.Errorf("parties for a super admin = %d (%v), want 1", len(parties), err)
+	}
+}
+
+func TestDuplicateContactsAreFoundAndMergedWithoutLosingAnything(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	t.Cleanup(func() { _, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM crm_merges WHERE org_id=$1`, f.org) })
+	ctx := context.Background()
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	co, _ := f.svc.CreateCompany(ctx, f.org, alice, crm.Company{Name: "Dup Co", Kind: crm.KindProspect})
+	f.svc.Share(ctx, f.org, alice, core.Ref{Type: core.EntityCompany, ID: co.ID})
+	keep, err := f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "Dana Whitfield", Email: "dana@dup.example", CompanyID: &co.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dupe, err := f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "dana whitfield", Email: "dana.w@dup.example", Phone: "(216) 555-0142", Title: "Buyer", Notes: "met at the expo", CompanyID: &co.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _ := f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "Someone Else", Email: "else@dup.example"})
+	for _, c := range []*crm.Contact{keep, dupe, other} {
+		f.svc.Share(ctx, f.org, alice, c.Ref())
+	}
+	// The duplicate was unsubscribed; the survivor was not.
+	if _, err := f.svc.SetContactOptOut(ctx, f.org, alice, dupe.ID, "unsubscribed"); err != nil {
+		t.Fatal(err)
+	}
+	deal, _ := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Dana's deal", ContactID: &dupe.ID})
+	f.svc.AddActivity(ctx, f.org, alice, crm.Activity{Kind: crm.ActNote, Body: "about the duplicate", Targets: []core.Ref{dupe.Ref()}})
+	fu, _ := f.svc.AddFollowup(ctx, f.org, alice, crm.FollowupParams{Title: "ring Dana", Target: dupe.Ref()})
+
+	groups, err := f.svc.Duplicates(ctx, f.org, bob, core.EntityContact)
+	if err != nil || len(groups) != 1 || len(groups[0].Records) != 2 {
+		t.Fatalf("duplicate groups = %+v (%v), want one group of two", groups, err)
+	}
+	if g, _ := f.svc.Duplicates(ctx, f.org, out, core.EntityContact); len(g) != 0 {
+		t.Errorf("an outsider found %d duplicate groups", len(g))
+	}
+	// An outsider cannot merge anything, and a bad request is refused before anything moves.
+	if err := f.svc.Merge(ctx, f.org, out, core.EntityContact, keep.ID, []string{dupe.ID}); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("an outsider merging: got %v, want ErrNotFound", err)
+	}
+	for name, e := range map[string]error{
+		"no losers":     f.svc.Merge(ctx, f.org, bob, core.EntityContact, keep.ID, nil),
+		"into itself":   f.svc.Merge(ctx, f.org, bob, core.EntityContact, keep.ID, []string{keep.ID}),
+		"a deal":        f.svc.Merge(ctx, f.org, bob, core.EntityDeal, keep.ID, []string{dupe.ID}),
+		"a stranger id": f.svc.Merge(ctx, f.org, bob, core.EntityContact, keep.ID, []string{uuid.NewString()}),
+	} {
+		if e == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if err := f.svc.Merge(ctx, f.org, bob, core.EntityContact, keep.ID, []string{dupe.ID}); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	got, err := f.svc.GetContact(ctx, f.org, bob, keep.ID)
+	if err != nil || got.Phone == "" || got.Title != "Buyer" {
+		t.Fatalf("survivor = %+v (%v), want the duplicate's phone and title filled in", got, err)
+	}
+	if !strings.Contains(got.Notes, "met at the expo") {
+		t.Errorf("notes = %q, want the duplicate's carried over", got.Notes)
+	}
+	d, _ := f.svc.ContactDetails(ctx, f.org, bob, keep.ID)
+	if len(d.ExtraEmails) != 1 || d.ExtraEmails[0] != "dana.w@dup.example" {
+		t.Errorf("extra emails = %v, want the duplicate's address kept", d.ExtraEmails)
+	}
+	if d.MarketingOptOutAt == nil {
+		t.Error("the unsubscribe did not carry over: a merge must never re-subscribe somebody")
+	}
+	if _, err := f.svc.GetContact(ctx, f.org, bob, dupe.ID); err == nil {
+		t.Error("the merged contact can still be opened")
+	}
+	if dd, _ := f.svc.GetDeal(ctx, f.org, bob, deal.ID); dd.ContactID == nil || *dd.ContactID != keep.ID {
+		t.Errorf("the deal still points at %v", dd.ContactID)
+	}
+	if acts, _ := f.svc.ActivitiesFor(ctx, f.org, bob, keep.Ref()); len(acts) != 1 {
+		t.Errorf("survivor's timeline has %d notes, want the duplicate's 1", len(acts))
+	}
+	if rows, _, _ := f.svc.Followups(ctx, f.org, bob, crm.FollowupQuery{Target: &core.Ref{Type: core.EntityContact, ID: keep.ID}}); len(rows) != 1 || rows[0].ID != fu.ID {
+		t.Errorf("the follow-up did not move: %+v", rows)
+	}
+	var n int
+	f.pools.Web.QueryRow(ctx, `SELECT count(*) FROM crm_merges WHERE org_id=$1 AND survivor_id=$2 AND loser_id=$3`, f.org, keep.ID, dupe.ID).Scan(&n)
+	if n != 1 {
+		t.Errorf("merge records = %d, want 1", n)
+	}
+	if g, _ := f.svc.Duplicates(ctx, f.org, bob, core.EntityContact); len(g) != 0 {
+		t.Errorf("after the merge there are still %d groups", len(g))
+	}
+}
+
+func TestDuplicateCompaniesAreMergedWithTheirPeopleAndDeals(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	t.Cleanup(func() { _, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM crm_merges WHERE org_id=$1`, f.org) })
+	ctx := context.Background()
+	alice, bob := f.subj(t, f.alice), f.subj(t, f.bob)
+	keep, err := f.svc.CreateCompany(ctx, f.org, alice, crm.Company{Name: "Acme Rewinds", Kind: crm.KindProspect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dupe, err := f.svc.CreateCompany(ctx, f.org, alice, crm.Company{Name: "ACME  Rewinds", Domain: "acme.example", Kind: crm.KindProspect, Notes: "the old record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []*crm.Company{keep, dupe} {
+		f.svc.Share(ctx, f.org, alice, c.Ref())
+	}
+	f.svc.SetCompanyLabels(ctx, f.org, alice, dupe.ID, nil, &[]string{"expo"})
+	person, _ := f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "At Dupe", Email: "p@acme.example", CompanyID: &dupe.ID})
+	f.svc.Share(ctx, f.org, alice, person.Ref())
+	deal, _ := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Rewind order", CompanyID: &dupe.ID})
+	groups, err := f.svc.Duplicates(ctx, f.org, bob, core.EntityCompany)
+	if err != nil || len(groups) != 1 {
+		t.Fatalf("company groups = %+v (%v), want one", groups, err)
+	}
+	if err := f.svc.Merge(ctx, f.org, bob, core.EntityCompany, keep.ID, []string{dupe.ID}); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if c, _ := f.svc.GetCompany(ctx, f.org, bob, keep.ID); c.Domain != "acme.example" || !strings.Contains(c.Notes, "the old record") {
+		t.Errorf("survivor = %+v, want the duplicate's domain and notes", c)
+	}
+	if ct, _ := f.svc.GetContact(ctx, f.org, bob, person.ID); ct.CompanyID == nil || *ct.CompanyID != keep.ID {
+		t.Errorf("the person is still at %v", ct.CompanyID)
+	}
+	if dd, _ := f.svc.GetDeal(ctx, f.org, bob, deal.ID); dd.CompanyID == nil || *dd.CompanyID != keep.ID {
+		t.Errorf("the deal is still at %v", dd.CompanyID)
+	}
+	if l, _ := f.svc.CompanyLabels(ctx, f.org, bob, keep.ID); len(l.Tags) != 1 || l.Tags[0] != "expo" {
+		t.Errorf("tags = %v, want the duplicate's expo", l.Tags)
+	}
+	if _, err := f.svc.GetCompany(ctx, f.org, bob, dupe.ID); err == nil {
+		t.Error("the merged company can still be opened")
 	}
 }
