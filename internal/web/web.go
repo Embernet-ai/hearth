@@ -1358,6 +1358,8 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("GET /social", s.getSocial)
 	authed.HandleFunc("POST /social/post", s.postSocialPost)
 	authed.HandleFunc("POST /social/post/{id}/delete", s.postSocialDelete)
+	authed.HandleFunc("POST /social/post/{id}/status", s.postSocialStatus)
+	authed.HandleFunc("POST /social/media", s.postSocialUpload)
 	authed.HandleFunc("GET /mailbox", s.getMailbox)
 	authed.HandleFunc("POST /mailbox/send", s.postMailSend)
 	authed.HandleFunc("POST /mailbox/reply", s.postMailReply)

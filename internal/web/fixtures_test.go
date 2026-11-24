@@ -231,7 +231,12 @@ func fixtures() map[string]page {
 		"social-none": {Title: "Social", SocialArea: &SocialView{Configured: true}},
 		"social-posts": {Title: "Social", SocialArea: &SocialView{Configured: true,
 			Channels: []social.Channel{{ID: "c1", Name: "Fireball", Kind: "linkedin"}},
-			Posts:    []social.Post{{ID: "p1", Content: "Hello", PublishDate: "2026-11-22T10:00:00Z", State: "QUEUE"}}}},
+			Posts: []social.Post{{ID: "p1", Content: "Hello", PublishDate: "2026-11-22T10:00:00Z", State: "QUEUE"}, {ID: "p2", Content: "Draft", PublishDate: "2026-11-23T10:00:00Z", State: "DRAFT"},
+				{ID: "p3", Content: "Out", PublishDate: "2026-11-20T10:00:00Z", State: "PUBLISHED"}}}},
+		"social-activity": {Title: "Social", SocialArea: &SocialView{Configured: true, Tab: "activity",
+			Notifications: []social.Notification{{ID: "n1", Content: "Your post to X was published successfully", CreatedAt: "2026-11-20T10:00:00.000Z"}}}},
+		"social-media": {Title: "Social", SocialArea: &SocialView{Configured: true, Tab: "media",
+			Media: []social.Media{{ID: "m1", OriginalName: "banner.png", Path: "https://u.example/banner.png", CreatedAt: "2026-11-20T09:12:00.000Z"}}}},
 		"tools-list": {Title: "Tools", ToolsOn: true, ToolsList: &ToolsView{Tools: []tools.Tool{{Name: "Ops", Description: "Orders and invoices", Href: "https://ops.example"}, {Name: "Vord", Description: "Your account", Href: "https://vord.example", Note: "Sign in with Vord"}}}},
 		"tools-none": {Title: "Tools", ToolsList: &ToolsView{}},
 

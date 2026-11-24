@@ -256,3 +256,86 @@ func (c *Client) Analytics(ctx context.Context, channelID string, days int) ([]M
 	}
 	return out, nil
 }
+
+// SetStatus moves a scheduled post back to a draft, or a draft onto the schedule at the date it already holds. Postiz keeps
+// the stored date either way; its public API has no call to change a post's date.
+func (c *Client) SetStatus(ctx context.Context, id, status string) error {
+	if status != "draft" && status != "schedule" {
+		return errors.New("social: a post is either a draft or scheduled")
+	}
+	err := c.do(ctx, http.MethodPut, "/posts/"+url.PathEscape(id)+"/status", nil, map[string]string{"status": status}, nil, false)
+	c.forget()
+	return err
+}
+
+// DeleteGroup removes every post made together, by the group they share.
+func (c *Client) DeleteGroup(ctx context.Context, group string) error {
+	err := c.do(ctx, http.MethodDelete, "/posts/group/"+url.PathEscape(group), nil, nil, nil, false)
+	c.forget()
+	return err
+}
+
+// PostAnalytics reads the numbers of one published post for the last days (likes, comments, shares, impressions, by platform).
+func (c *Client) PostAnalytics(ctx context.Context, postID string, days int) ([]Metric, error) {
+	var out []Metric
+	q := url.Values{"date": {fmt.Sprint(days)}}
+	if err := c.do(ctx, http.MethodGet, "/analytics/post/"+url.PathEscape(postID), q, nil, &out, true); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Notification is one line of what the publishing app has to say: a post published, a post failed.
+type Notification struct {
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	Link      string `json:"link"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// Notifications reads the most recent notifications (a hundred a page, newest first).
+func (c *Client) Notifications(ctx context.Context, page int) ([]Notification, error) {
+	var out struct {
+		Notifications []Notification `json:"notifications"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/notifications", url.Values{"page": {fmt.Sprint(page)}}, nil, &out, true); err != nil {
+		return nil, err
+	}
+	return out.Notifications, nil
+}
+
+// Media is one file in the media library.
+type Media struct {
+	ID           string `json:"id"`
+	OriginalName string `json:"originalName"`
+	Path         string `json:"path"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+// MediaLibrary lists the uploaded files, newest first, eighteen a page, narrowed by a name.
+func (c *Client) MediaLibrary(ctx context.Context, search string, page int) ([]Media, error) {
+	var out struct {
+		Results []Media `json:"results"`
+	}
+	q := url.Values{"page": {fmt.Sprint(max(page, 1))}}
+	if search != "" {
+		q.Set("search", search)
+	}
+	if err := c.do(ctx, http.MethodGet, "/media", q, nil, &out, true); err != nil {
+		return nil, err
+	}
+	return out.Results, nil
+}
+
+// UploadFromURL puts a file that is already on the web into the media library, and returns it ready to attach to a post.
+func (c *Client) UploadFromURL(ctx context.Context, address string) (*Image, error) {
+	if u, err := url.Parse(strings.TrimSpace(address)); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return nil, errors.New("social: that is not a web address")
+	}
+	var out Image
+	err := c.do(ctx, http.MethodPost, "/upload-from-url", nil, map[string]string{"url": strings.TrimSpace(address)}, &out, false)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

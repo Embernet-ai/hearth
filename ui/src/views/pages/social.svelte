@@ -11,11 +11,33 @@
   <h1>Social</h1>
   {#if F.t(v?.Notice)}<p  class="card small"  data-flash>{v?.Notice}</p>{/if}
 
+  {#if v?.Configured}
+    <nav  class="row tabs">
+      <a  class={'chip' + (v.Tab === 'posts' ? ' on' : '')}  href="/social">Posts</a>
+      <a  class={'chip' + (v.Tab === 'activity' ? ' on' : '')}  href="/social?tab=activity">Activity</a>
+      <a  class={'chip' + (v.Tab === 'media' ? ' on' : '')}  href="/social?tab=media">Media</a>
+    </nav>
+  {/if}
+
   {#if !v?.Configured}
     <p  class="muted"  data-not-set-up>
       Social is not connected on this installation. Set <code>HEARTH_SOCIAL_URL</code> and <code>HEARTH_SOCIAL_API_KEY</code> to the
       address and API key of your social publishing app, and your channels and posts appear here.
     </p>
+  {:else if v.Tab === 'activity'}
+    <h2>Activity</h2>
+    {#if v.Notifications && v.Notifications.length}
+      <ul  class="list"  data-activity>{#each v.Notifications as n}<li>{n.Content}{#if n.Link} <a  href={n.Link}>Open</a>{/if} <span  class="muted small">{(n.CreatedAt ?? '').slice(0, 16).replace('T', ' ')}</span></li>{/each}</ul>
+    {:else}<p  class="muted"  data-no-activity>Nothing from the publishing app yet.</p>{/if}
+  {:else if v.Tab === 'media'}
+    <h2>Media</h2>
+    <form  method="post"  action="/social/media"  class="row"  data-media-upload>
+      <input  type="url"  name="url"  placeholder="Address of an image or video to add"  aria-label="Address of a file"  required>
+      <button  type="submit">Add to the library</button>
+    </form>
+    {#if v.Media && v.Media.length}
+      <ul  class="list"  data-media>{#each v.Media as m}<li><a  href={m.Path}  target="_blank"  rel="noopener">{m.OriginalName || m.Path}</a> <span  class="muted small">{(m.CreatedAt ?? '').slice(0, 10)}</span></li>{/each}</ul>
+    {:else}<p  class="muted">No files in the media library.</p>{/if}
   {:else}
     <h2>Channels</h2>
     {#if v.Channels && v.Channels.length}
@@ -33,6 +55,13 @@
       <table  class="list small"  data-metrics>
         <thead><tr><th>Last 30 days</th><th>Latest</th><th>Change</th></tr></thead>
         <tbody>{#each v.Metrics as m}<tr><td>{m.Label}</td><td>{(m.Data ?? []).slice(-1)[0]?.Total ?? ''}</td><td>{m.Change ?? ''}%</td></tr>{/each}</tbody>
+      </table>
+    {/if}
+
+    {#if v.PostMetrics && v.PostMetrics.length}
+      <table  class="list small"  data-post-metrics>
+        <thead><tr><th>This post, last 30 days</th><th>Latest</th><th>Change</th></tr></thead>
+        <tbody>{#each v.PostMetrics as m}<tr><td>{m.Label}</td><td>{(m.Data ?? []).slice(-1)[0]?.Total ?? ''}</td><td>{m.Change ?? ''}%</td></tr>{/each}</tbody>
       </table>
     {/if}
 
@@ -59,7 +88,12 @@
               <td>{F.date(p.PublishDate)}</td><td>{p.Channel?.Name ?? p.Channel?.Kind}</td>
               <td>{p.Content}{#if p.URL} <a  href={p.URL}  target="_blank"  rel="noopener">View</a>{/if}</td>
               <td>{p.State === 'QUEUE' ? 'Scheduled' : p.State === 'PUBLISHED' ? 'Published' : p.State === 'ERROR' ? 'Failed' : 'Draft'}{#if p.Error} <span  class="err">{p.Error}</span>{/if}</td>
-              <td><form  method="post"  action={"/social/post/" + p.ID + "/delete"}  class="inline"  data-confirm="Delete this post?"><button  class="ghost small">Delete</button></form></td>
+              <td  class="row">
+                {#if p.State === 'QUEUE'}<form  method="post"  action={"/social/post/" + p.ID + "/status"}  class="inline"><input  type="hidden"  name="to"  value="draft"><button  class="ghost small">Make a draft</button></form>{/if}
+                {#if p.State === 'DRAFT'}<form  method="post"  action={"/social/post/" + p.ID + "/status"}  class="inline"><input  type="hidden"  name="to"  value="schedule"><button  class="ghost small">Schedule</button></form>{/if}
+                {#if p.State === 'PUBLISHED'}<a  class="small"  href={"/social?post=" + p.ID}>Numbers</a>{/if}
+                <form  method="post"  action={"/social/post/" + p.ID + "/delete"}  class="inline"  data-confirm="Delete this post?"><button  class="ghost small">Delete</button></form>
+              </td>
             </tr>
           {/each}
         </tbody>

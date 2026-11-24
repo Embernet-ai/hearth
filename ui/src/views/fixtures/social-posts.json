@@ -327,8 +327,12 @@
    }
   ],
   "Configured": true,
+  "Media": null,
   "Metrics": null,
   "Notice": "",
+  "Notifications": null,
+  "Post": "",
+  "PostMetrics": null,
   "Posts": [
    {
     "Channel": {
@@ -343,8 +347,37 @@
     "PublishDate": "2026-11-22T10:00:00Z",
     "State": "QUEUE",
     "URL": ""
+   },
+   {
+    "Channel": {
+     "ID": "",
+     "Kind": "",
+     "Name": "",
+     "Picture": ""
+    },
+    "Content": "Draft",
+    "Error": "",
+    "ID": "p2",
+    "PublishDate": "2026-11-23T10:00:00Z",
+    "State": "DRAFT",
+    "URL": ""
+   },
+   {
+    "Channel": {
+     "ID": "",
+     "Kind": "",
+     "Name": "",
+     "Picture": ""
+    },
+    "Content": "Out",
+    "Error": "",
+    "ID": "p3",
+    "PublishDate": "2026-11-20T10:00:00Z",
+    "State": "PUBLISHED",
+    "URL": ""
    }
-  ]
+  ],
+  "Tab": ""
  },
  "Sort": "",
  "SortLinks": null,

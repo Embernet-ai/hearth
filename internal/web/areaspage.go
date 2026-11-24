@@ -413,11 +413,21 @@ type SocialView struct {
 	Posts      []social.Post
 	Metrics    []social.Metric
 	Channel    string // the channel whose numbers are shown
+	// Tab is posts, activity or media. The publishing app allows about thirty requests an hour, so activity and media are
+	// read only when asked for.
+	Tab           string
+	Post          string // the post whose numbers are shown
+	PostMetrics   []social.Metric
+	Notifications []social.Notification
+	Media         []social.Media
 }
 
 func (s *Server) getSocial(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v := &SocialView{Configured: s.social.Enabled(), Notice: q.Get("notice"), Channel: q.Get("channel")}
+	v := &SocialView{Configured: s.social.Enabled(), Notice: q.Get("notice"), Channel: q.Get("channel"), Tab: q.Get("tab"), Post: q.Get("post")}
+	if v.Tab != "activity" && v.Tab != "media" {
+		v.Tab = "posts"
+	}
 	if v.Configured {
 		ctx, cancel := s.areaCtx(r)
 		defer cancel()
@@ -429,6 +439,21 @@ func (s *Server) getSocial(w http.ResponseWriter, r *http.Request) {
 		}
 		if v.Channel != "" && err == nil {
 			if v.Metrics, err = s.social.Analytics(ctx, v.Channel, 30); err != nil {
+				v.Notice = areaErr(err)
+			}
+		}
+		if v.Post != "" && err == nil {
+			if v.PostMetrics, err = s.social.PostAnalytics(ctx, v.Post, 30); err != nil {
+				v.Notice = areaErr(err)
+			}
+		}
+		switch v.Tab {
+		case "activity":
+			if v.Notifications, err = s.social.Notifications(ctx, 0); err != nil {
+				v.Notice = areaErr(err)
+			}
+		case "media":
+			if v.Media, err = s.social.MediaLibrary(ctx, q.Get("q"), 1); err != nil {
 				v.Notice = areaErr(err)
 			}
 		}
@@ -576,4 +601,40 @@ func tagList(raw string) []string {
 		}
 	}
 	return out
+}
+
+// postSocialStatus moves a post between a draft and the schedule.
+func (s *Server) postSocialStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.social.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Social is not set up on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	ctx, cancel := s.areaCtx(r)
+	defer cancel()
+	to := r.FormValue("to")
+	done := "Back to a draft."
+	if to == "schedule" {
+		done = "Scheduled for the date it holds."
+	}
+	areaBack(w, r, "/social", nil, done, s.social.SetStatus(ctx, r.PathValue("id"), to))
+}
+
+// postSocialUpload puts a file from a web address into the media library.
+func (s *Server) postSocialUpload(w http.ResponseWriter, r *http.Request) {
+	if !s.social.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Social is not set up on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	ctx, cancel := s.areaCtx(r)
+	defer cancel()
+	_, err := s.social.UploadFromURL(ctx, r.FormValue("url"))
+	areaBack(w, r, "/social", url.Values{"tab": {"media"}}, "Added to the media library.", err)
 }
