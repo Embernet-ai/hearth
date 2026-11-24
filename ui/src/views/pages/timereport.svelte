@@ -8,7 +8,7 @@
   // buttons stay off until somebody is. When every person is ticked the form sends
   // all=1 instead of one id each, so a big organisation's address stays short.
   let picked: string[] = $state([]);
-  const everyone: string[] = $derived((dot?.Totals ?? []).map((t: any) => String(t.PrincipalID)));
+  const everyone: string[] = $derived((dot?.ReportPeople ?? dot?.Totals ?? []).map((t: any) => String(t.PrincipalID)));
   const allPicked: boolean = $derived(everyone.length > 0 && picked.length === everyone.length);
   function toggleAll(on: boolean) {
     picked = on ? [...everyone] : [];
@@ -89,7 +89,8 @@
       <p  class="muted">Nothing logged in this range.</p>
     {/if}
 
-    {#if F.t(dot?.Totals)}
+    {#if F.t(dot?.ReportNotice)}<p  class="card small"  data-flash>{dot?.ReportNotice}</p>{/if}
+    {#if F.t(dot?.ReportPeople) || F.t(dot?.Totals)}
       <form  class="detail-export"  method="get"  action="/reports/time"  style="margin-top:1.5rem">
         <h2>Export details</h2>
         <p  class="muted small">
@@ -109,7 +110,7 @@
           </label>
         </p>
         <div  style="display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.25rem .75rem;margin-bottom:.75rem">
-          {#each F.rng(dot?.Totals) as [k4, d4]}
+          {#each F.rng(dot?.ReportPeople ?? dot?.Totals) as [k4, d4]}
             <label>
               <input  type="checkbox"  name={allPicked ? undefined : 'people'}  value={S(d4?.PrincipalID)}
                 checked={picked.includes(String(d4?.PrincipalID))}

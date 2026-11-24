@@ -206,6 +206,9 @@ func fixtures() map[string]page {
 			Emails: []mautic.Email{{ID: 2, Name: "Welcome"}}, Segments: []mautic.Segment{{ID: 3, Name: "Customers"}}}},
 		"marketing-segments": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "segments",
 			Segments: []mautic.Segment{{ID: 3, Name: "Customers", Description: "Paying", Contacts: 40}}}},
+		"timereport-nobody-logged": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30",
+			ReportPeople: []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee"}, {PrincipalID: "p2", PersonName: "Bo Diaz"}},
+			ReportNotice: "Nothing to export: the people you chose have no finished time between 2026-11-01 and 2026-11-30. Widen the dates above, press Show, and try again."},
 		"forms-off": {Title: "Forms", FormsArea: &FormsView{}},
 		"forms-list": {Title: "Forms", FormsArea: &FormsView{Configured: true, Forms: []FormRow{
 			{Form: forms.Form{ID: "f1", Name: "Feedback", Status: forms.InProgress, Questions: []forms.Question{{ID: "q1", Type: "openText", Headline: "Anything else?"}}}, Label: "Live"},

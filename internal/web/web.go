@@ -11,6 +11,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -163,7 +164,11 @@ type Server struct {
 	// hideLocalLogin leaves the email and password form off the sign-in page.
 	hideLocalLogin bool
 	auth           *auth.Service
-	log            *slog.Logger
+	// directory lists everybody with an account, for the time report's picker. It is s.auth in production and a fake in tests.
+	directory interface {
+		People(ctx context.Context, orgID string) ([]auth.Person, error)
+	}
+	log *slog.Logger
 
 	// searchDB reads the index bookkeeping for the operations page. The web
 	// pool, because it is a page render and belongs under its statement
@@ -305,6 +310,9 @@ func New(d Deps) (*Server, error) {
 		queue:   d.Queue, relay: d.Relay, hub: d.Hub, oidc: d.OIDC,
 		oidcName: d.OIDCName, hideLocalLogin: d.HideLocalLogin,
 		notifyDB: d.NotifyDB, searchDB: d.NotifyDB, workerOn: d.WorkerOn, log: d.Log,
+	}
+	if d.Auth != nil {
+		s.directory = d.Auth
 	}
 	return s, nil
 }
@@ -756,11 +764,16 @@ type page struct {
 	// Billing's view, not planning's -- gated on Finance rather than TimeAll.
 	// Totals is the whole-org roll-up (the default view); Report is one
 	// person's entries, reached by clicking through from Totals.
-	Totals           []timelog.ReportTotal
-	Report           []timelog.ReportRow
-	ReportFrom       string
-	ReportTo         string
-	ReportTotal      int
+	Totals      []timelog.ReportTotal
+	Report      []timelog.ReportRow
+	ReportFrom  string
+	ReportTo    string
+	ReportTotal int
+	// ReportPeople is everybody the details export can be made for: every active person, with the time they logged in the
+	// range (none is 0). It is not the people who logged time, because a picker that only lists those is empty in a range
+	// with no time in it and a person cannot choose anybody. ReportNotice says why an export made nothing.
+	ReportPeople     []timelog.ReportTotal
+	ReportNotice     string
 	ReportPerson     string
 	ReportPersonName string
 

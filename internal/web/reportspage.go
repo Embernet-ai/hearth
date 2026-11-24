@@ -12,10 +12,12 @@ package web
 // page somebody wants when they only care about their own team lead's week.
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -217,7 +219,9 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 
 		s.render(w, r, "timereport", page{
 			Title: "Time report", Totals: totals, ReportTotal: grand,
-			ReportFrom: reportFrom, ReportTo: reportTo,
+			ReportPeople: s.reportPeople(r.Context(), id.OrgID, totals),
+			ReportNotice: r.URL.Query().Get("notice"),
+			ReportFrom:   reportFrom, ReportTo: reportTo,
 		})
 		return
 	}
@@ -275,4 +279,35 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		ReportFrom: reportFrom, ReportTo: reportTo,
 		ReportPerson: person, ReportPersonName: name,
 	})
+}
+
+// reportPeople is who the details export can be made for: every active person, in the order of their time in the range and
+// then by name, with their minutes (0 for somebody who logged none). Only people with time in the range used to be offered,
+// so a range with no time in it offered nobody and the panel was not there at all. The report is Finance's, and a
+// Finance person already sees everybody's totals, so listing the rest of the people shows them nothing new.
+func (s *Server) reportPeople(ctx context.Context, orgID string, totals []timelog.ReportTotal) []timelog.ReportTotal {
+	out := append([]timelog.ReportTotal{}, totals...)
+	have := map[string]bool{}
+	for _, t := range totals {
+		have[t.PrincipalID] = true
+	}
+	if s.directory != nil {
+		if list, err := s.directory.People(ctx, orgID); err == nil {
+			for _, p := range list {
+				if (p.Status != "" && p.Status != "active") || have[p.PrincipalID] {
+					continue
+				}
+				out = append(out, timelog.ReportTotal{PrincipalID: p.PrincipalID, PersonName: p.DisplayName})
+			}
+		} else {
+			s.log.WarnContext(ctx, "time report: list people", "error", err)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Minutes != out[j].Minutes {
+			return out[i].Minutes > out[j].Minutes
+		}
+		return strings.ToLower(out[i].PersonName) < strings.ToLower(out[j].PersonName)
+	})
+	return out
 }

@@ -209,6 +209,8 @@ Report
 ReportFrom
 ReportTo
 ReportTotal
+ReportPeople
+ReportNotice
 ReportPerson
 ReportPersonName
 Tags
