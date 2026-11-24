@@ -587,3 +587,30 @@ func TestDuplicateCompaniesAreMergedWithTheirPeopleAndDeals(t *testing.T) {
 		t.Error("the merged company can still be opened")
 	}
 }
+
+// The external id of an EmberOps link holds the Hearth id; the document's own name is the end of its page address.
+func TestAnEmberOpsLinkCarriesTheDocumentsOwnName(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	t.Cleanup(func() {
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM external_refs WHERE org_id=$1`, f.org)
+	})
+	ctx := context.Background()
+	id := uuid.NewString()
+	for _, r := range [][3]string{{"Opportunity/" + id, "https://ops.example/app/opportunity/CRM-OPP-2026-00001", "Opportunity"}, {"Contact/" + id, "https://ops.example/app/contact/Opshome%20Mailproof", "Contact"}} {
+		if _, err := f.pools.Web.Exec(ctx, `INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id, external_url) VALUES ($1,'emberops-record',$2,'deal',$3,$4)`, f.org, r[0], id, r[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	links, err := f.svc.EmberOpsLinks(ctx, f.org, core.Ref{Type: core.EntityDeal, ID: id})
+	if err != nil || len(links) != 2 {
+		t.Fatalf("links = %+v (%v)", links, err)
+	}
+	got := map[string]string{}
+	for _, l := range links {
+		got[l.Label] = l.Name
+	}
+	if got["Opportunity"] != "CRM-OPP-2026-00001" || got["Contact"] != "Opshome Mailproof" {
+		t.Errorf("names = %v, want the document names from the addresses, not the Hearth id", got)
+	}
+}
