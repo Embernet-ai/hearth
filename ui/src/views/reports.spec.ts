@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { draw, text } from './testing/draw';
+import { draw, page, text } from './testing/draw';
 import { fixture } from './testing/fixture';
 
 describe('spaces', () => {
@@ -86,5 +86,46 @@ describe('before sign-in', () => {
     expect(d.querySelector('form[action="/set-password"] input[name=t][value=tok]')).not.toBeNull();
     expect(text(d)).toContain('ana@example.com');
     expect(text(draw("setpassword", fixture("setpassword-done", anon)))).toContain("Your password is set");
+  });
+});
+
+describe('time report', () => {
+  const totals = [
+    { PrincipalID: 'p1', PersonName: 'Ann Lee', Minutes: 150 },
+    { PrincipalID: 'p2', PersonName: 'Bo Diaz', Minutes: 480 },
+  ];
+  const range = { ReportFrom: '2026-11-01', ReportTo: '2026-11-30', ReportTotal: 630, Totals: totals };
+
+  // The totals table and its two downloads are what the page was, and stay.
+  test('the totals view keeps its table and its two downloads', () => {
+    const d = draw('timereport', page(range));
+    const hrefs = [...d.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toContain('/reports/time?from=2026-11-01&to=2026-11-30&format=csv');
+    expect(hrefs).toContain('/reports/time?from=2026-11-01&to=2026-11-30&format=xlsx');
+    expect(hrefs).toContain('/reports/time?person=p1&from=2026-11-01&to=2026-11-30');
+    expect(text(d)).toContain('2 people');
+  });
+
+  // Details are their own choice: one form, a box per person with a select all, and a button per format.
+  test('the details export offers each person, select all, and both formats', () => {
+    const d = draw('timereport', page(range));
+    const form = d.querySelector('form.detail-export');
+    expect(form?.getAttribute('action')).toBe('/reports/time');
+    expect(form?.getAttribute('method')).toBe('get');
+    expect(form?.querySelector('input[name=detail][value="1"]')).not.toBeNull();
+    expect(form?.querySelector('input[name=from][value="2026-11-01"]')).not.toBeNull();
+    expect(form?.querySelector('input[name=to][value="2026-11-30"]')).not.toBeNull();
+    expect(form?.querySelector('#detail-all')).not.toBeNull();
+    for (const id of ['p1', 'p2']) expect(form?.querySelector(`input[name=people][value=${id}]`), id).not.toBeNull();
+    for (const f of ['csv', 'xlsx']) expect(form?.querySelector(`button[name=format][value=${f}]`), f).not.toBeNull();
+    // Nobody is ticked to begin with, so neither button can send an empty request.
+    expect(form?.querySelector('button[name=format][value=csv]')?.hasAttribute('disabled')).toBe(true);
+  });
+
+  test('one person drilled into has no details form and keeps its own downloads', () => {
+    const d = draw('timereport', page({ ...range, Totals: null, ReportPerson: 'p1', ReportPersonName: 'Ann Lee', Report: [], ReportTotal: 150 }));
+    expect(d.querySelector('form.detail-export')).toBeNull();
+    const hrefs = [...d.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toContain('/reports/time?person=p1&from=2026-11-01&to=2026-11-30&format=csv');
   });
 });

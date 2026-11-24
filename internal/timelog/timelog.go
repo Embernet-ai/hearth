@@ -844,6 +844,56 @@ func (s *Service) TimeReport(ctx context.Context, orgID, actorID, principalID st
 	return out, rows.Err()
 }
 
+// TimeReportRows hands every finished, logged entry in the range to fn, one at
+// a time, for the people named (everybody when principalIDs is empty). It is the
+// detail export's read: the same rows, order and billing gate as TimeReport, but
+// streamed off the cursor so a year of everybody's time never has to sit in
+// memory, and so the first bytes of the file can leave before the last row is
+// read. The gate runs before any row, so a refusal arrives before anything has
+// been written.
+func (s *Service) TimeReportRows(ctx context.Context, orgID, actorID string, principalIDs []string, from, to time.Time, fn func(ReportRow) error) error {
+	if err := s.requireBilling(ctx, orgID, actorID); err != nil {
+		return err
+	}
+	if to.Before(from) {
+		from, to = to, from
+	}
+	if principalIDs == nil {
+		principalIDs = []string{}
+	}
+	rows, err := s.db.Query(ctx, `
+		SELECT t.id::text, p.id::text, COALESCE(NULLIF(p.display_name,''), p.id::text),
+		       COALESCE(d.title, ''), COALESCE(sp.name, ''),
+		       t.started_at, t.minutes, t.note,
+		       COALESCE((SELECT array_agg(tg.name ORDER BY tg.name)
+		                   FROM time_entry_tag_links l
+		                   JOIN time_entry_tags tg ON tg.id = l.tag_id
+		                  WHERE l.entry_id = t.id), '{}')
+		  FROM time_entries t
+		  JOIN principals p ON p.id = t.principal_id
+		  LEFT JOIN documents d ON d.id = t.document_id
+		  LEFT JOIN spaces sp ON sp.id = d.space_id
+		 WHERE t.org_id = $1 AND t.minutes IS NOT NULL AND t.deleted_at IS NULL
+		   AND t.started_at >= $2 AND t.started_at < $3
+		   AND (cardinality($4::text[]) = 0 OR t.principal_id::text = ANY($4::text[]))
+		 ORDER BY p.display_name, p.id, t.started_at, t.id`, orgID, from, to, principalIDs)
+	if err != nil {
+		return fmt.Errorf("timelog: report rows: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r ReportRow
+		if err := rows.Scan(&r.ID, &r.PrincipalID, &r.PersonName, &r.DocTitle, &r.SpaceName,
+			&r.StartedAt, &r.Minutes, &r.Note, &r.Tags); err != nil {
+			return fmt.Errorf("timelog: scan report row: %w", err)
+		}
+		if err := fn(r); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
 // SetCapacity records somebody's week and their rate.
 func (s *Service) SetCapacity(ctx context.Context, orgID, principalID string, minutesPerWeek int, rateCents *int) error {
 	if minutesPerWeek < 0 || minutesPerWeek > 10080 {

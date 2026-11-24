@@ -3,6 +3,19 @@
   import { F, S, A } from '../../lib/gofuncs';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
+
+  // The details export: which people are ticked. Empty means nobody yet, and the
+  // buttons stay off until somebody is. When every person is ticked the form sends
+  // all=1 instead of one id each, so a big organisation's address stays short.
+  let picked: string[] = $state([]);
+  const everyone: string[] = $derived((dot?.Totals ?? []).map((t: any) => String(t.PrincipalID)));
+  const allPicked: boolean = $derived(everyone.length > 0 && picked.length === everyone.length);
+  function toggleAll(on: boolean) {
+    picked = on ? [...everyone] : [];
+  }
+  function toggleOne(id: string, on: boolean) {
+    picked = on ? [...picked.filter((p) => p !== id), id] : picked.filter((p) => p !== id);
+  }
 </script>
 
 {#snippet content(dot: any)}
@@ -74,6 +87,43 @@
       </table>
     {:else}
       <p  class="muted">Nothing logged in this range.</p>
+    {/if}
+
+    {#if F.t(dot?.Totals)}
+      <form  class="detail-export"  method="get"  action="/reports/time"  style="margin-top:1.5rem">
+        <h2>Export details</h2>
+        <p  class="muted small">
+          One file with every entry, not just the totals, for the people you tick,
+          {S(dot?.ReportFrom)} to {S(dot?.ReportTo)}. Each row carries the person's
+          name and id. To change the dates, set them above and press Show.
+        </p>
+        <input  type="hidden"  name="detail"  value="1">
+        <input  type="hidden"  name="from"  value={S(dot?.ReportFrom)}>
+        <input  type="hidden"  name="to"  value={S(dot?.ReportTo)}>
+        {#if allPicked}<input  type="hidden"  name="all"  value="1">{/if}
+        <p>
+          <label>
+            <input  id="detail-all"  type="checkbox"  checked={allPicked}
+              onchange={(e) => toggleAll((e.currentTarget as HTMLInputElement).checked)}>
+            Select all ({everyone.length})
+          </label>
+        </p>
+        <div  style="display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.25rem .75rem;margin-bottom:.75rem">
+          {#each F.rng(dot?.Totals) as [k4, d4]}
+            <label>
+              <input  type="checkbox"  name={allPicked ? undefined : 'people'}  value={S(d4?.PrincipalID)}
+                checked={picked.includes(String(d4?.PrincipalID))}
+                onchange={(e) => toggleOne(String(d4?.PrincipalID), (e.currentTarget as HTMLInputElement).checked)}>
+              {d4?.PersonName} <span  class="muted small">{F.hours(d4?.Minutes)}</span>
+            </label>
+          {/each}
+        </div>
+        <div  class="row">
+          <button  type="submit"  name="format"  value="csv"  disabled={picked.length === 0}>Download details CSV</button>
+          <button  type="submit"  name="format"  value="xlsx"  disabled={picked.length === 0}>Download details Excel</button>
+          <span  class="muted small">{picked.length} of {everyone.length} chosen</span>
+        </div>
+      </form>
     {/if}
   {/if}
 </section>

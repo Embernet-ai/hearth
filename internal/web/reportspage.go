@@ -172,6 +172,13 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		return false
 	}
 
+	// Details for a set of people, in one file. A separate choice from the totals
+	// and the per-person export below, which are untouched.
+	if r.URL.Query().Get("detail") == "1" && (format == "csv" || format == "xlsx") {
+		s.timeDetailExport(w, r, format, from, to)
+		return
+	}
+
 	if person == "" {
 		totals, err := s.time.TimeReportSummary(r.Context(), id.OrgID, id.PrincipalID, from, to)
 		if fail(err) {

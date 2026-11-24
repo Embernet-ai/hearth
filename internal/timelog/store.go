@@ -72,6 +72,7 @@ type Store interface {
 	Stop(ctx context.Context, orgID, principalID string) (*Entry, error)
 	TagEntry(ctx context.Context, orgID string, actor core.Subjects, entryID, tagID string) error
 	TimeReport(ctx context.Context, orgID, actorID, principalID string, from, to time.Time) ([]ReportRow, error)
+	TimeReportRows(ctx context.Context, orgID, actorID string, principalIDs []string, from, to time.Time, fn func(ReportRow) error) error
 	TimeReportSummary(ctx context.Context, orgID, actorID string, from, to time.Time) ([]ReportTotal, error)
 	UntagEntry(ctx context.Context, orgID string, actor core.Subjects, entryID, tagID string) error
 	UpdateTag(ctx context.Context, orgID, actorID, tagID, name, description string) error
