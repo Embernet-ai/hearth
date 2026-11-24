@@ -117,6 +117,7 @@
      "Tiles": [
       {
        "Detail": "5 entries",
+       "Exact": "",
        "HasPercent": true,
        "Href": "/time?from=2026-11-16",
        "Label": "Logged this week",
@@ -129,6 +130,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/time?from=2026-11-01\u0026span=month",
        "Label": "Sent back",
@@ -147,6 +149,7 @@
      "Tiles": [
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents?f=status%3Aany_of%3Atodo",
        "Label": "Overdue",
@@ -165,6 +168,7 @@
      "Tiles": [
       {
        "Detail": "4 open deals",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/deals?view=table\u0026owner=me\u0026open=1",
        "Label": "Open pipeline",
@@ -197,6 +201,7 @@
    "Stages": [
     {
      "Current": false,
+     "Exact": "",
      "Href": "/deals?view=table\u0026owner=me\u0026stage=proposal",
      "Label": "Proposal",
      "Percent": 100,
@@ -206,6 +211,7 @@
    "Weeks": [
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time?from=2026-11-09",
      "Label": "9 Nov",
      "Percent": 75,
@@ -213,6 +219,7 @@
     },
     {
      "Current": true,
+     "Exact": "",
      "Href": "/time?from=2026-11-16",
      "Label": "16 Nov",
      "Percent": 31,

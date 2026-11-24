@@ -597,6 +597,7 @@
      "Tiles": [
       {
        "Detail": "5 entries",
+       "Exact": "",
        "HasPercent": true,
        "Href": "/time",
        "Label": "Logged this week",
@@ -609,18 +610,20 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": true,
        "Href": "/time",
        "Label": "Logged this month",
        "Note": "",
-       "Of": "120h",
-       "Percent": 51,
+       "Of": "136h",
+       "Percent": 208,
        "Period": "1 to 21 Nov",
        "Tone": "",
-       "Value": "61h"
+       "Value": "283h 2m"
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Waiting for approval",
@@ -633,6 +636,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/time",
        "Label": "Sent back",
@@ -651,6 +655,7 @@
      "Tiles": [
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Open and assigned",
@@ -663,6 +668,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Overdue",
@@ -675,6 +681,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Due soon",
@@ -687,6 +694,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Completed this week",
@@ -699,6 +707,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Completed this month",
@@ -711,6 +720,7 @@
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": true,
        "Href": "/reports/daily",
        "Label": "Daily reports filed",
@@ -728,19 +738,21 @@
      "Key": "deals",
      "Tiles": [
       {
-       "Detail": "11 open deals",
+       "Detail": "135 open deals",
+       "Exact": "$18,066,007.28",
        "HasPercent": false,
        "Href": "/deals",
        "Label": "Open pipeline",
-       "Note": "",
+       "Note": "All owners' deals. Only mine narrows it to yours.",
        "Of": "",
        "Percent": 0,
        "Period": "right now",
        "Tone": "",
-       "Value": "$142,500"
+       "Value": "$18.07M"
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Past expected close",
@@ -749,22 +761,24 @@
        "Percent": 0,
        "Period": "open, close date before 21 Nov",
        "Tone": "",
-       "Value": "2"
+       "Value": "42"
       },
       {
-       "Detail": "",
+       "Detail": "13 deals",
+       "Exact": "$1,603,521.28",
        "HasPercent": false,
-       "Href": "/documents",
+       "Href": "/deals",
        "Label": "Won this month",
        "Note": "",
        "Of": "",
        "Percent": 0,
-       "Period": "November 2026, 2 deals",
+       "Period": "November 2026",
        "Tone": "",
-       "Value": "$18,000"
+       "Value": "$1.60M"
       },
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Lost this month",
@@ -773,7 +787,7 @@
        "Percent": 0,
        "Period": "November 2026",
        "Tone": "",
-       "Value": "$0"
+       "Value": "45"
       }
      ],
      "Title": "Deals"
@@ -804,43 +818,49 @@
    "Stages": [
     {
      "Current": false,
+     "Exact": "",
      "Href": "/deals",
      "Label": "New",
-     "Percent": 40,
-     "Value": "3, $20,000"
+     "Percent": 2,
+     "Value": "2, $576,000"
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/deals",
      "Label": "Screening",
-     "Percent": 30,
-     "Value": "2, $12,000"
+     "Percent": 3,
+     "Value": "3, $316,000"
     },
     {
      "Current": false,
+     "Exact": "108, $6,296,029",
      "Href": "/deals",
      "Label": "Meeting",
      "Percent": 100,
-     "Value": "3, $60,500"
+     "Value": "108, $6.30M"
     },
     {
      "Current": false,
+     "Exact": "13, $4,374,401",
      "Href": "/deals",
      "Label": "Proposal",
-     "Percent": 70,
-     "Value": "2, $40,000"
+     "Percent": 12,
+     "Value": "13, $4.37M"
     },
     {
      "Current": false,
+     "Exact": "9, $6,503,577.28",
      "Href": "/deals",
      "Label": "Customer",
-     "Percent": 20,
-     "Value": "1, $10,000"
+     "Percent": 8,
+     "Value": "9, $6.50M"
     }
    ],
    "Weeks": [
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "28 Sep",
      "Percent": 60,
@@ -848,6 +868,7 @@
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "5 Oct",
      "Percent": 65,
@@ -855,6 +876,7 @@
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "12 Oct",
      "Percent": 70,
@@ -862,6 +884,7 @@
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "19 Oct",
      "Percent": 75,
@@ -869,6 +892,7 @@
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "26 Oct",
      "Percent": 80,
@@ -876,6 +900,7 @@
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "2 Nov",
      "Percent": 85,
@@ -883,6 +908,7 @@
     },
     {
      "Current": false,
+     "Exact": "",
      "Href": "/time",
      "Label": "9 Nov",
      "Percent": 90,
@@ -890,6 +916,7 @@
     },
     {
      "Current": true,
+     "Exact": "",
      "Href": "/time",
      "Label": "16 Nov",
      "Percent": 95,

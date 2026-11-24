@@ -43,16 +43,31 @@ main[data-screen='dashboard'] .dashcols { display: flex; flex-direction: column;
 main[data-screen='dashboard'] .dashcols > * { min-width: 0; }
 main[data-screen='dashboard'] .colside, main[data-screen='dashboard'] .colwork, main[data-screen='dashboard'] .colextra { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 main[data-screen='dashboard'] .colside h2, main[data-screen='dashboard'] .dashtime h2, main[data-screen='dashboard'] .dashfollow h2 { margin: 0 0 var(--s-2); }
-main[data-screen='dashboard'] .colwork h2:not(:first-child) { margin-top: var(--s-4); }
+main[data-screen='dashboard'] .colwork { gap: var(--s-2); }
+main[data-screen='dashboard'] .colwork h2:not(:first-child) { margin-top: var(--s-5); }
+main[data-screen='dashboard'] .colwork table.list, main[data-screen='dashboard'] .colwork .empty { margin: 0; }
+main[data-screen='dashboard'] .colwork > p { margin: 0; }
 main[data-screen='dashboard'] .numbers { margin: 0; container-type: inline-size; }
-main[data-screen='dashboard'] .numbers .numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--s-4) var(--s-5); align-items: start; grid-auto-flow: row dense; }
-main[data-screen='dashboard'] .numbers .numgroup { min-width: 0; }
-main[data-screen='dashboard'] .numbers .numgroup .grouptitle { margin-top: 0; }
-main[data-screen='dashboard'] .numbers .stats { grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); margin: 0; }
-@container (min-width: 46rem) {
-  /* a group with six tiles (or the eight weeks) takes two columns; one with a tile or two stays one */
-  .numbers .numgroup:has(> .stats > .stat:nth-child(5)), .numbers .numgroup.numweeks { grid-column: span 2; }
+main[data-screen='dashboard'] .numbers .numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--s-5) var(--s-5); align-items: start; grid-auto-flow: row dense; }
+main[data-screen='dashboard'] .numbers .numgroup { min-width: 0; container-type: inline-size; }
+main[data-screen='dashboard'] .numbers .numgroup .grouptitle { margin: 0 0 var(--s-2); display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); }
+/* One even grid of tiles, sized by the width of the block they sit in, so a row is always full and no tile is wider than it needs to be:
+   a block with four tiles is two across, then four across once it has room; six tiles are two, then three, then six across. */
+main[data-screen='dashboard'] .numbers .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); margin: 0; align-items: stretch; }
+main[data-screen='dashboard'] .numbers .stat { container-type: inline-size; min-width: 0; padding: var(--s-3) var(--s-3); }
+main[data-screen='dashboard'] .numbers .stat dd { font-size: clamp(1.15rem, 13cqi, 1.75rem); font-variant-numeric: tabular-nums; line-height: 1.1; min-width: 0; overflow-wrap: anywhere; }
+main[data-screen='dashboard'] .numbers .stat dd .of { font-size: clamp(0.75rem, 6cqi, 0.9rem); }
+main[data-screen='dashboard'] .numbers .stat .period { overflow-wrap: anywhere; }
+@container (min-width: 34rem) {
+  main[data-screen='dashboard'] .numbers .stats[data-n='4'] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  main[data-screen='dashboard'] .numbers .stats[data-n='6'], main[data-screen='dashboard'] .numbers .stats[data-n='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  main[data-screen='dashboard'] .numbers .stats[data-n='5'] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+@container (min-width: 46rem) {
+  /* a block of six tiles, and the eight weeks, take two columns of the numbers; a block of four stays one */
+  main[data-screen='dashboard'] .numbers .numgroup:has(> .stats[data-n='6']), main[data-screen='dashboard'] .numbers .numgroup.numweeks { grid-column: span 2; }
+}
+@container (min-width: 60rem) { main[data-screen='dashboard'] .numbers .stats[data-n='6'] { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 /* Assigned to me is a list that can be long: it scrolls inside its own card instead of making the page as tall as the list. */
 main[data-screen='dashboard'] .assignedscroll { max-height: 26rem; overflow: auto; border: 1px solid var(--line); border-radius: var(--en-r-card, 12px); }
 main[data-screen='dashboard'] .assignedscroll table.list { margin: 0; }

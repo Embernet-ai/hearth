@@ -55,7 +55,7 @@ func fillFixtures(end time.Time) map[string]page {
 			{Key: "hours", Title: "Hours", Tiles: []statTile{
 				{Label: "Logged this week", Value: "12h 30m", Detail: "5 entries", Period: "16 to 22 Nov", Href: "/time", Of: "40h", Percent: 31, HasPercent: true,
 					Note: "No weekly hours are set for this person, so the standard 40 hour week is used."},
-				{Label: "Logged this month", Value: "61h", Period: "1 to 21 Nov", Href: "/time", Of: "120h", Percent: 51, HasPercent: true},
+				{Label: "Logged this month", Value: "283h 2m", Period: "1 to 21 Nov", Href: "/time", Of: "136h", Percent: 208, HasPercent: true},
 				tile("Waiting for approval", "4h", "1 to 21 Nov"),
 				{Label: "Sent back", Value: "1h", Period: "1 to 21 Nov", Href: "/time", Tone: "bad"},
 			}},
@@ -65,13 +65,13 @@ func fillFixtures(end time.Time) map[string]page {
 				tile("Completed this month", "17", "November 2026"), {Label: "Daily reports filed", Value: "9", Of: "15 working days", Percent: 60, HasPercent: true, Period: "1 to 21 Nov", Href: "/reports/daily"},
 			}},
 			{Key: "deals", Title: "Deals", Tiles: []statTile{
-				{Label: "Open pipeline", Value: "$142,500", Detail: "11 open deals", Period: "right now", Href: "/deals"},
-				tile("Past expected close", "2", "open, close date before 21 Nov"), tile("Won this month", "$18,000", "November 2026, 2 deals"), tile("Lost this month", "$0", "November 2026"),
+				{Label: "Open pipeline", Value: "$18.07M", Exact: "$18,066,007.28", Detail: "135 open deals", Period: "right now", Href: "/deals", Note: "All owners' deals. Only mine narrows it to yours."},
+				tile("Past expected close", "42", "open, close date before 21 Nov"), {Label: "Won this month", Value: "$1.60M", Exact: "$1,603,521.28", Detail: "13 deals", Period: "November 2026", Href: "/deals"}, tile("Lost this month", "45", "November 2026"),
 			}},
 		},
 		WeeksTarget: "40h",
-		Stages: []barRow{{Label: "New", Value: "3, $20,000", Percent: 40, Href: "/deals"}, {Label: "Screening", Value: "2, $12,000", Percent: 30, Href: "/deals"},
-			{Label: "Meeting", Value: "3, $60,500", Percent: 100, Href: "/deals"}, {Label: "Proposal", Value: "2, $40,000", Percent: 70, Href: "/deals"}, {Label: "Customer", Value: "1, $10,000", Percent: 20, Href: "/deals"}},
+		Stages: []barRow{{Label: "New", Value: "2, $576,000", Percent: 2, Href: "/deals"}, {Label: "Screening", Value: "3, $316,000", Percent: 3, Href: "/deals"},
+			{Label: "Meeting", Value: "108, $6.30M", Exact: "108, $6,296,029", Percent: 100, Href: "/deals"}, {Label: "Proposal", Value: "13, $4.37M", Exact: "13, $4,374,401", Percent: 12, Href: "/deals"}, {Label: "Customer", Value: "9, $6.50M", Exact: "9, $6,503,577.28", Percent: 8, Href: "/deals"}},
 		Recent: []recentRow{{Kind: "Deal won", Title: "Line upgrade", Detail: "$4,000", Href: "/deals/d1"}, {Kind: "Deal won", Title: "Press retrofit", Detail: "$14,000", Href: "/deals/d2"}},
 	}
 	for i, h := range []string{"28 Sep", "5 Oct", "12 Oct", "19 Oct", "26 Oct", "2 Nov", "9 Nov", "16 Nov"} {

@@ -117,6 +117,7 @@
      "Tiles": [
       {
        "Detail": "",
+       "Exact": "",
        "HasPercent": false,
        "Href": "/documents",
        "Label": "Open and assigned",

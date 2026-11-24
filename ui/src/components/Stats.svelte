@@ -2,8 +2,8 @@
   // The numbers on the dashboard: one person's hours, work and deals. Every tile is a query the server ran over live records
   // (internal/web/statspanel.go), says which period it covers, and links to the records it counts. Somebody who may see
   // colleagues' hours gets a picker; everybody else sees their own and nothing to pick.
-  interface Tile { Label: string; Value: string; Detail?: string; Period: string; Href: string; Tone?: string; Percent?: number; HasPercent?: boolean; Of?: string; Note?: string }
-  interface Bar { Label: string; Value: string; Percent: number; Href: string; Current?: boolean }
+  interface Tile { Label: string; Value: string; Detail?: string; Period: string; Href: string; Tone?: string; Percent?: number; HasPercent?: boolean; Of?: string; Note?: string; Exact?: string }
+  interface Bar { Label: string; Value: string; Percent: number; Href: string; Current?: boolean; Exact?: string }
   interface Stats {
     Person: { ID: string; Name: string };
     Self: boolean;
@@ -39,10 +39,11 @@
     <div class="numgrid">
     {#each groups as g (g.Key)}
       <div class={'numgroup g-' + g.Key}>
-      <h3 class="grouptitle">{g.Title}{#if g.Key === 'deals'}{#if g.Tiles[0]?.Period.startsWith('All owners')}<a class="chip" href="/?deals=mine">Only mine</a>{:else}<a class="chip" href="/">All owners</a>{/if}{/if}</h3>
-      <div class="stats" style:--cols={g.Tiles.length > 4 ? 3 : g.Tiles.length}>
-        {#each g.Tiles as t, i (t.Label)}
-          <a class={'stat ' + (t.Tone ?? '')} href={t.Href}>
+      <h3 class="grouptitle">{g.Title}{#if g.Key === 'deals'}{#if g.Tiles[0]?.Note?.startsWith('All owners')}<a class="chip" href="/?deals=mine">Only mine</a>{:else}<a class="chip" href="/">All owners</a>{/if}{/if}</h3>
+      {#each [...new Set(g.Tiles.map((x) => x.Note).filter(Boolean))] as note}<p class="groupnote">{note}</p>{/each}
+      <div class="stats" data-n={g.Tiles.length}>
+        {#each g.Tiles as t (t.Label)}
+          <a class={'stat ' + (t.Tone ?? '')} href={t.Href} title={t.Exact || undefined}>
             <dt>{t.Label}</dt>
             <dd>{t.Value}{#if t.Of}<span class="of"> of {t.Of}</span>{/if}</dd>
             {#if t.HasPercent}
@@ -50,8 +51,8 @@
                 <span class:over={(t.Percent ?? 0) > 100} style:width={`${Math.min(t.Percent ?? 0, 100)}%`}></span>
               </div>
             {/if}
-            <small class="period">{#if t.HasPercent && (t.Percent ?? 0) > 100}<strong class="overtext">{t.Percent}% of target</strong> &middot; {/if}{t.Period}{#if t.Detail}<span class="detail"> &middot; {t.Detail}</span>{/if}</small>
-            {#if t.Note && g.Tiles.findIndex((x) => x.Note === t.Note) === i}<small class="note">{t.Note}</small>{/if}
+            <small class="period">{#if t.HasPercent && (t.Percent ?? 0) > 100}<strong class="overtext">{t.Percent}% of target</strong> &middot; {/if}{t.Period}</small>
+            {#if t.Detail}<small class="period detail">{t.Detail}</small>{/if}
           </a>
         {/each}
       </div>
@@ -81,7 +82,7 @@
       <ul class="stagebars">
         {#each stages as s (s.Label)}
           <li>
-            <a href={s.Href}>
+            <a href={s.Href} title={s.Exact || undefined}>
               <span class="name">{s.Label}</span>
               <span class="track"><span style:width={`${s.Percent}%`}></span></span>
               <span class="val">{s.Value}</span>
@@ -117,8 +118,8 @@
   .grouptitle .muted { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: var(--s-2); }
   .period { display: block; }
   .flat { margin: 0 0 var(--s-3); }
-  .detail { white-space: nowrap; }
-  .note { display: block; margin-top: var(--s-1); color: var(--muted); font-size: var(--t-2xs); line-height: 1.35; }
+  .detail { display: block; }
+  .groupnote { margin: 0 0 var(--s-2); color: var(--muted); font-size: var(--t-xs); line-height: 1.35; }
   .meter { height: 4px; margin-top: var(--s-1); background: var(--hover); border-radius: 2px; overflow: hidden; }
   .meter span { display: block; height: 100%; background: var(--accent-dim); }
   .meter span.over { background: var(--ok, var(--accent-dim)); }

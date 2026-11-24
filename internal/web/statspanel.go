@@ -51,6 +51,8 @@ type statTile struct {
 	HasPercent bool
 	Of         string
 	Note       string
+	// Exact is the figure in full when Value is shortened ($18.07M), shown on hover.
+	Exact string
 }
 
 type statGroup struct {
@@ -66,6 +68,8 @@ type barRow struct {
 	Percent int
 	Href    string
 	Current bool
+	// Exact is the full figure when Value is shortened.
+	Exact string
 }
 
 type recentRow struct {
@@ -119,6 +123,39 @@ func sums(in []crm.Sum) string {
 		parts[i] = s.Amount()
 	}
 	return strings.Join(parts, " + ")
+}
+
+// compactSums is sums() with a big amount shortened so it fits a tile at any width: a million or more reads $18.07M (or
+// $1.20B), anything smaller is written out. The second answer is the full figure, for the hover.
+func compactSums(in []crm.Sum) (short, exact string) {
+	exact = sums(in)
+	if len(in) == 0 {
+		return exact, ""
+	}
+	parts := make([]string, len(in))
+	changed := false
+	for i, sm := range in {
+		full := sm.Amount()
+		parts[i] = full
+		abs := sm.Cents
+		if abs < 0 {
+			abs = -abs
+		}
+		if abs < 100_000_000 {
+			continue
+		}
+		prefix := full[:strings.IndexAny(full, "0123456789")]
+		unit, div := "M", 1e8
+		if abs >= 100_000_000_000 {
+			unit, div = "B", 1e11
+		}
+		parts[i] = fmt.Sprintf("%s%.2f%s", prefix, float64(sm.Cents)/div, unit)
+		changed = true
+	}
+	if !changed {
+		return exact, ""
+	}
+	return strings.Join(parts, " + "), exact
 }
 
 func plural(n int, one, many string) string {
@@ -329,9 +366,9 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 		// Sales shows everything a person with sales access may see, whoever owns it: the default is all deals and all
 		// owners (Patrick 2026-11-24). "Mine" is a filter somebody turns on with ?deals=mine, never the starting point,
 		// and what the viewer may see is still the CRM's own access rule (every count and list runs as the viewer), so a person with no sales access reads zeros and sees none of the records.
-		scope, ownerQ, who := "All owners: ", "", ""
+		scope, ownerQ, who := "All owners' deals. Only mine narrows it to yours.", "", ""
 		if mine {
-			scope, ownerQ, who = "", "&owner="+url.QueryEscape(person), person
+			scope, ownerQ, who = "Only your own deals. All owners shows the whole pipeline.", "&owner="+url.QueryEscape(person), person
 		}
 		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, who, today, monthFrom, monthFrom.AddDate(0, 1, 0))
 		if err != nil {
@@ -339,15 +376,18 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 		} else {
 			own := "/deals?view=table" + ownerQ
 			closed := own + "&closedfrom=" + dayStr(monthFrom) + "&closedto=" + dayStr(monthTo)
+			openV, openX := compactSums(st.Open)
+			wonV, wonX := compactSums(st.Won)
+			lostV, _ := compactSums(st.Lost)
 			g := statGroup{Key: "deals", Title: "Deals", Tiles: []statTile{
-				{Label: "Open pipeline", Value: sums(st.Open), Detail: plural(st.OpenCount, "open deal", "open deals"),
-					Period: scope + "right now", Href: own + "&open=1"},
+				{Label: "Open pipeline", Value: openV, Exact: openX, Detail: plural(st.OpenCount, "open deal", "open deals"),
+					Period: "right now", Href: own + "&open=1", Note: scope},
 				{Label: "Past expected close", Value: fmt.Sprint(st.Overdue), Period: "open, close date before " + today.Format("2 Jan"),
 					Href: own + "&overdue=1", Tone: toneIf(st.Overdue > 0)},
-				{Label: "Won this month", Value: sums(st.Won), Detail: plural(st.WonCount, "deal", "deals"),
-					Period: scope + monthLabel, Href: closed + "&stage=won"},
-				{Label: "Lost this month", Value: fmt.Sprint(st.LostCount), Detail: sums(st.Lost),
-					Period: scope + monthLabel, Href: closed + "&stage=lost"},
+				{Label: "Won this month", Value: wonV, Exact: wonX, Detail: plural(st.WonCount, "deal", "deals"),
+					Period: monthLabel, Href: closed + "&stage=won"},
+				{Label: "Lost this month", Value: fmt.Sprint(st.LostCount), Detail: lostV,
+					Period: monthLabel, Href: closed + "&stage=lost"},
 			}}
 			p.Groups = append(p.Groups, g)
 			peak := 0
@@ -355,8 +395,12 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 				peak = max(peak, r.Count)
 			}
 			for _, r := range st.Stages {
+				sv, sx := compactSums(r.Sums)
+				if sx != "" {
+					sx = fmt.Sprintf("%d, %s", r.Count, sx)
+				}
 				p.Stages = append(p.Stages, barRow{
-					Label: r.Label, Value: fmt.Sprintf("%d, %s", r.Count, sums(r.Sums)),
+					Label: r.Label, Value: fmt.Sprintf("%d, %s", r.Count, sv), Exact: sx,
 					Percent: percentOf(r.Count, peak), Href: own + "&stage=" + r.Stage})
 			}
 			cf := today.AddDate(0, 0, -90)
