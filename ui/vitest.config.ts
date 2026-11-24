@@ -7,5 +7,8 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 export default defineConfig({
   plugins: [svelte({ onwarn: () => {}, dynamicCompileOptions: ({ filename }) => ({ preserveWhitespace: /[\\/]views[\\/]pages[\\/]/.test(filename) }) })],
   resolve: { conditions: ['node'] },
-  test: { environment: 'node', include: ['src/**/*.spec.ts'] },
+  // No on-disk module cache. views/index.ts finds the pages with import.meta.glob, and the cache is keyed on that file's text,
+  // not on the folder it lists, so a checkout that had run the tests before a page was added kept answering "no view for this
+  // page" for it, from a cache that nothing would ever invalidate.
+  test: { environment: 'node', include: ['src/**/*.spec.ts'], fsModuleCache: false },
 });
