@@ -15,7 +15,9 @@ describe('the numbers on the dashboard', () => {
     expect(week.textContent).toContain('12h 30m');
     expect(week.textContent).toContain('of 40h');
     expect(week.querySelector('.meter')).not.toBeNull();
-    expect(week.textContent).toContain('standard 40 hour week');
+    // the note about the standard week is said once, under the group's title, not inside a tile
+    expect(d.querySelector('.numbers .groupnote')?.textContent).toContain('standard 40 hour week');
+    expect(week.textContent).not.toContain('standard 40 hour week');
     expect(tiles[1].classList.contains('bad')).toBe(true);
     expect(d.querySelector('.numbers h2')?.textContent).toBe('My numbers');
   });
