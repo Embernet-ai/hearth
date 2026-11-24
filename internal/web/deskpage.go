@@ -22,6 +22,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crmops"
 )
 
 // deskData is what the sales desk pages carry, in one field of the page.
@@ -41,6 +42,9 @@ type deskData struct {
 	// Dups is the groups of probable duplicates on the duplicates page, of the kind DupType.
 	Dups    []crm.DupGroup
 	DupType string
+	// EmberOps is the record's quotes and call logs from EmberOps, and Quoted what has been quoted in the report's period.
+	EmberOps *crmops.Panel
+	Quoted   *crmops.Totals
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -295,7 +299,42 @@ func (s *Server) deskFor(r *http.Request, ref core.Ref, p *page) {
 		s.log.WarnContext(r.Context(), "load follow-ups", "error", err)
 	}
 	d.Followups = rows
+	d.EmberOps = s.emberOpsPanel(r, ref, p)
 	p.Desk = d
+}
+
+// newCRMOps is the EmberOps reader, or nil when there is no EmberOps client: a nil client inside the interface would not be nil.
+func newCRMOps(l crmops.Lister) *crmops.Service {
+	if l == nil {
+		return nil
+	}
+	return crmops.New(l)
+}
+
+// emberOpsPanel is what EmberOps holds about this record: its quotations and the calls it logged. A failure leaves the
+// panel out and the page whole.
+func (s *Server) emberOpsPanel(r *http.Request, ref core.Ref, p *page) *crmops.Panel {
+	if s.crmOps == nil {
+		return nil
+	}
+	var phones []string
+	if ref.Type == core.EntityContact {
+		if p.Contact != nil {
+			phones = append(phones, p.Contact.Phone)
+		}
+		if p.Details != nil {
+			phones = append(phones, p.Details.ExtraPhones...)
+		}
+	}
+	panel, err := s.crmOps.For(r.Context(), p.EmberOps, phones)
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load EmberOps quotes and calls", "error", err)
+		return nil
+	}
+	if len(panel.Quotes) == 0 && len(panel.Calls) == 0 && panel.NewQuoteURL == "" {
+		return nil
+	}
+	return panel
 }
 
 // -----------------------------------------------------------------------------
@@ -371,8 +410,16 @@ func (s *Server) reportsPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusInternalServerError, "could not build the report")
 		return
 	}
+	var quoted *crmops.Totals
+	if s.crmOps != nil {
+		if q, err := s.crmOps.QuotedBetween(r.Context(), from.Format("2006-01-02"), to.Format("2006-01-02")); err != nil {
+			s.log.WarnContext(r.Context(), "read quoted totals", "error", err)
+		} else {
+			quoted = q
+		}
+	}
 	s.render(w, r, "salesreports", page{Title: "Sales reports", SalesOn: true, Owners: s.owners(r), OwnerSel: owner,
-		Desk: &deskData{Report: rep, From: from.Format("2006-01-02"), To: to.Format("2006-01-02")}})
+		Desk: &deskData{Report: rep, Quoted: quoted, From: from.Format("2006-01-02"), To: to.Format("2006-01-02")}})
 }
 
 // -----------------------------------------------------------------------------

@@ -15,21 +15,27 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/authz"
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/emberops"
+	"github.com/Embernet-ai/hearth/internal/emberops/fake"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
 	"github.com/Embernet-ai/hearth/internal/platform/pg/pgtest"
 )
 
 type deskFx struct {
+	ops    *fake.Frappe
 	t      *testing.T
 	srv    *Server
+	pool   *pgxpool.Pool
 	mux    *http.ServeMux
 	az     *authz.Service
 	org    string
@@ -55,11 +61,14 @@ func newDeskFx(t *testing.T) *deskFx {
 	}
 	az := authz.New(pools.Web)
 	svc := crm.New(pools.Web, az)
-	srv, err := New(Deps{Log: log, Sales: svc, CRM: svc, Authz: az})
+	ops := fake.New(map[string]string{"svc": "hearth-service"})
+	t.Cleanup(ops.Close)
+	opsURL, _ := url.Parse(ops.URL)
+	srv, err := New(Deps{Log: log, Sales: svc, CRM: svc, Authz: az, Ops: emberops.New(emberops.Config{BaseURL: opsURL, Service: emberops.StaticToken("svc")})})
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &deskFx{t: t, srv: srv, az: az, org: uuid.NewString(), member: uuid.NewString(), other: uuid.NewString(), out: uuid.NewString(), admin: uuid.NewString()}
+	f := &deskFx{pool: pools.Web, ops: ops, t: t, srv: srv, az: az, org: uuid.NewString(), member: uuid.NewString(), other: uuid.NewString(), out: uuid.NewString(), admin: uuid.NewString()}
 	exec := func(sql string, args ...any) {
 		t.Helper()
 		if _, err := pools.Web.Exec(ctx, sql, args...); err != nil {
@@ -79,7 +88,7 @@ func newDeskFx(t *testing.T) *deskFx {
 	t.Cleanup(func() {
 		c := context.Background()
 		for _, q := range []string{`DELETE FROM crm_followups WHERE org_id=$1`, `DELETE FROM crm_activities WHERE org_id=$1`,
-			`DELETE FROM deals WHERE org_id=$1`, `DELETE FROM capability_grants WHERE org_id=$1`, `DELETE FROM teams WHERE org_id=$1`} {
+			`DELETE FROM external_refs WHERE org_id=$1`, `DELETE FROM deals WHERE org_id=$1`, `DELETE FROM capability_grants WHERE org_id=$1`, `DELETE FROM teams WHERE org_id=$1`} {
 			_, _ = pools.Web.Exec(c, q, f.org)
 		}
 	})
@@ -299,5 +308,48 @@ func TestMergeThroughTheRoutes(t *testing.T) {
 	}
 	if _, err := svc.GetContact(ctx, f.org, f.subj(f.member), b.ID); err == nil {
 		t.Error("the merged contact still opens")
+	}
+}
+
+func TestADealPageShowsItsEmberOpsQuotesAndReportsTotalQuoted(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	f.ops.Put("Quotation", map[string]any{"name": "SAL-QTN-9", "quotation_to": "Lead", "party_name": "LEAD-9", "customer_name": "Desk Co", "status": "Open",
+		"currency": "USD", "grand_total": 4200, "transaction_date": time.Now().Format("2006-01-02"), "opportunity": "CRM-OPP-9"})
+	f.ops.Put("Quotation", map[string]any{"name": "SAL-QTN-10", "customer_name": "Elsewhere", "status": "Open", "currency": "USD", "grand_total": 1, "transaction_date": time.Now().Format("2006-01-02"), "opportunity": "CRM-OPP-10"})
+	if _, err := f.pool.Exec(ctx, `INSERT INTO external_refs (org_id, source, external_id, entity_type, entity_id, external_url) VALUES ($1,'emberops-record','Opportunity/CRM-OPP-9','deal',$2,'https://ops.example/app/opportunity/CRM-OPP-9')`, f.org, f.deal); err != nil {
+		t.Fatal(err)
+	}
+	var env struct {
+		Page struct {
+			Desk struct {
+				EmberOps struct {
+					Quotes []struct {
+						Name, Status string
+						Total        float64
+					}
+					NewQuoteURL string
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/deals/"+f.deal, nil).Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	q := env.Page.Desk.EmberOps
+	if len(q.Quotes) != 1 || q.Quotes[0].Name != "SAL-QTN-9" || q.Quotes[0].Total != 4200 || !strings.Contains(q.NewQuoteURL, "opportunity=CRM-OPP-9") {
+		t.Errorf("deal page EmberOps panel = %+v, want only this opportunity's quote and a link to make another", q)
+	}
+	var rep struct {
+		Page struct {
+			Desk struct{ Quoted struct{ Count int } }
+		}
+	}
+	if err := json.Unmarshal(f.do(f.member, "GET", "/crm/reports", nil).Body.Bytes(), &rep); err != nil || rep.Page.Desk.Quoted.Count != 2 {
+		t.Errorf("report quoted = %+v (%v), want both quotations of the period", rep, err)
+	}
+	// A person outside sales gets the page refused, and so none of EmberOps's data about it.
+	if w := f.do(f.out, "GET", "/deals/"+f.deal, nil); strings.Contains(w.Body.String(), "SAL-QTN-9") {
+		t.Error("a person outside sales was shown the quote")
 	}
 }

@@ -1,7 +1,7 @@
 <script lang="ts" module>
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  export { bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -238,5 +238,33 @@
   {#if type === "company"}<input  name="add_tag"  placeholder="add a tag"  aria-label="Add a tag">{/if}
   <button  type="submit"  class="ghost small">Apply</button>
 </form>
+{/if}
+{/snippet}
+
+{#snippet emberopspanel(dot)}
+{#if dot?.Desk?.EmberOps}
+<h3  id="emberops">In EmberOps</h3>
+{#if dot.Desk.EmberOps.Quotes?.length}
+  <table  class="list"  data-emberops-quotes>
+    <thead><tr><th>Quote</th><th>For</th><th>Status</th><th>Total</th><th>Valid till</th></tr></thead>
+    <tbody>
+      {#each dot.Desk.EmberOps.Quotes as q (q.Name)}
+        <tr><td><a  href={q.URL}  target="_blank"  rel="noopener">{q.Name}</a></td><td>{q.Party}</td><td><span  class="tag">{q.Status}</span></td>
+          <td class="muted small">{q.Total.toLocaleString(undefined, { style: 'currency', currency: q.Currency || 'USD' })}</td><td class="muted small">{q.ValidTill}</td></tr>
+      {/each}
+    </tbody>
+  </table>
+{:else}
+  <p  class="muted small">No quotes yet.</p>
+{/if}
+{#if dot.Desk.EmberOps.NewQuoteURL}<p><a  class="chip"  href={dot.Desk.EmberOps.NewQuoteURL}  target="_blank"  rel="noopener"  data-new-quote>New quote in EmberOps</a></p>{/if}
+{#if dot.Desk.EmberOps.Calls?.length}
+  <h4>Calls EmberOps logged</h4>
+  <ul  class="files"  data-emberops-calls>
+    {#each dot.Desk.EmberOps.Calls as c (c.Name)}
+      <li><span  class="tag">{c.Type}</span> <a  href={c.URL}  target="_blank"  rel="noopener">{c.Start}</a> <span  class="muted small">{c.From} to {c.To}{c.Seconds ? ', ' + Math.ceil(c.Seconds / 60) + ' min' : ''}{c.Status ? ', ' + c.Status : ''}</span></li>
+    {/each}
+  </ul>
+{/if}
 {/if}
 {/snippet}

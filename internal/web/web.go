@@ -38,6 +38,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
+	"github.com/Embernet-ai/hearth/internal/crmops"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/files"
@@ -97,6 +98,8 @@ type Server struct {
 	// sales is the pipeline, owners and timeline. Nil when the data lives in
 	// EmberOps, where those pages are not offered.
 	sales crm.Sales
+	// crmOps reads EmberOps's quotes and call logs for a record. Nil when the installation does not run on EmberOps.
+	crmOps *crmops.Service
 	// crmViews are the saved views of the companies, contacts and deals lists. Nil switches the saving off.
 	crmViews *crmviews.Service
 	mail     *mailint.Service
@@ -220,11 +223,13 @@ type Deps struct {
 	Connect      *connect.Service
 	Marketing    *mautic.Client
 	Forms        *forms.Client
-	Social       *social.Client
-	Tools        []tools.Tool
-	Box          connect.Sealer
-	SCIM         *scim.Service
-	Search       *search.Service
+	// Ops is the EmberOps client, nil when the installation does not run on EmberOps. The CRM reads quotes and call logs from it.
+	Ops    crmops.Lister
+	Social *social.Client
+	Tools  []tools.Tool
+	Box    connect.Sealer
+	SCIM   *scim.Service
+	Search *search.Service
 	// Playground is Settings -> Tutorial's personal practice organisation.
 	Playground *playground.Service
 	// TimeOff is requesting and deciding days away.
@@ -276,6 +281,7 @@ func New(d Deps) (*Server, error) {
 		google:     d.Google,
 		microsoft:  d.Microsoft,
 		marketing:  d.Marketing,
+		crmOps:     newCRMOps(d.Ops),
 		forms:      d.Forms,
 		social:     d.Social,
 		tools:      d.Tools,

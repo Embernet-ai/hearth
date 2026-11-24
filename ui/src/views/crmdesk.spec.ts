@@ -59,3 +59,22 @@ describe('the duplicates page', () => {
     expect(text(draw('duplicates', page({ Desk: { DupType: 'company', Dups: [] } })))).toContain('No duplicates found.');
   });
 });
+
+describe('what EmberOps adds to a record', () => {
+  const panel = { Quotes: [{ Name: 'SAL-QTN-1', Party: 'Acme', Status: 'Open', Total: 1250.5, Currency: 'USD', ValidTill: '2026-12-10', URL: 'https://ops.example/app/quotation/SAL-QTN-1' }],
+    Calls: [{ Name: 'CL-1', Type: 'Incoming', Status: 'Completed', From: '+12165550142', To: '100', Start: '2026-11-20 10:00:00', Seconds: 125, URL: 'https://ops.example/app/call-log/CL-1' }], NewQuoteURL: 'https://ops.example/app/quotation/new?opportunity=CRM-OPP-1' };
+  test('a deal shows its quotes, its calls and a way to make a quote', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'proposal' }, DealStages: ['new', 'proposal'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24', EmberOps: panel } }));
+    expect(d.querySelector('[data-emberops-quotes] a[href="https://ops.example/app/quotation/SAL-QTN-1"]')).not.toBeNull();
+    expect(d.querySelector('[data-emberops-calls]')?.textContent).toContain('3 min');
+    expect(d.querySelector('a[data-new-quote]')?.getAttribute('href')).toContain('opportunity=CRM-OPP-1');
+  });
+  test('a deal with nothing from EmberOps shows no EmberOps heading', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24' } }));
+    expect(text(d)).not.toContain('In EmberOps');
+  });
+  test('the report shows what was quoted', () => {
+    const d = draw('salesreports', page({ Owners: [], Desk: { From: '2026-11-01', To: '2026-11-30', Quoted: { Count: 3, ByCurrency: [{ Text: '$1,349.50' }], ByStatus: [{ Status: 'Open', Count: 2 }] }, Report: { OpenCount: 0, Open: [], Weighted: [], WonCount: 0, Won: [], LostCount: 0, Lost: [], WinRate: -1, AvgWon: [], AvgCycleDays: 0, Pipeline: [], Owners: [], Activity: [], Created: [] } } }));
+    expect(d.querySelector('[data-report-quoted]')?.textContent).toContain('3 quotations');
+  });
+});
