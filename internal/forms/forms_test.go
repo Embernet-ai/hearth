@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
