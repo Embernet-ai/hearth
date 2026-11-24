@@ -166,6 +166,7 @@
  "EmberOps": [
   {
    "Label": "Customer",
+   "Name": "",
    "URL": "https://ops.example/app/customer/Baldor%20Electric"
   }
  ],
