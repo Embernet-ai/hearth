@@ -167,3 +167,68 @@ func TestDetailLeavesTheTotalsExportAlone(t *testing.T) {
 		t.Error("the totals export reached the details read")
 	}
 }
+
+// A range with nobody's time in it used to hand back a file that was only a header, and the picker was missing from the page
+// altogether because it listed only people who had logged time in the range. An empty export now says so on the report.
+func TestDetailExportWithNoRowsSaysSoInsteadOfAnEmptyFile(t *testing.T) {
+	for _, format := range []string{"csv", "xlsx"} {
+		st := &detailStore{} // no rows at all
+		rec := runDetail(t, st, "detail=1&format="+format+"&from=2026-11-01&to=2026-11-30&people=p1")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("%s with no rows: status %d, want a redirect back to the report", format, rec.Code)
+		}
+		loc := rec.Header().Get("Location")
+		if !strings.HasPrefix(loc, "/reports/time?") || !strings.Contains(loc, "notice=Nothing+to+export") || !strings.Contains(loc, "from=2026-11-01") {
+			t.Errorf("%s redirect %q should return to the report with the dates and a note", format, loc)
+		}
+		if rec.Header().Get("Content-Disposition") != "" {
+			t.Errorf("%s: an attachment was started for an export with nothing in it", format)
+		}
+	}
+}
+
+type fakeDirectory struct{ list []auth.Person }
+
+func (f fakeDirectory) People(context.Context, string) ([]auth.Person, error) { return f.list, nil }
+
+// Every active person is offered, whether or not they logged time in the range, and the ones with time come first.
+func TestReportPeopleOffersEveryActivePerson(t *testing.T) {
+	s := &Server{directory: fakeDirectory{list: []auth.Person{
+		{PrincipalID: "p1", DisplayName: "Ann Lee", Status: "active"},
+		{PrincipalID: "p2", DisplayName: "Bo Diaz", Status: "active"},
+		{PrincipalID: "p3", DisplayName: "Cy Moved On", Status: "suspended"},
+		{PrincipalID: "p4", DisplayName: "Al Able", Status: ""},
+	}}, log: slog.New(slog.NewTextHandler(&strings.Builder{}, nil))}
+	// Nobody logged anything: the picker still offers the three active people, by name.
+	got := s.reportPeople(context.Background(), "o", nil)
+	if len(got) != 3 || got[0].PersonName != "Al Able" || got[1].PersonName != "Ann Lee" || got[2].PersonName != "Bo Diaz" {
+		t.Fatalf("with no time logged the picker offers %+v, want Al Able, Ann Lee, Bo Diaz", got)
+	}
+	// Bo logged time: Bo is first, with the minutes, and is not listed twice.
+	got = s.reportPeople(context.Background(), "o", []timelog.ReportTotal{{PrincipalID: "p2", PersonName: "Bo Diaz", Minutes: 480}})
+	if len(got) != 3 || got[0].PrincipalID != "p2" || got[0].Minutes != 480 || got[1].PersonName != "Al Able" {
+		t.Fatalf("with Bo's time the picker offers %+v", got)
+	}
+	// Nobody is hidden by a missing directory: the people with time are still there.
+	got = (&Server{log: slog.New(slog.NewTextHandler(&strings.Builder{}, nil))}).reportPeople(context.Background(), "o", []timelog.ReportTotal{{PrincipalID: "p2", PersonName: "Bo Diaz", Minutes: 5}})
+	if len(got) != 1 {
+		t.Errorf("without a directory: %+v", got)
+	}
+}
+
+// Every export leaves one log line saying who asked, for which dates and how many people, and how many rows came back, so a
+// report of "it came back empty" can be answered from the log.
+func TestDetailExportLeavesALogLine(t *testing.T) {
+	var buf strings.Builder
+	st := &detailStore{rows: detailFixture()}
+	s := &Server{time: st, log: slog.New(slog.NewTextHandler(&buf, nil))}
+	req := httptest.NewRequest(http.MethodGet, "/reports/time?detail=1&format=csv&from=2026-11-01&to=2026-11-30&people=p1", nil)
+	req = req.WithContext(auth.WithIdentity(req.Context(), &auth.Identity{OrgID: "o", PrincipalID: "me"}))
+	s.getTimeReport(httptest.NewRecorder(), req)
+	out := buf.String()
+	for _, want := range []string{`msg="time report"`, `principal=me`, `from=2026-11-01`, `to=2026-11-30`, `detail=true`, `people=1`, `msg="time details export"`, `rows=2`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the log lacks %s:\n%s", want, out)
+		}
+	}
+}
