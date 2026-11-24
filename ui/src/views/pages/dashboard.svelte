@@ -3,6 +3,7 @@
   import { F, S, A } from '../../lib/gofuncs';
   import { hoursmins } from './shared.svelte';
   import Stats from '../../components/Stats.svelte';
+  import Recap from '../../components/Recap.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -89,6 +90,7 @@
       {/if}
       </div>
     <Stats stats={dot?.Dash?.Stats} />
+    <Recap team={dot?.Dash?.Team} />
     <div  class="dashblock dashfollow">
       <h2>Things you follow</h2>
       {#if F.t(dot?.Dash?.Watching)}

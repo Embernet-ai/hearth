@@ -65,6 +65,9 @@ type dashboard struct {
 	PrevWeek  string
 	NextWeek  string
 	Today     string
+
+	// Team is the marketing, social and forms parts, for the people who work marketing and for super admins.
+	Team *teamPanel
 }
 
 // dashMonth is the month calendar: six weeks at most, Sunday first, each day linking to its own week.
@@ -129,6 +132,7 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Stats = stats
+	d.Team = s.teamParts(r.Context(), id)
 	s.render(w, r, "dashboard", page{Title: "Dashboard", Dash: d})
 }
 

@@ -145,7 +145,9 @@ type Server struct {
 	connect   *connect.Service
 	// The Marketing, Forms and Social areas call the apps the installation runs for them, and tools is the launcher.
 	// Each is nil, or empty, when the installation has not set it up, and its page then says what to set.
-	marketing  *mautic.Client
+	marketing *mautic.Client
+	// panel is the dashboard's team parts, shared for a few minutes (teampanel.go).
+	panel      panelCache
 	forms      *forms.Client
 	social     *social.Client
 	tools      []tools.Tool

@@ -427,3 +427,20 @@ func decodeCampaign(raw json.RawMessage) Campaign {
 	}
 	return out
 }
+
+// ContactTotal is how many contacts Mautic holds.
+func (c *Client) ContactTotal(ctx context.Context) (int, error) {
+	var out struct {
+		Total json.Number `json:"total"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/contacts", url.Values{"limit": {"1"}}, nil, &out); err != nil {
+		return 0, err
+	}
+	return int(int64of(out.Total)), nil
+}
+
+// SendEmailTo sends one email to one contact now, the way Mautic's own "send example" does, so a campaign can be tried on
+// a test address before it goes to a segment.
+func (c *Client) SendEmailTo(ctx context.Context, emailID, contactID int64) error {
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/emails/%d/contact/%d/send", emailID, contactID), nil, map[string]any{}, nil)
+}
