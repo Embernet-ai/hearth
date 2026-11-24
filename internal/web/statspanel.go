@@ -323,8 +323,9 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 		}
 	}
 
-	// Deals.
-	if s.sales != nil {
+	// Deals, and everything else in sales: only for somebody who works sales (the Sales team) or a super admin.
+	// Anybody else gets no Deals group, no pipeline and no closed deals, not a row of zeros.
+	if s.sales != nil && s.worksSales(ctx, id) {
 		// Sales shows everything a person with sales access may see, whoever owns it: the default is all deals and all
 		// owners (Patrick 2026-11-24). "Mine" is a filter somebody turns on with ?deals=mine, never the starting point,
 		// and what the viewer may see is still the CRM's own access rule (every count and list runs as the viewer), so a person with no sales access reads zeros and sees none of the records.
@@ -391,4 +392,15 @@ func toneIf(b bool) string {
 		return "bad"
 	}
 	return ""
+}
+
+// worksSales is the viewer's sales permission. A check that fails is a no: a part of the page that shows sales to
+// somebody who may not see it is worse than one that is missing.
+func (s *Server) worksSales(ctx context.Context, id *auth.Identity) bool {
+	ok, err := s.sales.HasSalesAccess(ctx, id.OrgID, id.Subjects)
+	if err != nil {
+		s.log.WarnContext(ctx, "stats: sales access", "error", err)
+		return false
+	}
+	return ok
 }
