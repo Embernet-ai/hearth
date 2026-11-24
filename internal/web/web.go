@@ -1351,6 +1351,8 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /forms/{id}/status", s.postFormsStatus)
 	authed.HandleFunc("POST /forms/{id}/schedule", s.postFormsSchedule)
 	authed.HandleFunc("POST /forms/{id}/delete", s.postFormsDelete)
+	authed.HandleFunc("GET /forms/{id}/answers.csv", s.getFormsCSV)
+	authed.HandleFunc("POST /forms/{id}/answers/{rid}/delete", s.postFormsResponseDelete)
 	authed.HandleFunc("GET /github", s.getGitHub)
 	authed.HandleFunc("POST /github/connect", s.postGitHubConnect)
 	authed.HandleFunc("POST /github/repos", s.postGitHubRepos)

@@ -8,7 +8,9 @@ package web
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -637,4 +639,65 @@ func (s *Server) postSocialUpload(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	_, err := s.social.UploadFromURL(ctx, r.FormValue("url"))
 	areaBack(w, r, "/social", url.Values{"tab": {"media"}}, "Added to the media library.", err)
+}
+
+// postFormsResponseDelete removes one person's answers.
+func (s *Server) postFormsResponseDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.forms.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Forms is not set up on this installation")
+		return
+	}
+	ctx, cancel := s.areaCtx(r)
+	defer cancel()
+	areaBack(w, r, "/forms", url.Values{"id": {r.PathValue("id")}, "results": {"1"}}, "Answers deleted.", s.forms.DeleteResponse(ctx, r.PathValue("rid")))
+}
+
+// getFormsCSV downloads every answer to a form as a spreadsheet, one column per question.
+func (s *Server) getFormsCSV(w http.ResponseWriter, r *http.Request) {
+	if !s.forms.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Forms is not set up on this installation")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	f, err := s.forms.Get(ctx, r.PathValue("id"))
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, areaErr(err))
+		return
+	}
+	rs, err := s.forms.AllResponses(ctx, f.ID)
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, areaErr(err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="answers.csv"`)
+	cw := csv.NewWriter(w)
+	head := []string{"When", "Finished"}
+	for _, q := range f.Questions {
+		head = append(head, safeCell(q.Headline))
+	}
+	_ = cw.Write(head)
+	for _, resp := range rs {
+		row := []string{resp.Created, fmt.Sprint(resp.Finished)}
+		for _, q := range f.Questions {
+			row = append(row, safeCell(answerText(resp.Answers[q.ID])))
+		}
+		_ = cw.Write(row)
+	}
+	cw.Flush()
+}
+
+func answerText(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case []any:
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = fmt.Sprint(e)
+		}
+		return strings.Join(parts, ", ")
+	}
+	return fmt.Sprint(v)
 }

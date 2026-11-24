@@ -52,11 +52,11 @@
     {/if}
 
     {#if v.Results}
-      <h2>Answers ({v.Results.Total}, {v.Results.Finished} finished)</h2>
+      <h2>Answers ({v.Results.Total}, {v.Results.Finished} finished) <a  class="chip"  href={"/forms/" + v.Form.ID + "/answers.csv"}>Download as a spreadsheet</a></h2>
       {#if v.Results.Responses && v.Results.Responses.length}
         <table  class="list small"  data-results>
-          <thead><tr><th>When</th>{#each v.Order as id}<th>{v.Headings[id]}</th>{/each}</tr></thead>
-          <tbody>{#each v.Results.Responses as r}<tr><td>{F.date(r.Created)}</td>{#each v.Order as id}<td>{cell(r.Answers?.[id])}</td>{/each}</tr>{/each}</tbody>
+          <thead><tr><th>When</th>{#each v.Order as id}<th>{v.Headings[id]}</th>{/each}<th></th></tr></thead>
+          <tbody>{#each v.Results.Responses as r}<tr><td>{F.date(r.Created)}</td>{#each v.Order as id}<td>{cell(r.Answers?.[id])}</td>{/each}<td><form  method="post"  action={"/forms/" + v.Form.ID + "/answers/" + r.ID + "/delete"}  class="inline"  data-confirm="Delete this person's answers?"><button  class="ghost small">Delete</button></form></td></tr>{/each}</tbody>
         </table>
       {:else}<p  class="muted">No answers yet.</p>{/if}
     {/if}
