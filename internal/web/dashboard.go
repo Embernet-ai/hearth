@@ -133,6 +133,12 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Stats = stats
 	d.Team = s.teamParts(r.Context(), id)
+	if gh := s.githubSection(r.Context(), id); gh != nil {
+		if d.Team == nil {
+			d.Team = &teamPanel{}
+		}
+		d.Team.Sections = append(append([]teamSection{}, d.Team.Sections...), *gh)
+	}
 	s.render(w, r, "dashboard", page{Title: "Dashboard", Dash: d})
 }
 

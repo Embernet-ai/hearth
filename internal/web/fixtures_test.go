@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"github.com/Embernet-ai/hearth/internal/github"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -277,7 +278,12 @@ func fixtures() map[string]page {
 				Photos:   []docs.Attachment{{FileID: "f1", Filename: "panel.jpg"}},
 				Comments: []*channels.Message{{AuthorName: "Yara", Body: "thanks", CreatedAt: end}},
 			}}},
-		"dailyreports-filed":  {RepMineToday: "abc", RepFrom: "a", RepTo: "b"},
+		"dailyreports-filed": {RepMineToday: "abc", RepFrom: "a", RepTo: "b"},
+		"github-none":        {GitHubArea: &GitHubView{Configured: true}},
+		"github-connected": {GitHubArea: &GitHubView{Configured: true, Connected: true, Login: "octo", Days: 30, Chosen: []string{"org/app"},
+			Choices: []GitHubChoice{{Name: "org/app", Private: true, Chosen: true}, {Name: "org/site"}},
+			Total:   &github.Metrics{Commits: 42, PRsOpened: 9, PRsMerged: 7, IssuesOpened: 4, IssuesClosed: 3, Releases: 2, Runs: 30, RunsPassed: 27, RunsFailed: 3},
+			Repos:   []github.Metrics{{Repo: "org/app", Commits: 42, PRsOpened: 9, PRsMerged: 7, IssuesOpened: 4, IssuesClosed: 3, Releases: 2, LatestRelease: "v2.0.0", Runs: 30, RunsPassed: 27, RunsFailed: 3}}}},
 		"dashboard-not-filed": {Dash: &dashboard{ReportDay: "2026-10-26"}},
 		"dashboard-filed":     {Dash: &dashboard{ReportDay: "2026-10-26", ReportID: "rid"}},
 		"servicehistory": {Title: "Service history", RepSpace: "sp1", RepFrom: "2025-01-01", RepTo: "2025-12-31",

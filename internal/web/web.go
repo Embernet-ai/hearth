@@ -46,6 +46,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/files"
 	"github.com/Embernet-ai/hearth/internal/forms"
+	"github.com/Embernet-ai/hearth/internal/github"
 	"github.com/Embernet-ai/hearth/internal/google"
 	"github.com/Embernet-ai/hearth/internal/importer"
 	"github.com/Embernet-ai/hearth/internal/importer/clickup"
@@ -148,6 +149,7 @@ type Server struct {
 	marketing *mautic.Client
 	// panel is the dashboard's team parts, shared for a few minutes (teampanel.go).
 	panel      panelCache
+	github     *github.Service
 	forms      *forms.Client
 	social     *social.Client
 	tools      []tools.Tool
@@ -243,10 +245,12 @@ type Deps struct {
 	// CRMForms shows a contact's Formbricks responses on their page. Nil when Formbricks is not connected.
 	CRMForms *crmforms.Service
 	Social   *social.Client
-	Tools    []tools.Tool
-	Box      connect.Sealer
-	SCIM     *scim.Service
-	Search   *search.Service
+	// GitHub is each person's read-only link to GitHub. Nil leaves the page saying it is not available.
+	GitHub *github.Service
+	Tools  []tools.Tool
+	Box    connect.Sealer
+	SCIM   *scim.Service
+	Search *search.Service
 	// Playground is Settings -> Tutorial's personal practice organisation.
 	Playground *playground.Service
 	// TimeOff is requesting and deciding days away.
@@ -303,6 +307,7 @@ func New(d Deps) (*Server, error) {
 		crmForms:   d.CRMForms,
 		forms:      d.Forms,
 		social:     d.Social,
+		github:     d.GitHub,
 		tools:      d.Tools,
 		connect:    d.Connect,
 		box:        d.Box,
@@ -640,6 +645,7 @@ type page struct {
 	Marketing  *MarketingView `json:",omitempty"`
 	FormsArea  *FormsView     `json:",omitempty"`
 	SocialArea *SocialView    `json:",omitempty"`
+	GitHubArea *GitHubView    `json:",omitempty"`
 	ToolsList  *ToolsView     `json:",omitempty"`
 	ToolsOn    bool           `json:",omitempty"`
 	CloudOn    bool           `json:",omitempty"`
@@ -1339,6 +1345,10 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /forms/{id}/status", s.postFormsStatus)
 	authed.HandleFunc("POST /forms/{id}/schedule", s.postFormsSchedule)
 	authed.HandleFunc("POST /forms/{id}/delete", s.postFormsDelete)
+	authed.HandleFunc("GET /github", s.getGitHub)
+	authed.HandleFunc("POST /github/connect", s.postGitHubConnect)
+	authed.HandleFunc("POST /github/repos", s.postGitHubRepos)
+	authed.HandleFunc("POST /github/disconnect", s.postGitHubDisconnect)
 	authed.HandleFunc("GET /social", s.getSocial)
 	authed.HandleFunc("POST /social/post", s.postSocialPost)
 	authed.HandleFunc("POST /social/post/{id}/delete", s.postSocialDelete)

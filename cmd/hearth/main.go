@@ -38,6 +38,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/emberops/stores"
 	"github.com/Embernet-ai/hearth/internal/files"
 	"github.com/Embernet-ai/hearth/internal/forms"
+	"github.com/Embernet-ai/hearth/internal/github"
 	"github.com/Embernet-ai/hearth/internal/google"
 	"github.com/Embernet-ai/hearth/internal/jobs"
 	"github.com/Embernet-ai/hearth/internal/m365"
@@ -545,7 +546,7 @@ func run() error {
 		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
-		CRMForms: crmFormsFor(formsClient), CRMMarketing: crmMarketingFor(pools, marketingClient), Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
+		CRMForms: crmFormsFor(formsClient), CRMMarketing: crmMarketingFor(pools, marketingClient), Marketing: marketingClient, Forms: formsClient, Social: socialClient, GitHub: github.NewService(pools.Web, githubSealer(box), nil), Tools: toolCards,
 		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
 		OIDCName: cfg.OIDCName, HideLocalLogin: !cfg.LocalLoginForm,
@@ -943,6 +944,14 @@ func salesFor(postgres bool, svc *crm.Service) crm.Sales {
 
 // sealerOf hands the web layer the secret box, or a true nil when there is none: a nil *secret.Box inside an
 // interface is not nil, and the chat webhook code tests for nil before storing anything.
+// githubSealer is the same box as a sealer the GitHub connection takes, or a true nil when there is none.
+func githubSealer(b *secret.Box) github.Sealer {
+	if b == nil {
+		return nil
+	}
+	return b
+}
+
 func sealerOf(b *secret.Box) connect.Sealer {
 	if b == nil {
 		return nil

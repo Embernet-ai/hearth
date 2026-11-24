@@ -66,7 +66,7 @@ describe('screens that fill the width keep everything', () => {
     expect(d.querySelectorAll('.numbers:not(.recap) a.stat').length).toBe(14);
     // the team's parts: email marketing and social with four numbers each, and forms that did not answer, saying so
     expect(heads(d).join('|')).toContain('Marketing and social');
-    expect(d.querySelectorAll('.recap a.stat').length).toBe(8);
+    expect(d.querySelectorAll('.recap a.stat').length).toBe(12);
     expect(d.querySelector('.recap .g-forms .groupnote')?.textContent).toContain('did not answer');
     expect(d.querySelector('form[action="/time"]')).not.toBeNull();
     expect(d.querySelector('form[action="/time/start"]')).not.toBeNull();

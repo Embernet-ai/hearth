@@ -78,6 +78,7 @@ export const groups: RailGroup[] = [
       { label: 'Service history', href: '/reports/service' },
       { label: 'Tags', href: '/tags' },
       { label: 'Calendar', href: '/calendar' },
+      { label: 'GitHub', href: '/github' },
       { label: 'Workload', href: '/workload', show: can('time_all') },
       { label: 'Time report', href: '/reports/time', show: can('finance') },
       { label: 'Time off', href: '/time-off', badge: (pg) => pg.TimeOffPending },
