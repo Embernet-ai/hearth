@@ -327,7 +327,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 	if s.sales != nil {
 		// Sales shows everything a person with sales access may see, whoever owns it: the default is all deals and all
 		// owners (Patrick 2026-11-24). "Mine" is a filter somebody turns on with ?deals=mine, never the starting point,
-		// and what the viewer may see is still the CRM's own access rule, so a person with no sales access reads none.
+		// and what the viewer may see is still the CRM's own access rule (every count and list runs as the viewer), so a person with no sales access reads zeros and sees none of the records.
 		scope, ownerQ, who := "All owners: ", "", ""
 		if mine {
 			scope, ownerQ, who = "", "&owner="+url.QueryEscape(person), person
@@ -335,8 +335,6 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, who, today, monthFrom, monthFrom.AddDate(0, 1, 0))
 		if err != nil {
 			s.log.WarnContext(ctx, "stats: deals", "error", err)
-		} else if !mine && st.OpenCount+st.WonCount+st.LostCount+st.Overdue == 0 {
-			// Nothing the viewer may see in sales: no sales access reads as no deals group, not a row of zeros.
 		} else {
 			own := "/deals?view=table" + ownerQ
 			closed := own + "&closedfrom=" + dayStr(monthFrom) + "&closedto=" + dayStr(monthTo)
