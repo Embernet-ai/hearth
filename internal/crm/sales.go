@@ -273,16 +273,10 @@ var _ Sales = (*Service)(nil)
 
 // superKey is not a subject anybody holds. keysOf appends it for a super admin and visible lets it through, so the one
 // filter every list carries lets a super admin see every record, as the rest of Hearth does, and nobody else.
-const superKey = "*super"
+const superKey = core.SuperKey
 
 // keysOf is the subject keys a list filters on: the actor's own, and for a super admin the key that sees everything.
-func keysOf(actor core.Subjects) []string {
-	keys := actor.Keys()
-	if actor.Super() {
-		keys = append(keys, superKey)
-	}
-	return keys
-}
+func keysOf(actor core.Subjects) []string { return actor.GrantKeys() }
 
 // visible is the permission filter every list uses: a row is the caller's to
 // see when some grant on it names a subject they hold, or when they are a super

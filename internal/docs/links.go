@@ -49,14 +49,14 @@ func (s *Service) Linked(ctx context.Context, orgID string, actor core.Subjects,
 		LEFT JOIN task_fields t ON t.document_id = d.id
 		WHERE d.org_id = $1
 		  AND d.deleted_at IS NULL
-		  AND EXISTS (
+		  AND ($3::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		      WHERE g.entity_type = 'document'
 		        AND g.entity_id = d.id
 		        AND g.subject_key = ANY($3)
-		        AND (g.expires_at IS NULL OR g.expires_at > now()))
+		        AND (g.expires_at IS NULL OR g.expires_at > now())))
 		ORDER BY d.updated_at DESC
-		LIMIT 100`, orgID, docID, actor.Keys())
+		LIMIT 100`, orgID, docID, actor.GrantKeys())
 	if err != nil {
 		return nil, fmt.Errorf("docs: linked: %w", err)
 	}
@@ -104,13 +104,13 @@ func (s *Service) LinkedTo(ctx context.Context, orgID string, actor core.Subject
 		JOIN related r ON r.id = d.id
 		LEFT JOIN task_fields t ON t.document_id = d.id
 		WHERE d.org_id = $1 AND d.deleted_at IS NULL
-		  AND EXISTS (
+		  AND ($4::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'document' AND g.entity_id = d.id
 		         AND g.subject_key = ANY($4)
-		         AND (g.expires_at IS NULL OR g.expires_at > now()))
+		         AND (g.expires_at IS NULL OR g.expires_at > now())))
 		ORDER BY d.updated_at DESC
-		LIMIT 100`, orgID, string(ref.Type), ref.ID, actor.Keys())
+		LIMIT 100`, orgID, string(ref.Type), ref.ID, actor.GrantKeys())
 	if err != nil {
 		return nil, fmt.Errorf("docs: linked to %s: %w", ref.Type, err)
 	}

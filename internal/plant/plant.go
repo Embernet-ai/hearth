@@ -688,14 +688,14 @@ func (s *Service) SpaceChildren(ctx context.Context, orgID string, actor core.Su
 		         WHERE d.space_id = sp.id AND d.deleted_at IS NULL) AS docs
 		FROM spaces sp
 		WHERE sp.org_id = $1 AND sp.parent_id = $2
-		  AND (EXISTS (
+		  AND ($3::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'space' AND g.entity_id = sp.id
 		         AND g.subject_key = ANY($3)
 		         AND (g.expires_at IS NULL OR g.expires_at > now()))
 		    OR sp.id IN (SELECT id FROM member_spaces))
 		ORDER BY sp.position, lower(sp.name)`,
-		orgID, parentID, actor.Keys(), actor.Principal())
+		orgID, parentID, actor.GrantKeys(), actor.Principal())
 	if err != nil {
 		return nil, fmt.Errorf("plant: children: %w", err)
 	}

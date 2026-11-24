@@ -182,6 +182,20 @@ func (s Subjects) Keys() []string {
 	return keys
 }
 
+// SuperKey is not a subject anybody holds. GrantKeys appends it for a super admin, and a query that filters on grants
+// lets it through with `$n::text[] @> ARRAY['*super']`, so one filter serves everybody and a super admin sees all.
+const SuperKey = "*super"
+
+// GrantKeys is Keys for a query that filters on grants by subject_key: the same keys, and for a super admin the one
+// that sees everything, because a super admin holds no grant on work other people made.
+func (s Subjects) GrantKeys() []string {
+	keys := s.Keys()
+	if s.Super() {
+		keys = append(keys, SuperKey)
+	}
+	return keys
+}
+
 // GrantsExists renders the permission filter every list query carries: an
 // EXISTS against grants, or TRUE for a super admin.
 //

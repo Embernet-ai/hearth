@@ -244,21 +244,21 @@ WITH RECURSIVE
 -- Every asset the caller can see, plus its parent when that is visible too.
 visible AS (
     SELECT d.id, d.title,
-           CASE WHEN EXISTS (
+           CASE WHEN ($2::text[] @> ARRAY['*super'] OR EXISTS (
                SELECT 1 FROM grants pg
                 WHERE pg.entity_type = 'document' AND pg.entity_id = a.parent_asset_id
                   AND pg.subject_key = ANY($2)
-                  AND (pg.expires_at IS NULL OR pg.expires_at > now()))
+                  AND (pg.expires_at IS NULL OR pg.expires_at > now())))
            THEN a.parent_asset_id END AS parent_id,
            COALESCE(a.code, '') AS code, a.installed_at, a.retired_at
     FROM documents d
     LEFT JOIN asset_fields a ON a.document_id = d.id
     WHERE d.org_id = $1 AND d.kind = 'asset' AND d.deleted_at IS NULL
-      AND EXISTS (
+      AND ($2::text[] @> ARRAY['*super'] OR EXISTS (
           SELECT 1 FROM grants g
            WHERE g.entity_type = 'document' AND g.entity_id = d.id
              AND g.subject_key = ANY($2)
-             AND (g.expires_at IS NULL OR g.expires_at > now()))
+             AND (g.expires_at IS NULL OR g.expires_at > now())))
 ),
 -- Each asset paired with itself and every ancestor above it.
 up AS (
@@ -365,7 +365,7 @@ LEFT JOIN property_values crit
 // Tree returns every asset the caller can see, in tree order, with the rollups
 // attached.
 func (s *Service) Tree(ctx context.Context, orgID string, actor core.Subjects) ([]*Asset, error) {
-	rows, err := s.db.Query(ctx, treeQuery+` ORDER BY pl.sort`, orgID, actor.Keys(), maxDepth)
+	rows, err := s.db.Query(ctx, treeQuery+` ORDER BY pl.sort`, orgID, actor.GrantKeys(), maxDepth)
 	if err != nil {
 		return nil, fmt.Errorf("plant: asset tree: %w", err)
 	}
@@ -378,7 +378,7 @@ func (s *Service) Get(ctx context.Context, orgID string, actor core.Subjects, id
 	if err := s.canView(ctx, actor, id); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.Query(ctx, treeQuery+` WHERE pl.id = $4`, orgID, actor.Keys(), maxDepth, id)
+	rows, err := s.db.Query(ctx, treeQuery+` WHERE pl.id = $4`, orgID, actor.GrantKeys(), maxDepth, id)
 	if err != nil {
 		return nil, fmt.Errorf("plant: asset: %w", err)
 	}
@@ -403,7 +403,7 @@ func (s *Service) Children(ctx context.Context, orgID string, actor core.Subject
 		return nil, err
 	}
 	rows, err := s.db.Query(ctx, treeQuery+` WHERE pl.parent_id = $4 ORDER BY pl.sort`,
-		orgID, actor.Keys(), maxDepth, id)
+		orgID, actor.GrantKeys(), maxDepth, id)
 	if err != nil {
 		return nil, fmt.Errorf("plant: children: %w", err)
 	}
@@ -445,12 +445,12 @@ func (s *Service) Ancestors(ctx context.Context, orgID string, actor core.Subjec
 		SELECT d.id::text, d.title, up.depth
 		FROM up JOIN documents d ON d.id = up.document_id
 		WHERE up.depth > 0 AND NOT up.looped AND d.deleted_at IS NULL
-		  AND EXISTS (
+		  AND ($4::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'document' AND g.entity_id = d.id
 		         AND g.subject_key = ANY($4)
-		         AND (g.expires_at IS NULL OR g.expires_at > now()))
-		ORDER BY up.depth DESC`, id, orgID, maxDepth, actor.Keys())
+		         AND (g.expires_at IS NULL OR g.expires_at > now())))
+		ORDER BY up.depth DESC`, id, orgID, maxDepth, actor.GrantKeys())
 	if err != nil {
 		return nil, fmt.Errorf("plant: ancestors: %w", err)
 	}
