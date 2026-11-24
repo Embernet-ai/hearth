@@ -1,7 +1,7 @@
 <script lang="ts" module>
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  export { orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -28,7 +28,7 @@
   <ul  class="files"  data-timeline>
     {#each F.rng(dot?.Activities) as [k2, d2]}
       <li  data-activity={S(d2?.ID)}>
-        <span  class="tag">{#if F.t(F.eq(d2?.Kind, "call"))}{#if F.t(F.eq(d2?.Direction, "inbound"))}call in{:else if F.t(F.eq(d2?.Direction, "outbound"))}call out{:else}call{/if}{:else}note{/if}</span>
+        <span  class="tag">{#if F.t(F.eq(d2?.Kind, "call"))}{#if F.t(F.eq(d2?.Direction, "inbound"))}call in{:else if F.t(F.eq(d2?.Direction, "outbound"))}call out{:else}call{/if}{:else if d2?.Kind === "meeting"}meeting{:else if d2?.Kind === "email"}{#if d2?.Direction === "inbound"}email in{:else}email out{/if}{:else}note{/if}</span>
         <strong>{#if F.t(d2?.Title)}{d2?.Title}{/if}</strong>
         <span  class="muted small">{F.date(d2?.OccurredAt)}{#if F.t(d2?.ByName)} · {d2?.ByName}{/if}</span>
         {#if F.t(d2?.Disposition)}<span  class="status">{d2?.Disposition}</span>{/if}
@@ -48,10 +48,10 @@
 <form  method="post"  action="/activities"  class="row wrap"  data-add-activity>
   <input  type="hidden"  name="target_type"  value={S(dot?.Type)}>
   <input  type="hidden"  name="target_id"  value={S(dot?.ID)}>
-  <select  name="kind"  aria-label="Kind"><option  value="note">Note</option><option  value="call">Call</option></select>
+  <select  name="kind"  aria-label="Kind"><option  value="note">Note</option><option  value="call">Call</option><option  value="meeting">Meeting (log one that happened)</option><option  value="email">Email (log one that was sent)</option></select>
   <input  name="title"  placeholder="Title"  aria-label="Title">
   <input  name="body"  placeholder="What happened"  style="min-width:14rem"  aria-label="Body">
-  <select  name="direction"  aria-label="Direction (calls)"><option  value="">direction</option><option  value="outbound">we rang</option><option  value="inbound">they rang</option></select>
+  <select  name="direction"  aria-label="Direction (calls and emails)"><option  value="">direction</option><option  value="outbound">we reached out</option><option  value="inbound">they reached out</option></select>
   <input  name="disposition"  placeholder="outcome, e.g. Left voicemail"  aria-label="Outcome">
   <input  name="also_company"  placeholder="also about (company names, comma separated)"  style="min-width:14rem"  aria-label="Also about these companies">
   <input  name="minutes"  type="number"  min="0"  step="0.5"  placeholder="mins"  style="width:5rem"  aria-label="Minutes">
@@ -140,3 +140,103 @@
 {#if err}<p  id={errId}  class="error"  role="alert">{err}</p>{/if}
 {/snippet}
 {#snippet typechecked(dot)}{@const v_k = dot?.Key}{#if F.t(dot?.Labels)}{#each F.rng(dot?.Labels?.Types) as [k5, d5]}{#if F.t(F.eq(d5?.Key, v_k))}checked{/if}{/each}{/if}{/snippet}
+
+{#snippet followupspanel(dot)}
+{#if dot?.Desk}
+<h3  id="followups">Follow-ups</h3>
+{#if dot.Desk.Followups?.length}
+  <ul  class="files"  data-followups>
+    {#each dot.Desk.Followups as f (f.ID)}
+      <li  data-followup={f.ID}>
+        <span  class={"tag" + (f.Overdue ? " overdue" : "")}>{f.Status === "done" ? "done" : f.DueAt ? "due " + f.DueAt.slice(0, 10) : "no date"}</span>
+        <strong>{f.Title}</strong>
+        <span  class="muted small">{f.AssigneeName}</span>
+        {#if f.Body}<div  class="muted small"  style="white-space:pre-wrap">{f.Body}</div>{/if}
+        <form  method="post"  action={"/crm/followups/" + f.ID + "/done"}  class="inline">
+          <input  type="hidden"  name="done"  value={f.Status === "done" ? "0" : "1"}>
+          <input  type="hidden"  name="back"  value={dot.Path + "#followups"}>
+          <button  type="submit"  class="ghost small">{f.Status === "done" ? "Open again" : "Done"}</button>
+        </form>
+        <form  method="post"  action={"/crm/followups/" + f.ID + "/delete"}  class="inline">
+          <input  type="hidden"  name="back"  value={dot.Path + "#followups"}>
+          <button  type="submit"  class="ghost small"  data-confirm="Remove this follow-up?">Remove</button>
+        </form>
+      </li>
+    {/each}
+  </ul>
+{:else}
+  <p  class="muted small">Nothing owed here.</p>
+{/if}
+<form  method="post"  action="/crm/followups"  class="row wrap"  data-add-followup>
+  <input  type="hidden"  name="target_type"  value={dot.FavoriteType || (dot.Deal ? "deal" : dot.Contact ? "contact" : "company")}>
+  <input  type="hidden"  name="target_id"  value={dot.Deal?.ID || dot.Contact?.ID || dot.Company?.ID}>
+  <input  name="title"  placeholder="Follow up on"  style="min-width:14rem"  aria-label="Follow-up"  required>
+  <input  name="due"  type="date"  aria-label="Due"  value={dot.Desk.Today}>
+  <select  name="assignee"  aria-label="Assigned to">
+    <option  value="me">Me</option>
+    {#each dot.Owners || [] as o}<option  value={o.PrincipalID}>{o.DisplayName}</option>{/each}
+  </select>
+  <button  type="submit">Add follow-up</button>
+</form>
+{/if}
+{/snippet}
+{#snippet mailpanel(dot)}
+{#if dot?.Desk?.MailOn}
+<h3  id="mail-out">Email and meetings</h3>
+<p  class="muted small">Sent and booked from your own connected account, and logged on the timeline.</p>
+<form  method="post"  action="/crm/email"  class="fields"  data-send-email>
+  <input  type="hidden"  name="target_type"  value={dot.Deal ? "deal" : dot.Contact ? "contact" : "company"}>
+  <input  type="hidden"  name="target_id"  value={dot.Deal?.ID || dot.Contact?.ID || dot.Company?.ID}>
+  <label  for="mail-provider">From</label>
+  <select  id="mail-provider"  name="provider"><option  value="google">Google</option><option  value="microsoft">Microsoft</option></select>
+  <label  for="mail-to">To</label>
+  <input  id="mail-to"  name="to"  value={dot.Contact?.Email || ""}  placeholder="name@example.com"  required>
+  <label  for="mail-subject">Subject</label>
+  <input  id="mail-subject"  name="subject"  required>
+  <label  for="mail-body">Message</label>
+  <textarea  id="mail-body"  name="body"  rows="5"  required></textarea>
+  <div  class="row"><button  type="submit">Send email</button></div>
+</form>
+<form  method="post"  action="/crm/meeting"  class="fields"  data-book-meeting>
+  <input  type="hidden"  name="target_type"  value={dot.Deal ? "deal" : dot.Contact ? "contact" : "company"}>
+  <input  type="hidden"  name="target_id"  value={dot.Deal?.ID || dot.Contact?.ID || dot.Company?.ID}>
+  <label  for="mt-provider">Calendar</label>
+  <select  id="mt-provider"  name="provider"><option  value="google">Google</option><option  value="microsoft">Microsoft</option></select>
+  <label  for="mt-title">Meeting</label>
+  <input  id="mt-title"  name="title"  required>
+  <label  for="mt-when">Starts</label>
+  <input  id="mt-when"  name="when"  type="datetime-local"  required>
+  <label  for="mt-mins">Minutes</label>
+  <input  id="mt-mins"  name="minutes"  type="number"  min="5"  step="5"  value="30">
+  <label  for="mt-invite">Invite</label>
+  <input  id="mt-invite"  name="invite"  value={dot.Contact?.Email || ""}  placeholder="emails, comma separated">
+  <label  for="mt-notes">Notes</label>
+  <textarea  id="mt-notes"  name="notes"  rows="2"></textarea>
+  <div  class="row"><button  type="submit">Book meeting</button></div>
+</form>
+{/if}
+{/snippet}
+
+{#snippet bulkbar(dot, type)}
+{#if dot?.SalesNav}
+<form  id="bulkform"  method="post"  action="/crm/bulk"  class="row wrap"  data-bulk>
+  <input  type="hidden"  name="type"  value={type}>
+  <input  type="hidden"  name="back"  value={dot?.Path}>
+  <span  class="muted small">With the ticked rows:</span>
+  <select  name="owner"  aria-label="Set owner">
+    <option  value="">Owner: no change</option>
+    <option  value="me">Owner: me</option>
+    <option  value="none">Owner: nobody</option>
+    {#each dot?.Owners || [] as o}<option  value={o.PrincipalID}>Owner: {o.DisplayName}</option>{/each}
+  </select>
+  {#if type === "deal"}
+    <select  name="stage"  aria-label="Move to stage">
+      <option  value="">Stage: no change</option>
+      {#each dot?.DealStages || [] as st}<option  value={st}>Stage: {F.stageName(st)}</option>{/each}
+    </select>
+  {/if}
+  {#if type === "company"}<input  name="add_tag"  placeholder="add a tag"  aria-label="Add a tag">{/if}
+  <button  type="submit"  class="ghost small">Apply</button>
+</form>
+{/if}
+{/snippet}

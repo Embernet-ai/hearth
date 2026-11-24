@@ -173,7 +173,7 @@ func (f *fx) drain(t *testing.T) {
 		}
 		// The recurring jobs reschedule themselves, so running them here would
 		// never terminate. They have their own test.
-		if job.Kind == notify.KindDues || job.Kind == notify.KindDigest {
+		if job.Kind == notify.KindDues || job.Kind == notify.KindFollowups || job.Kind == notify.KindDigest {
 			if err := f.queue.Complete(ctx, job.ID); err != nil {
 				t.Fatalf("complete: %v", err)
 			}

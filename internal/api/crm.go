@@ -70,6 +70,7 @@ func (s *Service) crmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/activities", s.crm(s.createActivity))
 	mux.HandleFunc("GET /v1/crm/stats", s.crm(s.crmStats))
 	mux.HandleFunc("GET /v1/crm/lookup", s.crm(s.lookupPhone))
+	s.deskRoutes(mux)
 }
 
 // crm answers 404 when the CRM is not switched on.
@@ -718,6 +719,7 @@ type dealBody struct {
 	ContactID   *string `json:"contact_id"`
 	OwnerID     *string `json:"owner_id"`
 	Notes       *string `json:"notes"`
+	LostReason  *string `json:"lost_reason"`
 	ExternalID  string  `json:"external_id"`
 	Source      string  `json:"source"`
 }
@@ -727,6 +729,8 @@ func dealJSON(d *crm.Deal) map[string]any {
 		"id": d.ID, "name": d.Name, "stage": d.Stage, "amount_cents": d.AmountCents, "currency": d.Currency,
 		"company_name": d.CompanyName, "contact_name": d.ContactName, "owner_name": d.OwnerName,
 		"notes": d.Notes, "created_at": d.CreatedAt, "updated_at": d.UpdatedAt,
+		"lost_reason": d.LostReason, "stage_changed_at": d.StageChangedAt, "closed_at": d.ClosedAt,
+		"probability_percent": crm.Probability(d.Stage), "weighted_cents": d.AmountCents * int64(crm.Probability(d.Stage)) / 100,
 		"close_date": nil, "company_id": nil, "contact_id": nil, "owner_id": nil,
 	}
 	if d.CloseDate != nil {
@@ -858,6 +862,14 @@ func (s *Service) patchDeal(w http.ResponseWriter, r *http.Request) {
 	if err := s.sales.UpdateDeal(r.Context(), c.OrgID, c.Subjects, next); err != nil {
 		crmErr(w, err, "you cannot change that deal")
 		return
+	}
+	if b.LostReason != nil {
+		if desk, ok := s.sales.(crm.Desk); ok {
+			if err := desk.SetLostReason(r.Context(), c.OrgID, c.Subjects, id, *b.LostReason); err != nil {
+				crmErr(w, err, "you cannot change that deal")
+				return
+			}
+		}
 	}
 	d, err := s.sales.GetDeal(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {

@@ -59,10 +59,12 @@ func ValidStage(s string) bool { _, ok := stageLabels[s]; return ok }
 
 // Activity kinds and call directions.
 const (
-	ActNote  = "note"
-	ActCall  = "call"
-	Inbound  = "inbound"
-	Outbound = "outbound"
+	ActNote    = "note"
+	ActCall    = "call"
+	ActMeeting = "meeting"
+	ActEmail   = "email"
+	Inbound    = "inbound"
+	Outbound   = "outbound"
 )
 
 // Deal is one opportunity.
@@ -84,6 +86,11 @@ type Deal struct {
 	Notes       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// LostReason is why a deal was lost, in the seller's words. StageChangedAt is when it entered its stage, set by
+	// the database for every writer, and ClosedAt when it was won, lost or given up on.
+	LostReason     string
+	StageChangedAt time.Time
+	ClosedAt       *time.Time
 }
 
 func (d *Deal) Ref() core.Ref { return core.Ref{Type: core.EntityDeal, ID: d.ID} }
@@ -264,13 +271,27 @@ type Sales interface {
 
 var _ Sales = (*Service)(nil)
 
+// superKey is not a subject anybody holds. keysOf appends it for a super admin and visible lets it through, so the one
+// filter every list carries lets a super admin see every record, as the rest of Hearth does, and nobody else.
+const superKey = "*super"
+
+// keysOf is the subject keys a list filters on: the actor's own, and for a super admin the key that sees everything.
+func keysOf(actor core.Subjects) []string {
+	keys := actor.Keys()
+	if actor.Super() {
+		keys = append(keys, superKey)
+	}
+	return keys
+}
+
 // visible is the permission filter every list uses: a row is the caller's to
-// see when some grant on it names a subject they hold.
+// see when some grant on it names a subject they hold, or when they are a super
+// admin.
 func visible(entity, alias string, keysArg int) string {
-	return fmt.Sprintf(`EXISTS (SELECT 1 FROM grants g
+	return fmt.Sprintf(`($%d::text[] @> ARRAY['%s'] OR EXISTS (SELECT 1 FROM grants g
 	       WHERE g.entity_type = '%s' AND g.entity_id = %s.id
 	         AND g.subject_key = ANY($%d)
-	         AND (g.expires_at IS NULL OR g.expires_at > now()))`, entity, alias, keysArg)
+	         AND (g.expires_at IS NULL OR g.expires_at > now())))`, keysArg, superKey, entity, alias, keysArg)
 }
 
 // sortCol maps a requested sort onto a column. Whitelisted, because the value
@@ -370,7 +391,7 @@ func (s *Service) CompaniesPage(ctx context.Context, orgID string, actor core.Su
 
 // companyFilter is the WHERE the companies list asks, shared by the page and the group totals so the two cannot disagree.
 func companyFilter(orgID string, actor core.Subjects, q ListQuery) (string, []any) {
-	args := []any{orgID, actor.Keys()}
+	args := []any{orgID, keysOf(actor)}
 	where := " AND " + visible("company", "c", 2)
 	if q.Kind != "" && validKinds[q.Kind] {
 		args = append(args, q.Kind)
@@ -407,7 +428,7 @@ var contactSorts = map[string]string{
 
 // contactFilter is the WHERE the contacts list asks.
 func contactFilter(orgID string, actor core.Subjects, q ListQuery) (string, []any) {
-	args := []any{orgID, actor.Keys()}
+	args := []any{orgID, keysOf(actor)}
 	where := " AND " + visible("contact", "ct", 2)
 	if q.CompanyID != "" {
 		args = append(args, q.CompanyID)
@@ -1004,7 +1025,7 @@ const dealSelect = `
 	SELECT d.id::text, d.name, d.stage, d.amount_cents, d.currency, d.close_date,
 	       d.company_id::text, coalesce(co.name,''), d.contact_id::text, coalesce(ct.name,''),
 	       d.owner_id::text, coalesce(op.display_name,''), d.position, d.notes,
-	       d.created_at, d.updated_at
+	       d.created_at, d.updated_at, d.lost_reason, d.stage_changed_at, d.closed_at
 	FROM deals d
 	LEFT JOIN companies co ON co.id = d.company_id AND co.deleted_at IS NULL
 	LEFT JOIN contacts  ct ON ct.id = d.contact_id AND ct.deleted_at IS NULL
@@ -1014,7 +1035,7 @@ func scanDeal(row pgx.Row, orgID string) (*Deal, error) {
 	d := &Deal{OrgID: orgID}
 	err := row.Scan(&d.ID, &d.Name, &d.Stage, &d.AmountCents, &d.Currency, &d.CloseDate,
 		&d.CompanyID, &d.CompanyName, &d.ContactID, &d.ContactName, &d.OwnerID,
-		&d.OwnerName, &d.Position, &d.Notes, &d.CreatedAt, &d.UpdatedAt)
+		&d.OwnerName, &d.Position, &d.Notes, &d.CreatedAt, &d.UpdatedAt, &d.LostReason, &d.StageChangedAt, &d.ClosedAt)
 	return d, err
 }
 
@@ -1044,7 +1065,7 @@ var dealSorts = map[string]string{
 
 // dealFilter is the WHERE the deals list asks.
 func dealFilter(orgID string, actor core.Subjects, q ListQuery) (string, []any) {
-	args := []any{orgID, actor.Keys()}
+	args := []any{orgID, keysOf(actor)}
 	where := " AND " + visible("deal", "d", 2)
 	if q.Stage != "" && ValidStage(q.Stage) {
 		args = append(args, q.Stage)
@@ -1134,7 +1155,7 @@ func (s *Service) DealsFor(ctx context.Context, orgID string, actor core.Subject
 	}
 	rows, err := s.db.Query(ctx, dealSelect+` WHERE d.org_id = $1 AND d.deleted_at IS NULL
 		AND `+col+` = $3 AND `+visible("deal", "d", 2)+` ORDER BY d.updated_at DESC`,
-		orgID, actor.Keys(), t.ID)
+		orgID, keysOf(actor), t.ID)
 	if err != nil {
 		return nil, fmt.Errorf("crm: deals for: %w", err)
 	}
@@ -1163,7 +1184,7 @@ func (s *Service) AddActivity(ctx context.Context, orgID string, actor core.Subj
 	if principal == "" {
 		return nil, errors.New("crm: no acting principal")
 	}
-	if a.Kind != ActNote && a.Kind != ActCall {
+	if a.Kind != ActNote && a.Kind != ActCall && a.Kind != ActMeeting && a.Kind != ActEmail {
 		return nil, fmt.Errorf("%w: %q is not a kind of activity", ErrInvalid, a.Kind)
 	}
 	a.Title = strings.TrimSpace(a.Title)
@@ -1182,11 +1203,17 @@ func (s *Service) AddActivity(ctx context.Context, orgID string, actor core.Subj
 			return nil, err
 		}
 	}
-	if a.Kind == ActCall {
+	switch a.Kind {
+	case ActCall, ActEmail:
 		if a.Direction != "" && a.Direction != Inbound && a.Direction != Outbound {
-			return nil, fmt.Errorf("%w: a call goes in or out", ErrInvalid)
+			return nil, fmt.Errorf("%w: a %s goes in or out", ErrInvalid, a.Kind)
 		}
-	} else {
+		if a.Kind == ActEmail {
+			a.DurationMs = nil
+		}
+	case ActMeeting:
+		a.Direction = ""
+	default:
 		a.Direction, a.Disposition, a.DurationMs = "", "", nil
 	}
 	if a.OccurredAt.IsZero() {
@@ -1339,7 +1366,7 @@ func (s *Service) Unassigned(ctx context.Context, orgID string, actor core.Subje
 	if !ok {
 		return nil, 0, fmt.Errorf("%w: %q has no owner", ErrInvalid, t)
 	}
-	args := []any{orgID, actor.Keys()}
+	args := []any{orgID, keysOf(actor)}
 	where := " AND r.owner_id IS NULL AND " + visible(string(t), "r", 2)
 	if tx := strings.TrimSpace(q.Search); tx != "" {
 		args = append(args, "%"+tx+"%")
@@ -1446,7 +1473,7 @@ type StageStat struct {
 // list uses, so a tile never says more than the page behind it would show.
 func (s *Service) Stats(ctx context.Context, orgID string, actor core.Subjects) (*Stats, error) {
 	out := &Stats{ByStage: map[string]StageStat{}}
-	keys := actor.Keys()
+	keys := keysOf(actor)
 	if err := s.db.QueryRow(ctx, `SELECT count(*) FROM companies c WHERE c.org_id=$1 AND c.deleted_at IS NULL AND `+
 		visible("company", "c", 2), orgID, keys).Scan(&out.Companies); err != nil {
 		return nil, fmt.Errorf("crm: stats companies: %w", err)

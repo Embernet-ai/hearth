@@ -28,6 +28,8 @@ const (
 	KindEmail  = "notify.email"
 	KindDigest = "notify.digest"
 	KindDues   = "notify.due_soon"
+	// KindFollowups is the sweep that tells a salesperson a CRM follow-up is due.
+	KindFollowups = "notify.crm_followups"
 )
 
 // Mailer is the slice of sending this package needs, declared here so the SMTP
@@ -59,6 +61,7 @@ func (f *Fanout) Register(h interface {
 	h.Handle(KindEmail, f.handleEmail)
 	h.Handle(KindDigest, f.handleDigest)
 	h.Handle(KindDues, f.handleDueSoon)
+	h.Handle(KindFollowups, f.handleFollowupsDue)
 }
 
 // Routes are the outbox subscriptions.
@@ -594,6 +597,11 @@ func (f *Fanout) StartAll(ctx context.Context) error {
 func (f *Fanout) Start(ctx context.Context, orgID string) error {
 	if _, err := f.queue.Enqueue(ctx, jobs.Spec{
 		OrgID: orgID, Kind: KindDues, UniqueKey: "due_sweep",
+	}); err != nil {
+		return err
+	}
+	if _, err := f.queue.Enqueue(ctx, jobs.Spec{
+		OrgID: orgID, Kind: KindFollowups, UniqueKey: "crm_followup_sweep",
 	}); err != nil {
 		return err
 	}

@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
+  import { bulkbar, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -60,6 +60,7 @@
     {#if F.t(dot?.CompanyRows)}
     <table  class="list"  data-sales-list>
       <thead><tr>
+        <th></th>
         <th><a  href={(S(F.index(dot?.SortLinks, "name")))}>Company</a></th>
         <th><a  href={(S(F.index(dot?.SortLinks, "kind")))}>Kind</a></th>
         <th>Types</th>
@@ -74,6 +75,7 @@
         {#each F.rng(dot?.CompanyRows) as [k5, d5]}
           {@render grouprow(dot, k5, 9)}
           <tr  data-company={S(d5?.ID)}>
+            <td><input  type="checkbox"  name="ids"  value={S(d5?.ID)}  form="bulkform"  aria-label="Select"></td>
             <td><a  href={("/companies/" + S(d5?.ID))}>{d5?.Name}</a></td>
             <td>{#if F.t(d5?.Kind)}<span  class="tag">{d5?.Kind}</span>{/if}</td>
             <td>{#each F.rng(d5?.TypeLabels) as [k6, d6]}<span  class="tag">{d6}</span> {/each}{#each F.rng(d5?.Tags) as [k7, d7]}<span  class="tag muted">#{d7}</span> {/each}</td>
@@ -88,6 +90,7 @@
       </tbody>
     </table>
     {@render pager(dot?.Pager)}
+    {@render bulkbar(dot, "company")}
     {:else}
       <p  class="muted">Nothing here yet.</p>
     {/if}

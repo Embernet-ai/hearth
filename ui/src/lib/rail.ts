@@ -41,15 +41,25 @@ export const mine: RailGroup = {
 
 export const groups: RailGroup[] = [
   {
-    key: 'g-conversation',
-    heading: 'Conversation',
+    key: 'g-crm',
+    heading: 'CRM',
     dot: 'talk',
     items: [
-      { label: 'Channels', href: '/channels' },
-      { label: 'Contacts', href: '/contacts' },
+      { label: 'Contacts', href: '/contacts', on: pre('/contacts') },
+      { label: 'Companies', href: '/companies', on: pre('/companies') },
       { label: 'Deals', href: '/deals', on: pre('/deals'), show: (pg) => !!pg.SalesNav },
+      { label: 'Follow-ups', href: '/crm/followups', show: (pg) => !!pg.SalesNav },
+      { label: 'Forecast', href: '/crm/forecast', show: (pg) => !!pg.SalesNav },
+      { label: 'Sales reports', href: '/crm/reports', show: (pg) => !!pg.SalesNav },
       { label: 'Unassigned', href: '/crm/unassigned', show: (pg) => !!pg.SalesNav },
     ],
+  },
+  {
+    // Team chat is not the CRM, so it has its own place. It was the first line of the group that is now the CRM.
+    key: 'g-chat',
+    heading: 'Chat',
+    dot: 'talk',
+    items: [{ label: 'Channels', href: '/channels', on: pre('/channels') }],
   },
   {
     key: 'g-work',

@@ -798,11 +798,13 @@ type page struct {
 	CanManageTypes bool
 	UnownedType    string
 	UnownedCounts  map[string]int
-	Deals          []*crm.Deal
-	Deal           *crm.Deal
-	DealCols       []dealCol
-	DealStages     []string
-	Activities     []*crm.Activity
+	// Desk is the data of the follow-up, forecast and report pages, and of the follow-ups on a record.
+	Desk       *deskData
+	Deals      []*crm.Deal
+	Deal       *crm.Deal
+	DealCols   []dealCol
+	DealStages []string
+	Activities []*crm.Activity
 	// EmberOps is the page this record has in EmberOps, when the CRM sync has sent it there.
 	EmberOps    []crm.EmberOpsLink
 	Details     *crm.Details
@@ -921,7 +923,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	p.HideLocalLogin = s.oidc != nil && s.hideLocalLogin
 	p.Path = r.URL.Path
 	p.Version = s.version
-	p.SalesNav = s.sales != nil
+	p.SalesNav = s.salesNav(r)
 	p.ToolsOn = len(s.tools) > 0
 	p.Today = time.Now().Format("2006-01-02")
 	// The list page drives its space filter entirely from this query param and
@@ -1213,6 +1215,7 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /contacts/{id}/delete", s.deleteContact)
 	authed.HandleFunc("POST /contacts/{id}/link", s.linkContact)
 	s.salesRoutes(authed)
+	s.deskRoutes(authed)
 	authed.HandleFunc("POST /companies/{id}/link", s.linkCompany)
 
 	authed.HandleFunc("GET /integrations", s.getIntegrations)

@@ -415,6 +415,7 @@ func (s *Server) salesFor(r *http.Request, ref core.Ref, p *page) {
 	p.DealStages = crm.Stages
 	p.EmberOps = s.emberOpsLinks(r, ref)
 	s.markFavorite(r, ref, p)
+	s.deskFor(r, ref, p)
 }
 
 // -----------------------------------------------------------------------------
@@ -557,6 +558,7 @@ func (s *Server) getDeal(w http.ResponseWriter, r *http.Request) {
 	s.markFavorite(r, d.Ref(), &p)
 	p.Activities, _ = s.sales.ActivitiesFor(r.Context(), id.OrgID, id.Subjects, d.Ref())
 	p.EmberOps = s.emberOpsLinks(r, d.Ref())
+	s.deskFor(r, d.Ref(), &p)
 	companies, _, _ := s.sales.CompaniesPage(r.Context(), id.OrgID, id.Subjects, crm.ListQuery{Limit: 300})
 	for _, c := range companies {
 		c := c.Company
@@ -582,6 +584,14 @@ func (s *Server) updateDeal(w http.ResponseWriter, r *http.Request) {
 	if err := s.sales.UpdateDeal(r.Context(), id.OrgID, id.Subjects, d); err != nil {
 		s.crmFail(w, r, err, "you cannot change that deal")
 		return
+	}
+	if _, sent := r.Form["lost_reason"]; sent {
+		if desk, ok := s.sales.(crm.Desk); ok {
+			if err := desk.SetLostReason(r.Context(), id.OrgID, id.Subjects, d.ID, r.FormValue("lost_reason")); err != nil {
+				s.crmFail(w, r, err, "you cannot change that deal")
+				return
+			}
+		}
 	}
 	http.Redirect(w, r, "/deals/"+d.ID, http.StatusSeeOther)
 }

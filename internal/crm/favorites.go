@@ -69,7 +69,7 @@ func (s *Service) Favorites(ctx context.Context, orgID string, actor core.Subjec
 		        WHEN 'contact' THEN EXISTS (SELECT 1 FROM contacts ct WHERE ct.id = f.entity_id AND ct.deleted_at IS NULL AND `+visible("contact", "ct", 3)+`)
 		        ELSE EXISTS (SELECT 1 FROM deals d WHERE d.id = f.entity_id AND d.deleted_at IS NULL AND `+visible("deal", "d", 3)+`)
 		      END
-		ORDER BY f.created_at DESC, f.entity_id`, orgID, actor.Principal(), actor.Keys())
+		ORDER BY f.created_at DESC, f.entity_id`, orgID, actor.Principal(), keysOf(actor))
 	if err != nil {
 		return nil, fmt.Errorf("crm: favorites: %w", err)
 	}

@@ -247,6 +247,7 @@ TagList
 CanManageTypes
 UnownedType
 UnownedCounts
+Desk
 Deals
 Deal
 DealCols
