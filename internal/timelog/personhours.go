@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// WeekHours is one Monday-to-Sunday week.
+// WeekHours is one week of seven days from From (the dashboard's weeks start on Sunday).
 type WeekHours struct {
 	From    time.Time
 	Minutes int

@@ -169,7 +169,9 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 
 	now := time.Now()
 	today := startOfDay(now)
-	weekFrom := startOfWeek(now)
+	// Sunday to Saturday, the same week as the strip above, so a card and the strip agree. The timesheet and approval pages keep
+	// the week EmberOps defines (Monday first), so a link into them names the Monday of this week.
+	weekFrom := sundayOf(now)
 	weekTo := weekFrom.AddDate(0, 0, 6)
 	monthFrom := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
 	monthTo := monthFrom.AddDate(0, 1, -1)
@@ -190,7 +192,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 			if !h.Set {
 				note = "No weekly hours are set for this person, so the standard 40 hour week is used."
 			}
-			weekHref := "/time?from=" + dayStr(weekFrom) + who
+			weekHref := "/time?from=" + dayStr(weekFrom.AddDate(0, 0, 1)) + who
 			monthHref := "/time?from=" + dayStr(monthFrom) + "&span=month" + who
 			g := statGroup{Key: "hours", Title: "Hours", Tiles: []statTile{
 				{Label: "Logged this week", Value: hoursAndMinutes(h.Week), Period: weekLabel,
@@ -215,7 +217,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 				p.Weeks = append(p.Weeks, barRow{
 					Label: w.From.Format("2 Jan"), Value: hoursAndMinutes(w.Minutes),
 					Percent: percentOf(w.Minutes, peak),
-					Href:    "/time?from=" + dayStr(w.From) + who, Current: i == len(h.Weeks)-1})
+					Href:    "/time?from=" + dayStr(w.From.AddDate(0, 0, 1)) + who, Current: i == len(h.Weeks)-1})
 			}
 			p.WeeksTarget = hoursAndMinutes(h.WeekTarget)
 		}
