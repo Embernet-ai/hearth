@@ -98,12 +98,15 @@ type MarketingView struct {
 	Segment  *mautic.Segment
 	New      bool
 	Total    int
+	// Contacts is the people tab: the list, or the one being changed with the segments it can join.
+	Contacts []mautic.Contact
+	Contact  *mautic.Contact
 }
 
 func (s *Server) getMarketing(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	v := &MarketingView{Configured: s.marketing != nil, Tab: q.Get("tab"), Notice: q.Get("notice"), Search: q.Get("q"), New: q.Get("new") != ""}
-	if v.Tab != "campaigns" && v.Tab != "segments" {
+	if v.Tab != "campaigns" && v.Tab != "segments" && v.Tab != "contacts" {
 		v.Tab = "emails"
 	}
 	if s.marketing != nil {
@@ -137,6 +140,15 @@ func (s *Server) getMarketing(w http.ResponseWriter, r *http.Request) {
 				for i := range v.Campaigns {
 					v.Campaigns[i].Contacts, _ = s.marketing.CampaignContacts(ctx, v.Campaigns[i].ID)
 				}
+			}
+			if v.Emails == nil {
+				v.Emails, _, _ = s.marketing.Emails(ctx, "", 100, 0)
+			}
+		case "contacts":
+			if id > 0 {
+				v.Contact, err = s.marketing.GetContact(ctx, id)
+			} else if !v.New {
+				v.Contacts, v.Total, err = s.marketing.Contacts(ctx, v.Search, 50, 0)
 			}
 			if v.Emails == nil {
 				v.Emails, _, _ = s.marketing.Emails(ctx, "", 100, 0)
@@ -471,4 +483,97 @@ func (s *Server) postSocialDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.areaCtx(r)
 	defer cancel()
 	areaBack(w, r, "/social", nil, "Deleted.", s.social.Delete(ctx, r.PathValue("id")))
+}
+
+// ---- contacts: the people the emails go to ----
+
+func (s *Server) postMarketingContact(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "contacts", "Saved.", func(ctx context.Context) error {
+		in := mautic.ContactInput{First: strings.TrimSpace(r.FormValue("first")), Last: strings.TrimSpace(r.FormValue("last")),
+			Email: strings.TrimSpace(r.FormValue("email")), Company: strings.TrimSpace(r.FormValue("company")), Tags: tagList(r.FormValue("tags"))}
+		if in.Email == "" {
+			return errors.New("a contact needs an email address")
+		}
+		_, err := s.marketing.SaveContact(ctx, intOf(r.FormValue("id")), in)
+		return err
+	})
+}
+
+func (s *Server) postMarketingContactDelete(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "contacts", "Deleted.", func(ctx context.Context) error {
+		return s.marketing.DeleteContact(ctx, intOf(r.PathValue("id")))
+	})
+}
+
+// postMarketingContactDNC marks a contact do not email, or takes the mark off.
+func (s *Server) postMarketingContactDNC(w http.ResponseWriter, r *http.Request) {
+	on := r.FormValue("on") == "1"
+	done := "Taken off the do not email list."
+	if on {
+		done = "Marked do not email."
+	}
+	s.marketingAct(w, r, "contacts", done, func(ctx context.Context) error {
+		return s.marketing.SetDoNotEmail(ctx, intOf(r.PathValue("id")), on, "marked in Hearth")
+	})
+}
+
+func (s *Server) postMarketingContactSegment(w http.ResponseWriter, r *http.Request) {
+	add := r.FormValue("do") != "remove"
+	done := "Removed from the segment."
+	if add {
+		done = "Added to the segment."
+	}
+	s.marketingAct(w, r, "contacts", done, func(ctx context.Context) error {
+		seg := intOf(r.FormValue("segment"))
+		if seg == 0 {
+			return errors.New("choose a segment")
+		}
+		if add {
+			return s.marketing.SegmentAdd(ctx, seg, intOf(r.PathValue("id")))
+		}
+		return s.marketing.SegmentRemove(ctx, seg, intOf(r.PathValue("id")))
+	})
+}
+
+// postMarketingContactSend sends one email to one contact now: the way to try an email on a test address.
+func (s *Server) postMarketingContactSend(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "contacts", "Sent to this contact.", func(ctx context.Context) error {
+		email := intOf(r.FormValue("email"))
+		if email == 0 {
+			return errors.New("choose the email to send")
+		}
+		return s.marketing.SendEmailTo(ctx, email, intOf(r.PathValue("id")))
+	})
+}
+
+// postMarketingEmailTest sends an email to an address as a test, finding the contact or making one for it first.
+func (s *Server) postMarketingEmailTest(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "emails", "Test sent.", func(ctx context.Context) error {
+		addr := strings.TrimSpace(r.FormValue("to"))
+		if !strings.Contains(addr, "@") {
+			return errors.New("type the address to send the test to")
+		}
+		ct, err := s.marketing.FindContactByEmail(ctx, addr)
+		if err != nil {
+			return err
+		}
+		var id int64
+		if ct != nil {
+			id = ct.ID
+		} else if id, err = s.marketing.SaveContact(ctx, 0, mautic.ContactInput{Email: addr, Tags: []string{"hearth-test"}}); err != nil {
+			return err
+		}
+		return s.marketing.SendEmailTo(ctx, intOf(r.PathValue("id")), id)
+	})
+}
+
+// tagList splits "a, b" into tags, dropping blanks.
+func tagList(raw string) []string {
+	var out []string
+	for _, t := range strings.Split(raw, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

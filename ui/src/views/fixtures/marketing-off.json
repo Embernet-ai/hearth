@@ -194,6 +194,8 @@
   "Campaign": null,
   "Campaigns": null,
   "Configured": false,
+  "Contact": null,
+  "Contacts": null,
   "Email": null,
   "Emails": null,
   "New": false,

@@ -210,6 +210,12 @@ func fixtures() map[string]page {
 		"timereport-nobody-logged": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30",
 			ReportPeople: []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee"}, {PrincipalID: "p2", PersonName: "Bo Diaz"}},
 			ReportNotice: "Nothing to export: the people you chose have no finished time between 2026-11-01 and 2026-11-30. Widen the dates above, press Show, and try again."},
+		"marketing-contacts": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "contacts", Total: 2,
+			Contacts: []mautic.Contact{{ID: 7, First: "Ann", Last: "Lee", Email: "ann@example.com", Company: "Acme", Tags: []string{"vip"}, LastActive: "2026-11-20 10:00:00", DoNotEmail: true},
+				{ID: 5, Email: "bob@example.com"}}}},
+		"marketing-contact": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "contacts",
+			Contact:  &mautic.Contact{ID: 7, First: "Ann", Last: "Lee", Email: "ann@example.com", Company: "Acme", Tags: []string{"vip"}},
+			Segments: []mautic.Segment{{ID: 3, Name: "Customers"}}, Emails: []mautic.Email{{ID: 11, Name: "Spring"}}}},
 		"forms-off": {Title: "Forms", FormsArea: &FormsView{}},
 		"forms-list": {Title: "Forms", FormsArea: &FormsView{Configured: true, Forms: []FormRow{
 			{Form: forms.Form{ID: "f1", Name: "Feedback", Status: forms.InProgress, Questions: []forms.Question{{ID: "q1", Type: "openText", Headline: "Anything else?"}}}, Label: "Live"},
