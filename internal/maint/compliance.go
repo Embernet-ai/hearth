@@ -80,7 +80,7 @@ func (s *Service) Report(ctx context.Context, orgID string, actor core.Subjects,
 		JOIN documents a ON a.id = s.asset_id AND a.deleted_at IS NULL
 		LEFT JOIN documents d ON d.id = o.work_order_id
 		WHERE o.org_id = $1 AND o.due_at >= $3 AND o.due_at < $4`+visibleAsset+`
-		ORDER BY o.due_at DESC`, orgID, actor.Keys(), from, to)
+		ORDER BY o.due_at DESC`, orgID, actor.GrantKeys(), from, to)
 	if err != nil {
 		return nil, fmt.Errorf("maint: compliance: %w", err)
 	}

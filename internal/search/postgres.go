@@ -311,7 +311,7 @@ func (p *Postgres) Verify(ctx context.Context, subjects core.Subjects, hits []Hi
 	}
 	rows, err := p.db.Query(ctx, `
 		SELECT d.id::text FROM documents d
-		 WHERE d.id::text = ANY($1) AND `+grantFilter(false, "document", "d.id"),
+		 WHERE d.id::text = ANY($1) AND `+grantFilter(subjects.Super(), "document", "d.id"),
 		docIDs, subjects.Keys())
 	if err != nil {
 		return nil, fmt.Errorf("verify hits: %w", err)

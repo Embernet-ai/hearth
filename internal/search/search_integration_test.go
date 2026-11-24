@@ -566,3 +566,70 @@ func TestDealsNotesAndCallsAreFoundOnTheirRecordsPermission(t *testing.T) {
 		t.Errorf("asking for deals returned the call")
 	}
 }
+
+// A super admin who is not on any team finds every deal, company and contact through search, and a person with no
+// grants finds none. Verify, which re-checks hits from the cluster, keeps a super admin's documents too.
+func TestASuperAdminOutsideSalesFindsEveryCRMRecord(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := f.pools.Web.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+	}
+	admin, outsider := uuid.NewString(), uuid.NewString()
+	exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1,$3,'user','Ada Admin'), ($2,$3,'user','Outside')`, admin, outsider, f.org)
+	exec(`INSERT INTO capability_grants (org_id, principal_id, capability, granted_by) VALUES ($1,$2,'super_admin',$2)`, f.org, admin)
+	t.Cleanup(func() {
+		for _, q := range []string{`DELETE FROM capability_grants WHERE org_id=$1`, `DELETE FROM deals WHERE org_id=$1`,
+			`DELETE FROM contacts WHERE org_id=$1`, `DELETE FROM companies WHERE org_id=$1`, `DELETE FROM grants WHERE org_id=$1`} {
+			_, _ = f.pools.Web.Exec(context.Background(), q, f.org)
+		}
+	})
+	deal, contact, company := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	exec(`INSERT INTO deals (id, org_id, name, stage, created_by) VALUES ($1,$2,'Phlogiston deal','new',$3)`, deal, f.org, f.alice)
+	exec(`INSERT INTO contacts (id, org_id, name, created_by) VALUES ($1,$2,'Phlogiston Person',$3)`, contact, f.org, f.alice)
+	exec(`INSERT INTO companies (id, org_id, name, kind, created_by) VALUES ($1,$2,'Phlogiston Works','prospect',$3)`, company, f.org, f.alice)
+	for _, e := range []struct{ typ, id string }{{"deal", deal}, {"contact", contact}, {"company", company}} {
+		exec(`INSERT INTO grants (id, org_id, entity_type, entity_id, subject_key, level, granted_by) VALUES (gen_random_uuid(),$1,$2,$3,$4,'admin',$5)`,
+			f.org, e.typ, e.id, core.Subject{Kind: core.SubjectPrincipal, ID: f.alice}.Key(), f.alice)
+	}
+	adminS, err := f.az.SubjectsFor(ctx, f.org, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outS, err := f.az.SubjectsFor(ctx, f.org, outsider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := search.New(nil, f.pg)
+	got := map[string]bool{}
+	r, err := svc.Search(ctx, f.org, adminS, search.Query{Text: "phlogiston"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range r.Hits {
+		got[h.EntityType] = true
+	}
+	for _, want := range []string{"deal", "contact", "company"} {
+		if !got[want] {
+			t.Errorf("a super admin outside sales did not find the %s: %+v", want, r.Hits)
+		}
+	}
+	r, _ = svc.Search(ctx, f.org, outS, search.Query{Text: "phlogiston"})
+	if len(r.Hits) != 0 {
+		t.Errorf("a person with no grants found %d records", len(r.Hits))
+	}
+	// Verify keeps a super admin's document hit and drops a stranger's.
+	doc := uuid.NewString()
+	exec(`INSERT INTO documents (id, org_id, kind, title, owner_id, created_by, updated_by) VALUES ($1,$2,'doc','Phlogiston memo',$3,$3,$3)`, doc, f.org, f.alice)
+	t.Cleanup(func() { _, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM documents WHERE id=$1`, doc) })
+	hit := []search.Hit{{EntityType: "document", EntityID: doc}}
+	if kept, err := f.pg.Verify(ctx, adminS, hit); err != nil || len(kept) != 1 {
+		t.Errorf("verify for a super admin kept %d (%v), want 1", len(kept), err)
+	}
+	if kept, _ := f.pg.Verify(ctx, outS, hit); len(kept) != 0 {
+		t.Errorf("verify for a stranger kept %d, want 0", len(kept))
+	}
+}

@@ -53,12 +53,12 @@ func (s *Service) Templates(ctx context.Context, orgID string, actor core.Subjec
 		       (SELECT count(*) FROM checklist_items c WHERE c.document_id = d.id)
 		FROM documents d
 		WHERE d.org_id = $1 AND d.kind = 'template' AND d.deleted_at IS NULL
-		  AND EXISTS (
+		  AND ($2::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'document' AND g.entity_id = d.id
 		         AND g.subject_key = ANY($2)
-		         AND (g.expires_at IS NULL OR g.expires_at > now()))
-		ORDER BY d.title`, orgID, actor.Keys(), TemplateKindKey)
+		         AND (g.expires_at IS NULL OR g.expires_at > now())))
+		ORDER BY d.title`, orgID, actor.GrantKeys(), TemplateKindKey)
 	if err != nil {
 		return nil, fmt.Errorf("docs: templates: %w", err)
 	}

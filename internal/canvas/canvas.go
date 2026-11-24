@@ -178,12 +178,12 @@ func (s *Service) List(ctx context.Context, orgID string, actor core.Subjects) (
 		       (SELECT count(*) FROM canvas_nodes n WHERE n.canvas_id = c.id)::int
 		FROM canvases c
 		WHERE c.org_id = $1 AND c.deleted_at IS NULL
-		  AND EXISTS (
+		  AND ($2::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'space' AND g.entity_id = c.id
 		         AND g.subject_key = ANY($2)
-		         AND (g.expires_at IS NULL OR g.expires_at > now()))
-		ORDER BY c.name`, orgID, actor.Keys())
+		         AND (g.expires_at IS NULL OR g.expires_at > now())))
+		ORDER BY c.name`, orgID, actor.GrantKeys())
 	if err != nil {
 		return nil, fmt.Errorf("canvas: list: %w", err)
 	}
@@ -262,7 +262,7 @@ func (s *Service) Nodes(ctx context.Context, orgID string, actor core.Subjects,
 		       -- Deleted rather than merely invisible. The two look the same
 		       -- from here and mean different things to a reader.
 		       (n.entity_id IS NOT NULL AND d.id IS NULL AND ct.id IS NULL AND co.id IS NULL),
-		       (n.entity_id IS NULL OR EXISTS (
+		       (n.entity_id IS NULL OR $3::text[] @> ARRAY['*super'] OR EXISTS (
 		           SELECT 1 FROM grants g
 		            WHERE g.entity_type = n.entity_type AND g.entity_id = n.entity_id
 		              AND g.subject_key = ANY($3)
@@ -273,7 +273,7 @@ func (s *Service) Nodes(ctx context.Context, orgID string, actor core.Subjects,
 		LEFT JOIN contacts ct  ON n.entity_type = 'contact'  AND ct.id = n.entity_id AND ct.deleted_at IS NULL
 		LEFT JOIN companies co ON n.entity_type = 'company'  AND co.id = n.entity_id AND co.deleted_at IS NULL
 		WHERE n.canvas_id = $1 AND n.org_id = $2
-		ORDER BY n.y, n.x`, canvasID, orgID, actor.Keys())
+		ORDER BY n.y, n.x`, canvasID, orgID, actor.GrantKeys())
 	if err != nil {
 		return nil, fmt.Errorf("canvas: nodes: %w", err)
 	}

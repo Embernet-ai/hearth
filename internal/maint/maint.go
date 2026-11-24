@@ -308,12 +308,12 @@ func scanSchedules(rows pgx.Rows) ([]*Schedule, error) {
 // own. Giving it a second, independent answer to "who can see this" is how a
 // machine somebody was deliberately walled off from turns up on a list because
 // of the service interval attached to it.
-const visibleAsset = ` AND EXISTS (
+const visibleAsset = ` AND ($2::text[] @> ARRAY['*super'] OR EXISTS (
 	SELECT 1 FROM grants g
 	 WHERE g.entity_type = 'document'
 	   AND g.entity_id = s.asset_id
 	   AND g.subject_key = ANY($2)
-	   AND (g.expires_at IS NULL OR g.expires_at > now()))`
+	   AND (g.expires_at IS NULL OR g.expires_at > now())))`
 
 // load reads one schedule with no permission check, for the generator, which
 // acts on behalf of the schedule rather than on behalf of anybody.
@@ -371,7 +371,7 @@ func (s *Service) ForAsset(ctx context.Context, orgID string, actor core.Subject
 func (s *Service) List(ctx context.Context, orgID string, actor core.Subjects) ([]*Schedule, error) {
 	rows, err := s.db.Query(ctx,
 		scheduleSelect+` WHERE s.org_id=$1`+visibleAsset+
-			` ORDER BY s.enabled DESC, s.next_due_at`, orgID, actor.Keys())
+			` ORDER BY s.enabled DESC, s.next_due_at`, orgID, actor.GrantKeys())
 	if err != nil {
 		return nil, fmt.Errorf("maint: list schedules: %w", err)
 	}

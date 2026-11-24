@@ -640,21 +640,21 @@ func (s *Service) PartiesFor(ctx context.Context, orgID string, actor core.Subje
 		JOIN contacts ct ON ct.id = r.id AND r.t = 'contact' AND ct.deleted_at IS NULL
 		LEFT JOIN companies co ON co.id = ct.company_id AND co.deleted_at IS NULL
 		WHERE ct.org_id = $1
-		  AND EXISTS (SELECT 1 FROM grants g
+		  AND ($3::text[] @> ARRAY['*super'] OR EXISTS (SELECT 1 FROM grants g
 		               WHERE g.entity_type = 'contact' AND g.entity_id = ct.id
 		                 AND g.subject_key = ANY($3)
-		                 AND (g.expires_at IS NULL OR g.expires_at > now()))
+		                 AND (g.expires_at IS NULL OR g.expires_at > now())))
 		UNION ALL
 		SELECT 'company'::text, c.id::text, c.name,
 		       concat_ws(' · ', NULLIF(c.kind,''), NULLIF(c.domain,''))
 		FROM related r
 		JOIN companies c ON c.id = r.id AND r.t = 'company' AND c.deleted_at IS NULL
 		WHERE c.org_id = $1
-		  AND EXISTS (SELECT 1 FROM grants g
+		  AND ($3::text[] @> ARRAY['*super'] OR EXISTS (SELECT 1 FROM grants g
 		               WHERE g.entity_type = 'company' AND g.entity_id = c.id
 		                 AND g.subject_key = ANY($3)
-		                 AND (g.expires_at IS NULL OR g.expires_at > now()))
-		ORDER BY 1, 3`, orgID, docID, actor.Keys())
+		                 AND (g.expires_at IS NULL OR g.expires_at > now())))
+		ORDER BY 1, 3`, orgID, docID, keysOf(actor))
 	if err != nil {
 		return nil, fmt.Errorf("crm: parties for document: %w", err)
 	}

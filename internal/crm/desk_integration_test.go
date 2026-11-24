@@ -13,6 +13,7 @@ import (
 
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/docs"
 )
 
 func (f *fx) outsider(t *testing.T) string {
@@ -367,5 +368,86 @@ func TestBulkApplyChangesManyAndRefusesTheRest(t *testing.T) {
 		if _, err := f.svc.BulkApply(ctx, f.org, bob, spec); !errors.Is(err, crm.ErrInvalid) {
 			t.Errorf("%s: got %v, want ErrInvalid", name, err)
 		}
+	}
+}
+
+// A super admin outside the Sales team reads every deal, company and contact, in every list and count that a page,
+// the API or the dashboard asks. Bead 4688ed: on 2.25.0 they read $0 and nothing.
+func TestSuperAdminOutsideSalesReadsDealsCompaniesAndContacts(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	alice := f.subj(t, f.alice)
+	ao := f.alice
+	co, err := f.svc.CreateCompany(ctx, f.org, alice, crm.Company{Name: "Seen Co", Kind: crm.KindProspect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct, err := f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "Seen Person", Email: "seen@example.com", CompanyID: &co.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Seen Deal", AmountCents: 12345, OwnerID: &ao, CompanyID: &co.ID}); err != nil {
+		t.Fatal(err)
+	}
+	admin := f.subj(t, f.superAdmin(t))
+	out := f.subj(t, f.outsider(t))
+	if has, _ := f.svc.HasSalesAccess(ctx, f.org, admin); !has {
+		t.Fatal("the super admin has no sales access")
+	}
+	if _, n, err := f.svc.Deals(ctx, f.org, admin, crm.ListQuery{}); err != nil || n != 1 {
+		t.Errorf("deals as a super admin = %d (%v), want 1", n, err)
+	}
+	if _, n, err := f.svc.CompaniesPage(ctx, f.org, admin, crm.ListQuery{}); err != nil || n != 1 {
+		t.Errorf("companies page as a super admin = %d (%v), want 1", n, err)
+	}
+	if _, n, err := f.svc.ContactsPage(ctx, f.org, admin, crm.ListQuery{}); err != nil || n != 1 {
+		t.Errorf("contacts page as a super admin = %d (%v), want 1", n, err)
+	}
+	if rows, err := f.svc.Companies(ctx, f.org, admin, "", ""); err != nil || len(rows) != 1 {
+		t.Errorf("companies as a super admin = %d (%v), want 1", len(rows), err)
+	}
+	if rows, err := f.svc.Contacts(ctx, f.org, admin, "", ""); err != nil || len(rows) != 1 {
+		t.Errorf("contacts as a super admin = %d (%v), want 1", len(rows), err)
+	}
+	st, err := f.svc.Stats(ctx, f.org, admin)
+	if err != nil || st.Companies != 1 || st.Contacts != 1 || st.Deals != 1 || st.OpenValueCents != 12345 {
+		t.Errorf("stats as a super admin = %+v (%v), want one of each and 12345 open", st, err)
+	}
+	if _, err := f.svc.GetContact(ctx, f.org, admin, ct.ID); err != nil {
+		t.Errorf("opening a contact as a super admin: %v", err)
+	}
+	// And nobody else gains: a person outside sales still reads none of it.
+	if _, n, _ := f.svc.CompaniesPage(ctx, f.org, out, crm.ListQuery{}); n != 0 {
+		t.Errorf("an outsider's companies = %d, want 0", n)
+	}
+	if _, n, _ := f.svc.ContactsPage(ctx, f.org, out, crm.ListQuery{}); n != 0 {
+		t.Errorf("an outsider's contacts = %d, want 0", n)
+	}
+	if rows, _ := f.svc.Companies(ctx, f.org, out, "", ""); len(rows) != 0 {
+		t.Errorf("an outsider's company list = %d, want 0", len(rows))
+	}
+}
+
+// The people and firms named in a document are listed for a super admin too.
+func TestSuperAdminSeesThePartiesOfADocument(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	alice := f.subj(t, f.alice)
+	co, _ := f.svc.CreateCompany(ctx, f.org, alice, crm.Company{Name: "Doc Co", Kind: crm.KindProspect})
+	d, err := f.docs.Create(ctx, f.org, alice, docs.CreateParams{Kind: docs.KindTask, Title: "Call them"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.docs.Link(ctx, f.org, alice, d.Ref(), core.Ref{Type: core.EntityCompany, ID: co.ID}, docs.LinkRelates); err != nil {
+		t.Fatal(err)
+	}
+	admin := f.subj(t, f.superAdmin(t))
+	parties, err := f.svc.PartiesFor(ctx, f.org, admin, d.ID)
+	if err != nil || len(parties) != 1 {
+		t.Errorf("parties for a super admin = %d (%v), want 1", len(parties), err)
 	}
 }
