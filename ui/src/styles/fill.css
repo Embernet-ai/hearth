@@ -33,14 +33,17 @@ table.list th.col-md, table.list td.col-md, table.list th.col-lg, table.list td.
 .notecell { max-width: 26rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---- Dashboard ------------------------------------------------------------------------------------------------------------------- */
+/* One column on a phone. From 1200px the numbers sit beside a side column, and from 1800px (a wide monitor) the side column
+   splits in two, so three independent stacks each take their own height: no row is shared between columns, so a long list in
+   one can never stretch a gap into another. */
 main[data-screen='dashboard'] .dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4) var(--s-5); align-items: start; }
 main[data-screen='dashboard'] .dash > * { min-width: 0; margin: 0; }
 main[data-screen='dashboard'] .dash > .notice { margin: 0; }
-main[data-screen='dashboard'] .dashgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); align-items: start; }
-main[data-screen='dashboard'] .dashgrid > * { min-width: 0; }
-main[data-screen='dashboard'] .dashfollow { grid-column: auto; }
-main[data-screen='dashboard'] .dashgrid h2 { margin: 0 0 var(--s-2); }
-main[data-screen='dashboard'] .dashwork h2:not(:first-child) { margin-top: var(--s-5); }
+main[data-screen='dashboard'] .dashcols { display: flex; flex-direction: column; gap: var(--s-5); align-items: stretch; }
+main[data-screen='dashboard'] .dashcols > * { min-width: 0; }
+main[data-screen='dashboard'] .colside, main[data-screen='dashboard'] .colwork, main[data-screen='dashboard'] .colextra { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+main[data-screen='dashboard'] .colside h2, main[data-screen='dashboard'] .dashtime h2, main[data-screen='dashboard'] .dashfollow h2 { margin: 0 0 var(--s-2); }
+main[data-screen='dashboard'] .colwork h2:not(:first-child) { margin-top: var(--s-4); }
 main[data-screen='dashboard'] .numbers { margin: 0; container-type: inline-size; }
 main[data-screen='dashboard'] .numbers .numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--s-4) var(--s-5); align-items: start; grid-auto-flow: row dense; }
 main[data-screen='dashboard'] .numbers .numgroup { min-width: 0; }
@@ -50,26 +53,55 @@ main[data-screen='dashboard'] .numbers .stats { grid-template-columns: repeat(au
   /* a group with six tiles (or the eight weeks) takes two columns; one with a tile or two stays one */
   .numbers .numgroup:has(> .stats > .stat:nth-child(5)), .numbers .numgroup.numweeks { grid-column: span 2; }
 }
+/* Assigned to me is a list that can be long: it scrolls inside its own card instead of making the page as tall as the list. */
+main[data-screen='dashboard'] .assignedscroll { max-height: 26rem; overflow: auto; border: 1px solid var(--line); border-radius: var(--en-r-card, 12px); }
+main[data-screen='dashboard'] .assignedscroll table.list { margin: 0; }
+main[data-screen='dashboard'] .assignedscroll thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+main[data-screen='dashboard'] .assignedscroll td:first-child { overflow-wrap: anywhere; }
+main[data-screen='dashboard'] .dashfollow .watchlist li { display: flex; gap: var(--s-3); justify-content: space-between; align-items: baseline; }
+main[data-screen='dashboard'] .dashfollow .watchlist li .muted { white-space: nowrap; flex: none; }
 @media (min-width: 1200px) {
-  main[data-screen='dashboard'] .dash { grid-template-columns: minmax(0, 1fr) minmax(22rem, 27rem); grid-template-areas: 'daily daily' 'week week' 'numbers side'; }
-  main[data-screen='dashboard'] .dash > .dailycard { grid-area: daily; }
-  main[data-screen='dashboard'] .dash > .weekstrip { grid-area: week; }
-  main[data-screen='dashboard'] .dash > .numbers { grid-area: numbers; }
-  main[data-screen='dashboard'] .dash > .dashgrid { grid-area: side; }
+  main[data-screen='dashboard'] .dashcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem); gap: var(--s-5); align-items: start; }
 }
 @media (min-width: 1800px) {
-  main[data-screen='dashboard'] .dash { grid-template-columns: minmax(0, 1fr) minmax(40rem, 48rem); }
-  main[data-screen='dashboard'] .dashgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'work time' 'work follow'; gap: var(--s-4) var(--s-5); }
-  main[data-screen='dashboard'] .dashwork { grid-area: work; }
-  main[data-screen='dashboard'] .dashtime { grid-area: time; }
-  main[data-screen='dashboard'] .dashfollow { grid-area: follow; }
+  main[data-screen='dashboard'] .dashcols { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.5fr); }
+  main[data-screen='dashboard'] .colside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5); align-items: start; }
+  main[data-screen='dashboard'] .assignedscroll { max-height: 34rem; }
 }
-/* the week strip: seven days across wherever there is room for them */
-@media (min-width: 1024px) {
-  /* seven equal days; the open one grows downward inside its own day instead of taking a row to itself */
-  main[data-screen='dashboard'] .weekstrip { grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: start; }
-  main[data-screen='dashboard'] .weekstrip > .weekday[open] { grid-column: auto; }
-}
+/* the week strip: Sunday to Saturday, seven days across wherever there is room, each day showing everything on it */
+main[data-screen='dashboard'] .weekhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-2); }
+main[data-screen='dashboard'] .weekhead h2, main[data-screen='dashboard'] .monthcard h2 { margin: 0; }
+main[data-screen='dashboard'] .weeknav { display: inline-flex; gap: var(--s-2); margin-left: var(--s-3); text-transform: none; letter-spacing: 0; }
+main[data-screen='dashboard'] .weekstrip { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); align-items: start; }
+main[data-screen='dashboard'] .weekday { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; padding: var(--s-3); background: var(--panel); border: 1px solid var(--line); border-radius: var(--en-r-card, 12px); }
+main[data-screen='dashboard'] .weekday.weekend { background: var(--surface); }
+main[data-screen='dashboard'] .weekday.today { border-color: var(--accent-dim); }
+main[data-screen='dashboard'] .weekday.picked { box-shadow: 0 0 0 2px var(--accent-dim); }
+main[data-screen='dashboard'] .weekday .whead { display: flex; align-items: baseline; gap: var(--s-2); text-decoration: none; color: var(--fg); }
+main[data-screen='dashboard'] .weekday .wd { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+main[data-screen='dashboard'] .weekday .wdate { font-weight: 600; }
+main[data-screen='dashboard'] .weekday .wcount { margin-left: auto; }
+main[data-screen='dashboard'] .weekday .wlist { margin: 0; display: grid; gap: var(--s-2); }
+main[data-screen='dashboard'] .weekday .wlist li { display: grid; grid-template-columns: 3.1rem minmax(0, 1fr); gap: var(--s-2); align-items: baseline; padding: 0; border: 0; text-align: left; }
+main[data-screen='dashboard'] .weekday .wtime { font-size: var(--t-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+main[data-screen='dashboard'] .weekday .wtitle { overflow-wrap: anywhere; text-align: left; }
+main[data-screen='dashboard'] .weekday .wnone { margin: 0; }
+@media (min-width: 700px) { main[data-screen='dashboard'] .weekstrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { main[data-screen='dashboard'] .weekstrip { grid-template-columns: repeat(7, minmax(0, 1fr)); } main[data-screen='dashboard'] .weekday .wlist li { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+/* the month calendar */
+main[data-screen='dashboard'] .monthcard { display: block; }
+main[data-screen='dashboard'] .monthcard h2 { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s-2); }
+main[data-screen='dashboard'] .monthgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+main[data-screen='dashboard'] .mname { text-align: center; font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: var(--s-1) 0; }
+main[data-screen='dashboard'] .mday { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 2.6rem; border-radius: 8px; text-decoration: none; color: var(--fg); border: 1px solid transparent; }
+main[data-screen='dashboard'] .mday:hover { background: var(--hover); }
+main[data-screen='dashboard'] .mday.weekend { background: var(--surface); }
+main[data-screen='dashboard'] .mday.other { color: var(--muted); opacity: 0.55; }
+main[data-screen='dashboard'] .mday.today { border-color: var(--accent-dim); font-weight: 700; }
+main[data-screen='dashboard'] .mday.picked { background: var(--accent-dim); color: var(--on-accent, #fff); }
+main[data-screen='dashboard'] .mdots { display: inline-flex; gap: 2px; }
+main[data-screen='dashboard'] .mdots i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+main[data-screen='dashboard'] .mfoot { margin: var(--s-2) 0 0; }
 
 /* ---- Inbox ------------------------------------------------------------------------------------------------------------------------ */
 main[data-screen='inbox'] .inboxgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); align-items: start; }

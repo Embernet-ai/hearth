@@ -13,7 +13,9 @@ package crmsync
 //     party EmberOps knows, so the company becomes a Lead first, and only
 //     because it has a deal. The thousands of companies with no deal never
 //     become Leads.
-//   - A deal with no company has no party and waits.
+//   - A deal with no company, a company that is gone, or one with no real name yet has no party of its own, so it gets a
+//     Lead of its own, named for the deal and keyed by the deal's id (never a company's), and the Opportunity comes
+//     from that. Every live deal reaches EmberOps; nothing waits for somebody to type a company in.
 //   - Nothing is deleted. A deal removed in Hearth leaves its Opportunity as it
 //     is, and the report says so.
 //
@@ -100,8 +102,9 @@ func (s *Syncer) deals(ctx context.Context, companyIDs []string) ([]deal, error)
 		       d.close_date::timestamp, d.deleted_at IS NOT NULL,
 		       coalesce((SELECT p.display_name FROM principals p WHERE p.id = d.owner_id), '')
 		FROM deals d
-		WHERE d.org_id = $1 AND (d.company_id IS NULL OR d.company_id = ANY($2::uuid[]))
-		ORDER BY d.created_at, d.id`, s.org, companyIDs)
+		WHERE d.org_id = $1 AND ($3 OR d.company_id IS NULL OR d.company_id = ANY($2::uuid[]) OR NOT EXISTS
+		      (SELECT 1 FROM companies c WHERE c.id = d.company_id AND c.deleted_at IS NULL))
+		ORDER BY d.created_at, d.id`, s.org, companyIDs, !s.limited)
 	if err != nil {
 		return nil, fmt.Errorf("crmsync: read deals: %w", err)
 	}
@@ -135,20 +138,84 @@ func (s *Syncer) syncDeals(ctx context.Context, rep *Report, cos []company, writ
 		s.leadOf = leads
 	}
 	for _, d := range ds {
-		if d.CompanyID == "" {
-			// No company, and in a limited run no company to scope by, is not this run's.
-			continue
-		}
 		c, ok := byID[d.CompanyID]
-		if !ok {
+		if d.CompanyID == "" || !ok || unnamed(c.Name, c.Domain) {
+			// No company, one that is gone, or one with no real name: the deal carries its own party. A limited run
+			// (named companies) never reaches these, because they belong to none of them.
+			if s.limited {
+				continue
+			}
+			s.aloneDeal(ctx, rep, d, leads, write)
 			continue
 		}
 		s.oneDeal(ctx, rep, c, d, leads, write)
 	}
 }
 
+// aloneDeal sends a deal that has no usable company: a Lead named for the deal, keyed by the deal's id, then the
+// Opportunity from it. The Lead's fields are Hearth's, one owner per field like every other Lead.
+func (s *Syncer) aloneDeal(ctx context.Context, rep *Report, d deal, leads map[string]string, write bool) {
+	if d.Deleted {
+		return
+	}
+	c := company{ID: d.ID, Name: d.Name, Owner: d.Owner, Roles: map[string]bool{}}
+	name, ok := leads[d.ID]
+	if !ok {
+		var err error
+		if name, err = s.dealLead(ctx, rep, c, write); err != nil {
+			s.add(rep, Action{"lead", d.ID, d.Name, "failed", err.Error()})
+			return
+		}
+		leads[d.ID] = name
+	}
+	s.sendOpportunity(ctx, rep, c, d, "Lead", name, write)
+}
+
+// dealLead finds or makes the Lead that stands for one deal.
+func (s *Syncer) dealLead(ctx context.Context, rep *Report, c company, write bool) (string, error) {
+	var row emberops.Row
+	var ok bool
+	var err error
+	if s.prospects {
+		row, ok, err = s.known(ctx, "Lead", c.ID)
+	} else {
+		row, ok, err = fetch(ctx, s.ops, "Lead", c.ID)
+	}
+	if err != nil {
+		return "", err
+	}
+	doc := leadDoc(c.Name, c, ok)
+	s.stamp(doc, "deals", c.ID, c.Owner)
+	why := "a deal with no company of its own"
+	verb := "create"
+	if ok {
+		verb = "update"
+		s.overwrites(rep, "lead", c.ID, c.Name, doc, row, write)
+		if s.same(ctx, doc, row) {
+			s.add(rep, Action{"lead", c.ID, c.Name, "same", why})
+			return fmt.Sprint(row["name"]), nil
+		}
+	}
+	if !write {
+		s.add(rep, Action{"lead", c.ID, c.Name, "would " + verb, why})
+		if ok {
+			return fmt.Sprint(row["name"]), nil
+		}
+		return "", nil
+	}
+	res, err := s.send(ctx, "Lead", c.ID, doc)
+	if err != nil {
+		return "", err
+	}
+	s.add(rep, Action{"lead", c.ID, c.Name, verb, why})
+	if res.Name != "" {
+		return res.Name, nil
+	}
+	return fmt.Sprint(row["name"]), nil
+}
+
 func (s *Syncer) oneDeal(ctx context.Context, rep *Report, c company, d deal, leads map[string]string, write bool) {
-	opp, haveOpp, err := fetch(ctx, s.ops, "Opportunity", d.ID)
+	_, haveOpp, err := fetch(ctx, s.ops, "Opportunity", d.ID)
 	if err != nil {
 		s.add(rep, Action{"opportunity", d.ID, d.Name, "failed", err.Error()})
 		return
@@ -159,11 +226,6 @@ func (s *Syncer) oneDeal(ctx context.Context, rep *Report, c company, d deal, le
 		}
 		return
 	}
-	if unnamed(c.Name, c.Domain) {
-		s.add(rep, Action{"opportunity", d.ID, d.Name, "skipped", "its company has no real name yet"})
-		return
-	}
-
 	from, party := "", ""
 	if c.Roles["customer"] {
 		if row, ok, err := s.known(ctx, "Customer", c.ID); err != nil {
@@ -194,6 +256,16 @@ func (s *Syncer) oneDeal(ctx context.Context, rep *Report, c company, d deal, le
 		}
 	}
 
+	s.sendOpportunity(ctx, rep, c, d, from, party, write)
+}
+
+// sendOpportunity writes the Opportunity of a deal from the party it was given.
+func (s *Syncer) sendOpportunity(ctx context.Context, rep *Report, c company, d deal, from, party string, write bool) {
+	opp, haveOpp, err := fetch(ctx, s.ops, "Opportunity", d.ID)
+	if err != nil {
+		s.add(rep, Action{"opportunity", d.ID, d.Name, "failed", err.Error()})
+		return
+	}
 	status, stage := stageOf(d.Stage)
 	if haveOpp {
 		status = settableStatus(status, opp)

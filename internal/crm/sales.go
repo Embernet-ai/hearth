@@ -249,6 +249,8 @@ type Sales interface {
 	DealsFor(ctx context.Context, orgID string, actor core.Subjects, t core.Ref) ([]*Deal, error)
 
 	Stats(ctx context.Context, orgID string, actor core.Subjects) (*Stats, error)
+	// HasSalesAccess reports whether the actor works sales: a member of the Sales team, or a super admin.
+	HasSalesAccess(ctx context.Context, orgID string, actor core.Subjects) (bool, error)
 	PersonStats(ctx context.Context, orgID string, actor core.Subjects, owner string, today, from, to time.Time) (*PersonStats, error)
 	Unassigned(ctx context.Context, orgID string, actor core.Subjects, t core.EntityType, q ListQuery) ([]*Unowned, int, error)
 	UnassignedCounts(ctx context.Context, orgID string, actor core.Subjects) (map[core.EntityType]int, error)
@@ -1474,4 +1476,23 @@ func (s *Service) Stats(ctx context.Context, orgID string, actor core.Subjects) 
 		}
 	}
 	return out, rows.Err()
+}
+
+// HasSalesAccess reports whether the actor works sales: a super admin, or a member of the Sales team. It is the one
+// answer every sales part of the dashboard asks, so a person outside sales gets none of them, and it is the same
+// membership that makes a CRM record visible (ShareKey), so it cannot say yes where the records say no.
+func (s *Service) HasSalesAccess(ctx context.Context, orgID string, actor core.Subjects) (bool, error) {
+	if actor.Super() {
+		return true, nil
+	}
+	key, err := ShareKey(ctx, s.db, orgID)
+	if err != nil || key == "" {
+		return false, err
+	}
+	for _, k := range actor.Keys() {
+		if k == key {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -54,7 +54,7 @@ type PersonStats struct {
 	Stages []StageRow
 }
 
-// PersonStats counts the deals owned by owner that the actor may see, with
+// PersonStats counts the deals owned by owner (everyone's when owner is empty) that the actor may see, with
 // wins and losses counted inside [from, to).
 func (s *Service) PersonStats(ctx context.Context, orgID string, actor core.Subjects,
 	owner string, today, from, to time.Time) (*PersonStats, error) {
@@ -65,7 +65,7 @@ func (s *Service) PersonStats(ctx context.Context, orgID string, actor core.Subj
 	rows, err := s.db.Query(ctx, `
 		SELECT d.stage, d.currency, count(*)::int, coalesce(sum(d.amount_cents), 0)::bigint
 		  FROM deals d
-		 WHERE d.org_id = $1 AND d.deleted_at IS NULL AND d.owner_id = $3
+		 WHERE d.org_id = $1 AND d.deleted_at IS NULL AND ($3 = '' OR d.owner_id::text = $3)
 		   AND `+visible("deal", "d", 2)+`
 		   AND d.stage NOT IN ('won', 'lost', 'no_response')
 		 GROUP BY d.stage, d.currency`, orgID, keys, owner)
@@ -110,7 +110,7 @@ func (s *Service) PersonStats(ctx context.Context, orgID string, actor core.Subj
 
 	if err := s.db.QueryRow(ctx, `
 		SELECT count(*)::int FROM deals d
-		 WHERE d.org_id = $1 AND d.deleted_at IS NULL AND d.owner_id = $3
+		 WHERE d.org_id = $1 AND d.deleted_at IS NULL AND ($3 = '' OR d.owner_id::text = $3)
 		   AND `+visible("deal", "d", 2)+`
 		   AND d.stage NOT IN ('won', 'lost', 'no_response')
 		   AND d.close_date IS NOT NULL AND d.close_date < $4::date`,
@@ -121,7 +121,7 @@ func (s *Service) PersonStats(ctx context.Context, orgID string, actor core.Subj
 	closed, err := s.db.Query(ctx, `
 		SELECT d.stage, d.currency, count(*)::int, coalesce(sum(d.amount_cents), 0)::bigint
 		  FROM deals d
-		 WHERE d.org_id = $1 AND d.deleted_at IS NULL AND d.owner_id = $3
+		 WHERE d.org_id = $1 AND d.deleted_at IS NULL AND ($3 = '' OR d.owner_id::text = $3)
 		   AND `+visible("deal", "d", 2)+`
 		   AND d.stage IN ('won', 'lost')
 		   AND d.closed_at >= $4 AND d.closed_at < $5

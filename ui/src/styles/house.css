@@ -58,7 +58,9 @@
 }
 
 body { font-family: var(--en-font); font-size: var(--en-fs-sm); }
-code, pre, kbd, samp, .elapsed, .who { font-family: var(--en-font-mono); }
+code, pre, kbd, samp, .elapsed { font-family: var(--en-font-mono); }
+/* the name in the bar, the day and time pills and every field are the same sans as the rest of the page */
+.who, .tag, .chip, input, select, textarea, button { font-family: var(--en-font); }
 h1, h2, h3 { color: var(--fg); letter-spacing: -0.01em; }
 a { color: var(--accent); }
 

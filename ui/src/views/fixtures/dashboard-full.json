@@ -121,7 +121,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "in_progress"
@@ -146,7 +146,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "todo"
@@ -171,7 +171,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "todo"
@@ -196,7 +196,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "blocked"
@@ -206,6 +206,388 @@
     "Version": 0
    }
   ],
+  "Month": {
+   "Names": [
+    "Sun",
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat"
+   ],
+   "Next": "/?day=2026-12-01",
+   "Prev": "/?day=2026-10-01",
+   "Title": "November 2026",
+   "Weeks": [
+    [
+     {
+      "Count": 0,
+      "Day": 1,
+      "Href": "/?day=2026-11-01",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     },
+     {
+      "Count": 0,
+      "Day": 2,
+      "Href": "/?day=2026-11-02",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 3,
+      "Href": "/?day=2026-11-03",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 4,
+      "Href": "/?day=2026-11-04",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 5,
+      "Href": "/?day=2026-11-05",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 6,
+      "Href": "/?day=2026-11-06",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 7,
+      "Href": "/?day=2026-11-07",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     }
+    ],
+    [
+     {
+      "Count": 0,
+      "Day": 8,
+      "Href": "/?day=2026-11-08",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     },
+     {
+      "Count": 0,
+      "Day": 9,
+      "Href": "/?day=2026-11-09",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 10,
+      "Href": "/?day=2026-11-10",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 11,
+      "Href": "/?day=2026-11-11",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 12,
+      "Href": "/?day=2026-11-12",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 13,
+      "Href": "/?day=2026-11-13",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 14,
+      "Href": "/?day=2026-11-14",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     }
+    ],
+    [
+     {
+      "Count": 0,
+      "Day": 15,
+      "Href": "/?day=2026-11-15",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     },
+     {
+      "Count": 0,
+      "Day": 16,
+      "Href": "/?day=2026-11-16",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 17,
+      "Href": "/?day=2026-11-17",
+      "InMonth": true,
+      "Selected": true,
+      "Titles": null,
+      "Today": true,
+      "Weekend": false
+     },
+     {
+      "Count": 4,
+      "Day": 18,
+      "Href": "/?day=2026-11-18",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": [
+       "Replace the guard switch on line 3",
+       "Quote the conveyor retrofit for Acme Motors",
+       "Torque check on the press brake"
+      ],
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 19,
+      "Href": "/?day=2026-11-19",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 20,
+      "Href": "/?day=2026-11-20",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 21,
+      "Href": "/?day=2026-11-21",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     }
+    ],
+    [
+     {
+      "Count": 0,
+      "Day": 22,
+      "Href": "/?day=2026-11-22",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     },
+     {
+      "Count": 0,
+      "Day": 23,
+      "Href": "/?day=2026-11-23",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 24,
+      "Href": "/?day=2026-11-24",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 25,
+      "Href": "/?day=2026-11-25",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 26,
+      "Href": "/?day=2026-11-26",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 27,
+      "Href": "/?day=2026-11-27",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 28,
+      "Href": "/?day=2026-11-28",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     }
+    ],
+    [
+     {
+      "Count": 0,
+      "Day": 29,
+      "Href": "/?day=2026-11-29",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     },
+     {
+      "Count": 0,
+      "Day": 30,
+      "Href": "/?day=2026-11-30",
+      "InMonth": true,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 1,
+      "Href": "/?day=2026-12-01",
+      "InMonth": false,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 2,
+      "Href": "/?day=2026-12-02",
+      "InMonth": false,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 3,
+      "Href": "/?day=2026-12-03",
+      "InMonth": false,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 4,
+      "Href": "/?day=2026-12-04",
+      "InMonth": false,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": false
+     },
+     {
+      "Count": 0,
+      "Day": 5,
+      "Href": "/?day=2026-12-05",
+      "InMonth": false,
+      "Selected": false,
+      "Titles": null,
+      "Today": false,
+      "Weekend": true
+     }
+    ]
+   ]
+  },
+  "NextWeek": "/?day=2026-11-22",
+  "PrevWeek": "/?day=2026-11-08",
   "ReportDay": "2026-11-21",
   "ReportID": "",
   "Stats": {
@@ -516,6 +898,7 @@
    ],
    "WeeksTarget": "40h"
   },
+  "Today": "/?day=2026-11-17",
   "Upcoming": [
    {
     "AllDay": false,
@@ -574,7 +957,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "in_progress"
@@ -599,7 +982,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "todo"
@@ -624,7 +1007,7 @@
     "Task": {
      "AssigneeID": null,
      "CompletedAt": null,
-     "DueAt": "2026-11-19T00:00:00Z",
+     "DueAt": "2026-11-18T00:00:00Z",
      "Priority": 0,
      "StartedAt": null,
      "Status": "todo"
@@ -637,8 +1020,9 @@
   "Week": [
    {
     "Count": 1,
-    "Date": "2026-11-16T00:00:00Z",
+    "Date": "2026-11-15T00:00:00Z",
     "Events": null,
+    "Href": "/?day=2026-11-15",
     "Items": [
      {
       "Body": "",
@@ -656,7 +1040,7 @@
       "Task": {
        "AssigneeID": null,
        "CompletedAt": null,
-       "DueAt": "2026-11-19T00:00:00Z",
+       "DueAt": "2026-11-18T00:00:00Z",
        "Priority": 0,
        "StartedAt": null,
        "Status": "in_progress"
@@ -666,23 +1050,56 @@
       "Version": 0
      }
     ],
-    "Label": "16 Nov",
-    "Today": true,
-    "Weekday": "Mon"
+    "Label": "15 Nov",
+    "Selected": false,
+    "Today": false,
+    "Weekday": "Sun",
+    "Weekend": true
    },
    {
     "Count": 0,
-    "Date": "2026-11-17T00:00:00Z",
+    "Date": "2026-11-16T00:00:00Z",
     "Events": null,
+    "Href": "/?day=2026-11-16",
     "Items": null,
-    "Label": "17 Nov",
+    "Label": "16 Nov",
+    "Selected": false,
     "Today": false,
-    "Weekday": "Tue"
+    "Weekday": "Mon",
+    "Weekend": false
    },
    {
-    "Count": 1,
-    "Date": "2026-11-18T00:00:00Z",
-    "Events": null,
+    "Count": 3,
+    "Date": "2026-11-17T00:00:00Z",
+    "Events": [
+     {
+      "AllDay": true,
+      "DocumentID": "",
+      "EndsAt": "0001-01-01T00:00:00Z",
+      "ID": "e1",
+      "Kind": "event",
+      "Link": "",
+      "Notes": "",
+      "OwnerName": "",
+      "Place": "",
+      "StartsAt": "2026-11-17T00:00:00Z",
+      "Title": "Out: Jeff Ryan"
+     },
+     {
+      "AllDay": false,
+      "DocumentID": "",
+      "EndsAt": "0001-01-01T00:00:00Z",
+      "ID": "e2",
+      "Kind": "event",
+      "Link": "",
+      "Notes": "",
+      "OwnerName": "",
+      "Place": "",
+      "StartsAt": "2026-11-17T17:00:00Z",
+      "Title": "Fireball Industries / Spocky: technical integration call"
+     }
+    ],
+    "Href": "/?day=2026-11-17",
     "Items": [
      {
       "Body": "",
@@ -700,7 +1117,7 @@
       "Task": {
        "AssigneeID": null,
        "CompletedAt": null,
-       "DueAt": "2026-11-19T00:00:00Z",
+       "DueAt": "2026-11-18T00:00:00Z",
        "Priority": 0,
        "StartedAt": null,
        "Status": "todo"
@@ -710,23 +1127,29 @@
       "Version": 0
      }
     ],
-    "Label": "18 Nov",
-    "Today": false,
-    "Weekday": "Wed"
+    "Label": "17 Nov",
+    "Selected": true,
+    "Today": true,
+    "Weekday": "Tue",
+    "Weekend": false
    },
    {
     "Count": 0,
-    "Date": "2026-11-19T00:00:00Z",
+    "Date": "2026-11-18T00:00:00Z",
     "Events": null,
+    "Href": "/?day=2026-11-18",
     "Items": null,
-    "Label": "19 Nov",
+    "Label": "18 Nov",
+    "Selected": false,
     "Today": false,
-    "Weekday": "Thu"
+    "Weekday": "Wed",
+    "Weekend": false
    },
    {
     "Count": 1,
-    "Date": "2026-11-20T00:00:00Z",
+    "Date": "2026-11-19T00:00:00Z",
     "Events": null,
+    "Href": "/?day=2026-11-19",
     "Items": [
      {
       "Body": "",
@@ -744,7 +1167,7 @@
       "Task": {
        "AssigneeID": null,
        "CompletedAt": null,
-       "DueAt": "2026-11-19T00:00:00Z",
+       "DueAt": "2026-11-18T00:00:00Z",
        "Priority": 0,
        "StartedAt": null,
        "Status": "todo"
@@ -754,23 +1177,29 @@
       "Version": 0
      }
     ],
-    "Label": "20 Nov",
+    "Label": "19 Nov",
+    "Selected": false,
     "Today": false,
-    "Weekday": "Fri"
+    "Weekday": "Thu",
+    "Weekend": false
    },
    {
     "Count": 0,
-    "Date": "2026-11-21T00:00:00Z",
+    "Date": "2026-11-20T00:00:00Z",
     "Events": null,
+    "Href": "/?day=2026-11-20",
     "Items": null,
-    "Label": "21 Nov",
+    "Label": "20 Nov",
+    "Selected": false,
     "Today": false,
-    "Weekday": "Sat"
+    "Weekday": "Fri",
+    "Weekend": false
    },
    {
     "Count": 1,
-    "Date": "2026-11-22T00:00:00Z",
+    "Date": "2026-11-21T00:00:00Z",
     "Events": null,
+    "Href": "/?day=2026-11-21",
     "Items": [
      {
       "Body": "",
@@ -788,7 +1217,7 @@
       "Task": {
        "AssigneeID": null,
        "CompletedAt": null,
-       "DueAt": "2026-11-19T00:00:00Z",
+       "DueAt": "2026-11-18T00:00:00Z",
        "Priority": 0,
        "StartedAt": null,
        "Status": "blocked"
@@ -798,11 +1227,14 @@
       "Version": 0
      }
     ],
-    "Label": "22 Nov",
+    "Label": "21 Nov",
+    "Selected": false,
     "Today": false,
-    "Weekday": "Sun"
+    "Weekday": "Sat",
+    "Weekend": true
    }
-  ]
+  ],
+  "WeekTitle": "15 to 21 Nov"
  },
  "Days": null,
  "Dead": null,

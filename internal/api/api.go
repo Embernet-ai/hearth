@@ -135,6 +135,8 @@ type Service struct {
 	time timelog.Store
 	// timeoff is the time off routes and tools (WithTimeOff). Nil leaves them 404.
 	timeoff timeoff.Store
+	// spaces is the space routes (WithSpaces). Nil leaves them 404.
+	spaces SpaceStore
 }
 
 func New(db *pgxpool.Pool, s Subjects, d Spine) *Service {
@@ -303,6 +305,7 @@ func (s *Service) Routes() http.Handler {
 	s.crmRoutes(mux)
 	s.timeRoutes(mux)
 	s.timeOffRoutes(mux)
+	s.spaceRoutes(mux)
 	return s.authenticated(mux)
 }
 

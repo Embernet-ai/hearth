@@ -130,7 +130,7 @@ func plural(n int, one, many string) string {
 
 // statsFor builds the panel for the person asked about. It returns an HTTP
 // status and message instead of a panel when the viewer may not ask.
-func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) (*statsPanel, int, string) {
+func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, mine bool) (*statsPanel, int, string) {
 	me := id.PrincipalID
 	person := me
 	if asked != "" {
@@ -169,7 +169,9 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 
 	now := time.Now()
 	today := startOfDay(now)
-	weekFrom := startOfWeek(now)
+	// Sunday to Saturday, the same week as the strip above, so a card and the strip agree. The timesheet and approval pages keep
+	// the week EmberOps defines (Monday first), so a link into them names the Monday of this week.
+	weekFrom := sundayOf(now)
 	weekTo := weekFrom.AddDate(0, 0, 6)
 	monthFrom := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
 	monthTo := monthFrom.AddDate(0, 1, -1)
@@ -190,7 +192,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 			if !h.Set {
 				note = "No weekly hours are set for this person, so the standard 40 hour week is used."
 			}
-			weekHref := "/time?from=" + dayStr(weekFrom) + who
+			weekHref := "/time?from=" + dayStr(weekFrom.AddDate(0, 0, 1)) + who
 			monthHref := "/time?from=" + dayStr(monthFrom) + "&span=month" + who
 			g := statGroup{Key: "hours", Title: "Hours", Tiles: []statTile{
 				{Label: "Logged this week", Value: hoursAndMinutes(h.Week), Period: weekLabel,
@@ -215,7 +217,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 				p.Weeks = append(p.Weeks, barRow{
 					Label: w.From.Format("2 Jan"), Value: hoursAndMinutes(w.Minutes),
 					Percent: percentOf(w.Minutes, peak),
-					Href:    "/time?from=" + dayStr(w.From) + who, Current: i == len(h.Weeks)-1})
+					Href:    "/time?from=" + dayStr(w.From.AddDate(0, 0, 1)) + who, Current: i == len(h.Weeks)-1})
 			}
 			p.WeeksTarget = hoursAndMinutes(h.WeekTarget)
 		}
@@ -262,15 +264,32 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 		// Everyone files a daily report: how many of this month's working days have one.
 		if entries, err := s.docs.Reports(ctx, id.OrgID, id.Subjects, docs.ReportFilter{
 			From: docs.ReportDay(monthFrom), To: docs.ReportDay(now), PersonID: person}); err == nil {
-			filed := map[string]bool{}
+			// A working day is Monday to Friday, and today is not owed until it is filed: counting it would
+			// read 16 of 17 at breakfast. A report filed on a weekend is welcome and counts as extra, so a
+			// Saturday never fills a Monday's gap and the tile can never read more than it asks for.
+			filed, weekend := map[string]bool{}, 0
 			for _, e := range entries {
+				if filed[e.Day] {
+					continue
+				}
 				filed[e.Day] = true
+				if d, perr := time.ParseInLocation("2006-01-02", e.Day, time.Local); perr == nil &&
+					(d.Weekday() == time.Saturday || d.Weekday() == time.Sunday) {
+					weekend++
+				}
 			}
 			days := workingDaysBetween(monthFrom, today)
-			t := statTile{Label: "Daily reports filed", Value: fmt.Sprint(len(filed)), Period: monthSoFar,
+			if wd := today.Weekday(); wd != time.Saturday && wd != time.Sunday && !filed[docs.ReportDay(now)] {
+				days--
+			}
+			done := len(filed) - weekend
+			t := statTile{Label: "Daily reports filed", Value: fmt.Sprint(done), Period: monthSoFar,
 				Href: "/reports/daily?from=" + docs.ReportDay(monthFrom) + "&to=" + docs.ReportDay(now) + "&person=" + url.QueryEscape(person)}
+			if weekend > 0 {
+				t.Detail = fmt.Sprintf("+%d on a weekend", weekend)
+			}
 			if days > 0 {
-				t.Of, t.Percent, t.HasPercent = fmt.Sprintf("%d working days", days), percentOf(len(filed), days), true
+				t.Of, t.Percent, t.HasPercent = fmt.Sprintf("%d working days", days), percentOf(done, days), true
 			}
 			tiles = append(tiles, t)
 		} else {
@@ -304,24 +323,31 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 		}
 	}
 
-	// Deals.
-	if s.sales != nil {
-		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, person, today,
-			monthFrom, monthFrom.AddDate(0, 1, 0))
+	// Deals, and everything else in sales: only for somebody who works sales (the Sales team) or a super admin.
+	// Anybody else gets no Deals group, no pipeline and no closed deals, not a row of zeros.
+	if s.sales != nil && s.worksSales(ctx, id) {
+		// Sales shows everything a person with sales access may see, whoever owns it: the default is all deals and all
+		// owners (Patrick 2026-11-24). "Mine" is a filter somebody turns on with ?deals=mine, never the starting point,
+		// and what the viewer may see is still the CRM's own access rule (every count and list runs as the viewer), so a person with no sales access reads zeros and sees none of the records.
+		scope, ownerQ, who := "All owners: ", "", ""
+		if mine {
+			scope, ownerQ, who = "", "&owner="+url.QueryEscape(person), person
+		}
+		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, who, today, monthFrom, monthFrom.AddDate(0, 1, 0))
 		if err != nil {
 			s.log.WarnContext(ctx, "stats: deals", "error", err)
 		} else {
-			own := "/deals?view=table&owner=" + url.QueryEscape(person)
+			own := "/deals?view=table" + ownerQ
 			closed := own + "&closedfrom=" + dayStr(monthFrom) + "&closedto=" + dayStr(monthTo)
 			g := statGroup{Key: "deals", Title: "Deals", Tiles: []statTile{
 				{Label: "Open pipeline", Value: sums(st.Open), Detail: plural(st.OpenCount, "open deal", "open deals"),
-					Period: "right now", Href: own + "&open=1"},
+					Period: scope + "right now", Href: own + "&open=1"},
 				{Label: "Past expected close", Value: fmt.Sprint(st.Overdue), Period: "open, close date before " + today.Format("2 Jan"),
 					Href: own + "&overdue=1", Tone: toneIf(st.Overdue > 0)},
 				{Label: "Won this month", Value: sums(st.Won), Detail: plural(st.WonCount, "deal", "deals"),
-					Period: monthLabel, Href: closed + "&stage=won"},
+					Period: scope + monthLabel, Href: closed + "&stage=won"},
 				{Label: "Lost this month", Value: fmt.Sprint(st.LostCount), Detail: sums(st.Lost),
-					Period: monthLabel, Href: closed + "&stage=lost"},
+					Period: scope + monthLabel, Href: closed + "&stage=lost"},
 			}}
 			p.Groups = append(p.Groups, g)
 			peak := 0
@@ -335,7 +361,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 			}
 			cf := today.AddDate(0, 0, -90)
 			rows, _, err := s.sales.Deals(ctx, id.OrgID, id.Subjects, crm.ListQuery{
-				Owner: person, ClosedFrom: &cf, Sort: "closed", Desc: true, Limit: 5})
+				Owner: who, ClosedFrom: &cf, Sort: "closed", Desc: true, Limit: 5})
 			if err == nil {
 				for _, d := range rows {
 					if d.Stage != crm.StageWon && d.Stage != crm.StageLost {
@@ -366,4 +392,15 @@ func toneIf(b bool) string {
 		return "bad"
 	}
 	return ""
+}
+
+// worksSales is the viewer's sales permission. A check that fails is a no: a part of the page that shows sales to
+// somebody who may not see it is worse than one that is missing.
+func (s *Server) worksSales(ctx context.Context, id *auth.Identity) bool {
+	ok, err := s.sales.HasSalesAccess(ctx, id.OrgID, id.Subjects)
+	if err != nil {
+		s.log.WarnContext(ctx, "stats: sales access", "error", err)
+		return false
+	}
+	return ok
 }

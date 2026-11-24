@@ -374,6 +374,69 @@ func (s *TimeLog) Mine(ctx context.Context, orgID, principalID string, from, to 
 	return s.entries(ctx, rows)
 }
 
+// PersonHours is the dashboard's hours tile read from EmberOps, where the time is kept. Until now the embedded
+// Postgres store answered it, so a person's month was whatever Postgres still held and every entry of it read
+// "waiting for approval" (the Postgres copy carries no decision). Capacity (the target) still comes from the
+// embedded store; the sums, the waiting and sent back counts and the eight weeks are read from the Timesheet rows.
+func (s *TimeLog) PersonHours(ctx context.Context, orgID, actorID, personID string, weekFrom, monthFrom, today time.Time) (*timelog.PersonHours, error) {
+	if actorID != personID {
+		all, err := s.Authz.HasCapability(ctx, orgID, actorID, capTimeAll)
+		if err != nil {
+			return nil, err
+		}
+		if !all {
+			return nil, timelog.ErrNotAllowed
+		}
+	}
+	h, err := s.Store.PersonHours(ctx, orgID, personID, personID, weekFrom, monthFrom, today)
+	if err != nil {
+		return nil, err
+	}
+	// Weekend entries count toward what was logged; the targets stay what the embedded store worked out.
+	first := weekFrom.AddDate(0, 0, -7*7)
+	from := monthFrom
+	if first.Before(from) {
+		from = first
+	}
+	entries, err := s.Mine(ctx, orgID, personID, from, today.AddDate(0, 0, 1), false)
+	if err != nil {
+		return nil, err
+	}
+	tomorrow := today.AddDate(0, 0, 1)
+	h.Week, h.WeekEntries, h.Month, h.MonthEntries, h.Waiting, h.SentBack = 0, 0, 0, 0, 0, 0
+	h.Weeks = make([]timelog.WeekHours, 8)
+	for i := range h.Weeks {
+		h.Weeks[i].From = first.AddDate(0, 0, 7*i)
+	}
+	for _, e := range entries {
+		if e.EndedAt == nil || e.Minutes == nil || e.DeletedAt != nil {
+			continue
+		}
+		m, at := *e.Minutes, e.StartedAt
+		if !at.Before(weekFrom) && at.Before(tomorrow) {
+			h.Week += m
+			h.WeekEntries++
+		}
+		if !at.Before(monthFrom) && at.Before(tomorrow) {
+			h.Month += m
+			h.MonthEntries++
+			if e.DecidedAt == nil && e.Approved == nil {
+				h.Waiting += m
+			}
+			if e.Approved != nil && !*e.Approved {
+				h.SentBack += m
+			}
+		}
+		for i := range h.Weeks {
+			if !at.Before(h.Weeks[i].From) && at.Before(h.Weeks[i].From.AddDate(0, 0, 7)) {
+				h.Weeks[i].Minutes += m
+				h.Weeks[i].Entries++
+			}
+		}
+	}
+	return h, nil
+}
+
 func (s *TimeLog) MineTotal(ctx context.Context, orgID, principalID string, from, to time.Time) (total, pending int, err error) {
 	if to.Before(from) {
 		from, to = to, from

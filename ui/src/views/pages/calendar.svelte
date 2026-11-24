@@ -26,8 +26,8 @@
   <table  class="list calendar">
     <thead>
       <tr>
-        <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th>
-        <th>Fri</th><th>Sat</th><th>Sun</th>
+        <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th>
+        <th>Thu</th><th>Fri</th><th>Sat</th>
       </tr>
     </thead>
     <tbody>

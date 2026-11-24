@@ -3,6 +3,7 @@ package stores
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -186,8 +187,23 @@ func (s *Calendar) Between(ctx context.Context, orgID, principalID string, from,
 	// Google events are cached in Hearth, and so are the events the Microsoft 365 and Google Workspace connectors bring in
 	// (ConnectEvents), which Hearth keeps in its own table.
 	if all, err := s.PG.Between(ctx, orgID, principalID, from, to); err == nil {
+		// An event Hearth made is in EmberOps and, from before the move (and from time off approved while both were
+		// written), in Hearth's own table too. The same event twice read as two rows, "Out: Jeff Ryan" twice on one
+		// day, so a Postgres copy is dropped when EmberOps already gave the same title, window and all-day flag.
+		seen := map[string]bool{}
+		key := func(e calendar.Entry) string {
+			return fmt.Sprintf("%s|%d|%d|%t", strings.ToLower(strings.TrimSpace(e.Title)), e.StartsAt.Unix(), e.EndsAt.Unix(), e.AllDay)
+		}
+		for _, e := range out {
+			if e.Kind == calendar.KindEvent {
+				seen[key(e)] = true
+			}
+		}
 		for _, e := range all {
 			if e.Kind == calendar.KindGoogle || e.Kind == calendar.KindEvent {
+				if e.Kind == calendar.KindEvent && seen[key(e)] {
+					continue
+				}
 				out = append(out, e)
 			}
 		}

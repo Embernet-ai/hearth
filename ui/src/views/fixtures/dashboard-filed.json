@@ -105,12 +105,17 @@
  "Dash": {
   "DueThisWeek": null,
   "Mine": null,
+  "Month": null,
+  "NextWeek": "",
+  "PrevWeek": "",
   "ReportDay": "2026-10-26",
   "ReportID": "rid",
   "Stats": null,
+  "Today": "",
   "Upcoming": null,
   "Watching": null,
-  "Week": null
+  "Week": null,
+  "WeekTitle": ""
  },
  "Days": null,
  "Dead": null,

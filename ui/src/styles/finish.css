@@ -52,12 +52,6 @@ article.card > form.row > button { flex: 0 0 auto; }
 /* A destructive button never sits against the line above it. */
 article.card > form:last-child, article.card > .row:last-child { margin-top: var(--s-4); }
 
-/* ---- the dashboard: what you follow runs full width beneath, in columns, so neither side is a tall strip --------------- */
-.dashfollow { grid-column: 1 / -1; }
-.dashfollow .watchlist { columns: 2 22rem; column-gap: var(--s-6); }
-.dashfollow .watchlist li { break-inside: avoid; }
-@media (max-width: 860px) { .dashfollow .watchlist { columns: 1; } }
-
 /* ---- a channel: the composer is as wide as the messages ---------------------------------------------------------------- */
 form[action$='/messages'] { max-width: none; }
 form[action$='/messages'] textarea { width: 100%; max-width: 100%; }

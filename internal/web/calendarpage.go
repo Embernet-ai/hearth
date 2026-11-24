@@ -93,7 +93,7 @@ type calendarDay struct {
 	Entries []cal.Entry
 }
 
-// monthGrid lays the month out as whole weeks, Monday first.
+// monthGrid lays the month out as whole weeks, Sunday first.
 //
 // Built here rather than in the template because a template that does date
 // arithmetic is a template nobody can test. The leading and trailing days
@@ -106,11 +106,11 @@ type calendarDay struct {
 // being reviewable.
 func monthGrid(first time.Time, entries []cal.Entry) [][]calendarDay {
 	start := first
-	for start.Weekday() != time.Monday {
+	for start.Weekday() != time.Sunday {
 		start = start.AddDate(0, 0, -1)
 	}
 	end := first.AddDate(0, 1, 0)
-	for end.Weekday() != time.Monday {
+	for end.Weekday() != time.Sunday {
 		end = end.AddDate(0, 0, 1)
 	}
 

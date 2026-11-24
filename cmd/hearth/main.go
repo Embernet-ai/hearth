@@ -517,6 +517,7 @@ func run() error {
 	}
 	// The admin time removal answers from whichever back end holds the time.
 	apiSvc.WithTime(set.Time)
+	apiSvc.WithSpaces(set.Plant)
 	// Time off for the people who decide it, over the API and as connector tools, through the
 	// same store as the page so it reaches EmberOps on that back end.
 	apiSvc.WithTimeOff(set.TimeOff)
