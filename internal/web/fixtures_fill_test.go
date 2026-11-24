@@ -20,7 +20,7 @@ import (
 )
 
 func fillFixtures(end time.Time) map[string]page {
-	day := func(i int) time.Time { return time.Date(2026, 11, 16+i, 0, 0, 0, 0, time.UTC) }
+	day := func(i int) time.Time { return time.Date(2026, 11, 15+i, 0, 0, 0, 0, time.UTC) }
 	due := day(3)
 	task := func(id, title, status string) *docs.Row {
 		return &docs.Row{Document: &docs.Document{ID: id, Kind: "task", Title: title, Task: &docs.TaskFields{Status: status, DueAt: &due}}}
@@ -33,10 +33,16 @@ func fillFixtures(end time.Time) map[string]page {
 	}
 	var week []dashDay
 	for i := 0; i < 7; i++ {
-		d := dashDay{Date: day(i), Label: day(i).Format("2 Jan"), Weekday: day(i).Format("Mon"), Today: i == 0}
+		d := dashDay{Date: day(i), Label: day(i).Format("2 Jan"), Weekday: day(i).Format("Mon"), Today: i == 2, Selected: i == 2,
+			Weekend: i == 0 || i == 6, Href: dayLink(day(i))}
 		if i%2 == 0 {
 			d.Count = 1
 			d.Items = mine[i/2 : i/2+1]
+		}
+		if i == 2 {
+			d.Events = []cal.Entry{{ID: "e1", Kind: cal.KindEvent, Title: "Out: Jeff Ryan", AllDay: true, StartsAt: day(i)},
+				{ID: "e2", Kind: cal.KindEvent, Title: "Fireball Industries / Spocky: technical integration call", StartsAt: day(i).Add(17 * time.Hour)}}
+			d.Count += 2
 		}
 		week = append(week, d)
 	}
@@ -71,7 +77,8 @@ func fillFixtures(end time.Time) map[string]page {
 	for i, h := range []string{"28 Sep", "5 Oct", "12 Oct", "19 Oct", "26 Oct", "2 Nov", "9 Nov", "16 Nov"} {
 		stats.Weeks = append(stats.Weeks, barRow{Label: h, Value: fmt.Sprintf("%dh", 30+i), Percent: 60 + i*5, Href: "/time", Current: i == 7})
 	}
-	dash := &dashboard{ReportDay: "2026-11-21", Mine: mine, Week: week, Stats: stats,
+	dash := &dashboard{ReportDay: "2026-11-21", Mine: mine, Week: week, Stats: stats, WeekTitle: "15 to 21 Nov", PrevWeek: "/?day=2026-11-08", NextWeek: "/?day=2026-11-22", Today: "/?day=2026-11-17",
+		Month: buildMonth(day(2), day(2), nil, mine),
 		Watching: []*docs.Row{task("w1", "Shutdown window plan", "in_progress"), task("w2", "Fire watch roster", "todo"), task("w3", "Paint booth filter change", "todo")},
 		Upcoming: []cal.Entry{{ID: "u1", Title: "Safety walk", StartsAt: end, Place: "Plant floor"}, {ID: "u2", Title: "Line 3 shutdown", StartsAt: end.AddDate(0, 0, 2), AllDay: true},
 			{ID: "u3", Title: "Replace the guard switch on line 3", DocumentID: "m1", StartsAt: end.AddDate(0, 0, 3), AllDay: true}}}

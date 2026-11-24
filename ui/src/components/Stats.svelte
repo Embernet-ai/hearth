@@ -50,7 +50,7 @@
                 <span class:over={(t.Percent ?? 0) > 100} style:width={`${Math.min(t.Percent ?? 0, 100)}%`}></span>
               </div>
             {/if}
-            <small class="period">{t.Period}{#if t.Detail}<span class="detail"> &middot; {t.Detail}</span>{/if}</small>
+            <small class="period">{#if t.HasPercent && (t.Percent ?? 0) > 100}<strong class="overtext">{t.Percent}% of target</strong> &middot; {/if}{t.Period}{#if t.Detail}<span class="detail"> &middot; {t.Detail}</span>{/if}</small>
             {#if t.Note && g.Tiles.findIndex((x) => x.Note === t.Note) === i}<small class="note">{t.Note}</small>{/if}
           </a>
         {/each}
@@ -97,7 +97,7 @@
       <h3 class="grouptitle">Recently closed</h3>
       <ul class="plain recent">
         {#each recent as r (r.Href)}
-          <li><span class="tag">{r.Kind}</span> <a href={r.Href}>{r.Title}</a>{#if r.Detail} <span class="muted small">{r.Detail}</span>{/if}{#if r.When} <span class="muted small">{r.When}</span>{/if}</li>
+          <li><span class="tag">{r.Kind}</span><a class="rtitle" href={r.Href}>{r.Title}</a>{#if r.Detail}<span class="muted small">{r.Detail}</span>{/if}{#if r.When}<span class="muted small rwhen">{r.When}</span>{/if}</li>
         {/each}
       </ul>
       </div>
@@ -120,7 +120,8 @@
   .note { display: block; margin-top: var(--s-1); color: var(--muted); font-size: var(--t-2xs); line-height: 1.35; }
   .meter { height: 4px; margin-top: var(--s-1); background: var(--hover); border-radius: 2px; overflow: hidden; }
   .meter span { display: block; height: 100%; background: var(--accent-dim); }
-  .meter span.over { background: var(--warn); }
+  .meter span.over { background: var(--ok, var(--accent-dim)); }
+  .overtext { font-weight: 600; color: var(--fg); }
   .weeks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--s-2); }
   .weeks a { display: grid; justify-items: center; gap: var(--s-1); text-decoration: none; color: var(--fg); }
   .weeks .col { display: flex; align-items: flex-end; width: 100%; height: 3.25rem; border-bottom: 1px solid var(--line-strong); }
@@ -133,7 +134,9 @@
   .stagebars .track { height: 6px; background: var(--hover); border-radius: 3px; overflow: hidden; }
   .stagebars .track span { display: block; height: 100%; background: var(--edge); }
   .stagebars .val { font-size: var(--t-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-  .recent li { margin: var(--s-1) 0; }
+  .recent li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-3); margin: var(--s-2) 0; }
+  .recent .rtitle { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+  .recent .rwhen { white-space: nowrap; margin-left: auto; }
   @media (max-width: 40rem) {
     .weeks { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: var(--s-3); }
     .stagebars a { grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: var(--s-2); }

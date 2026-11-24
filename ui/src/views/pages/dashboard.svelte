@@ -25,46 +25,55 @@
   </div>
 
   
-  <div  class="weekstrip">
-    {#each F.rng(dot?.Dash?.Week) as [k1, d1]}
-      <details  class={"weekday" + S((F.t(d1?.Today) ? (" today") : ""))} {...(F.t(F.and(d1?.Today, F.or(d1?.Count, d1?.Events))) ? {"open": true} : {})}>
-        <summary>
-          <span  class="wd">{d1?.Weekday}</span>
-          <span  class="wdate">{d1?.Label}</span>
-          {#if F.t(d1?.Count)}<span  class="wcount">{d1?.Count}</span>{/if}
-        </summary>
-        {#if F.t(d1?.Events)}
-          
-          <ul  class="plain">
-            {#each F.rng(d1?.Events) as [k2, d2]}
-              <li><span  class="tag">{#if F.t(d2?.AllDay)}all day{:else}{F.timeofday(d2?.StartsAt)}{/if}</span>
-                {d2?.Title}</li>
-            {/each}
-          </ul>
-        {/if}
-        {#if F.t(d1?.Items)}
-          <ul  class="plain">
-            {#each F.rng(d1?.Items) as [k3, d3]}
-              <li><a  href={("/documents/" + S(d3?.ID))}>{d3?.Title}</a>
-                {#if F.t(d3?.Task)}<span  class={"status " + S(d3?.Task?.Status)}>{F.statusLabel(d3?.Task?.Status)}</span>{/if}</li>
-            {/each}
-          </ul>
-        {:else if F.t(F.not(d1?.Events))}
-          <p  class="muted small">Nothing due</p>
-        {/if}
-      </details>
-    {/each}
+  <div  class="weekwrap">
+    <div  class="weekhead">
+      <h2>Week of {dot?.Dash?.WeekTitle}</h2>
+      <span  class="weeknav">
+        <a  class="chip"  href={S(dot?.Dash?.PrevWeek)}>Earlier</a>
+        <a  class="chip"  href={S(dot?.Dash?.Today)}>This week</a>
+        <a  class="chip"  href={S(dot?.Dash?.NextWeek)}>Later</a>
+      </span>
+    </div>
+    <div  class="weekstrip">
+      {#each (dot?.Dash?.Week ?? []) as d1}
+        <section  class={"weekday" + S((F.t(d1?.Today) ? (" today") : "")) + S((F.t(d1?.Selected) ? (" picked") : "")) + S((F.t(d1?.Weekend) ? (" weekend") : ""))}>
+          <a  class="whead"  href={S(d1?.Href)}  aria-label={S(d1?.Weekday) + " " + S(d1?.Label)}>
+            <span  class="wd">{d1?.Weekday}</span>
+            <span  class="wdate">{d1?.Label}</span>
+            {#if F.t(d1?.Count)}<span  class="wcount">{d1?.Count}</span>{/if}
+          </a>
+          {#if F.t(d1?.Events)}
+            <ul  class="plain wlist">
+              {#each F.rng(d1?.Events) as [k2, d2]}
+                <li><span  class="wtime">{#if F.t(d2?.AllDay)}All day{:else}{F.timeofday(d2?.StartsAt)}{/if}</span>
+                  <span  class="wtitle">{d2?.Title}</span></li>
+              {/each}
+            </ul>
+          {/if}
+          {#if F.t(d1?.Items)}
+            <ul  class="plain wlist">
+              {#each F.rng(d1?.Items) as [k3, d3]}
+                <li><span  class="wtime">Due</span>
+                  <span  class="wtitle"><a  href={("/documents/" + S(d3?.ID))}>{d3?.Title}</a>
+                  {#if F.t(d3?.Task)}<span  class={"status " + S(d3?.Task?.Status)}>{F.statusLabel(d3?.Task?.Status)}</span>{/if}</span></li>
+              {/each}
+            </ul>
+          {/if}
+          {#if F.t(F.not(F.or(d1?.Events, d1?.Items)))}<p  class="muted small wnone">Nothing on</p>{/if}
+        </section>
+      {/each}
+    </div>
   </div>
 
-  
-  <Stats stats={dot?.Dash?.Stats} />
-
-  
-  <div  class="dashgrid">
-    <div  class="dashwork">
+  <div  class="dashcols">
+    <div  class="colmain">
+      <Stats stats={dot?.Dash?.Stats} />
+    </div>
+    <div  class="colside">
+      <div  class="colwork dashwork">
       <h2>Assigned to me</h2>
       {#if F.t(dot?.Dash?.Mine)}
-        <table  class="list">
+        <div  class="assignedscroll"><table  class="list">
           <thead><tr><th>Title</th><th>Status</th><th>Due</th></tr></thead>
           <tbody>
             {#each F.rng(dot?.Dash?.Mine) as [k5, d5]}
@@ -75,14 +84,13 @@
               </tr>
             {/each}
           </tbody>
-        </table>
+        </table></div>
       {:else}
         <div  class="empty">
           <strong>Nothing is assigned to you</strong>
           Work assigned to you appears here, soonest first.
         </div>
       {/if}
-
       <h2>What's on <a  class="chip"  href={("/calendar")}>Open the calendar</a></h2>
       {#if F.t(dot?.Dash?.Upcoming)}
         <table  class="list">
@@ -113,9 +121,34 @@
           <a  href={("/calendar")}>Add something to the calendar</a>.
         </p>
       {/if}
-    </div>
+      </div>
+      <div  class="colextra">
+      <div  class="monthcard">
+        {#if dot?.Dash?.Month}
+          <h2>{dot?.Dash?.Month?.Title}
+            <span  class="weeknav">
+              <a  class="chip"  href={S(dot?.Dash?.Month?.Prev)}  aria-label="Earlier month">&lsaquo;</a>
+              <a  class="chip"  href={S(dot?.Dash?.Today)}>Today</a>
+              <a  class="chip"  href={S(dot?.Dash?.Month?.Next)}  aria-label="Later month">&rsaquo;</a>
+            </span></h2>
+          <div  class="monthgrid"  role="grid"  aria-label={"Calendar for " + S(dot?.Dash?.Month?.Title)}>
+            {#each (dot?.Dash?.Month?.Names ?? []) as n}<span  class="mname"  role="columnheader">{n}</span>{/each}
+            {#each (dot?.Dash?.Month?.Weeks ?? []) as wk}
+              {#each wk as c}
+                <a  role="gridcell"  href={S(c?.Href)}  class={"mday" + S((F.t(c?.InMonth) ? "" : " other")) + S((F.t(c?.Today) ? " today" : "")) + S((F.t(c?.Selected) ? " picked" : "")) + S((F.t(c?.Weekend) ? " weekend" : ""))}
+                  title={F.t(c?.Count) ? (S(c?.Count) + " on: " + (c?.Titles ?? []).join(", ")) : "Nothing on"}
+                  aria-label={S(c?.Day) + (F.t(c?.Count) ? ", " + S(c?.Count) + " on" : "")}>
+                  <span  class="mnum">{c?.Day}</span>
+                  {#if F.t(c?.Count)}<span  class="mdots">{#each Array(Math.min(c?.Count, 3)) as _}<i></i>{/each}</span>{/if}
+                </a>
+              {/each}
+            {/each}
+          </div>
+          <p  class="muted small mfoot"><a  href={("/calendar")}>Open the calendar</a> to add or change events.</p>
+        {/if}
+      </div>
 
-    <div  class="dashtime">
+      <div  class="dashtime">
       
       <h2>My time <a  class="chip"  href={("/time")}>All of it</a></h2>
       {#if F.t(dot?.Timer)}
@@ -149,7 +182,6 @@
       {/if}
 
     </div>
-
     <div  class="dashfollow">
       <h2>Things you follow</h2>
       {#if F.t(dot?.Dash?.Watching)}
@@ -167,6 +199,8 @@
           Follow a job to hear about it without being assigned to it.
         </div>
       {/if}
+    </div>
+      </div>
     </div>
   </div>
 </section>

@@ -262,15 +262,32 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 		// Everyone files a daily report: how many of this month's working days have one.
 		if entries, err := s.docs.Reports(ctx, id.OrgID, id.Subjects, docs.ReportFilter{
 			From: docs.ReportDay(monthFrom), To: docs.ReportDay(now), PersonID: person}); err == nil {
-			filed := map[string]bool{}
+			// A working day is Monday to Friday, and today is not owed until it is filed: counting it would
+			// read 16 of 17 at breakfast. A report filed on a weekend is welcome and counts as extra, so a
+			// Saturday never fills a Monday's gap and the tile can never read more than it asks for.
+			filed, weekend := map[string]bool{}, 0
 			for _, e := range entries {
+				if filed[e.Day] {
+					continue
+				}
 				filed[e.Day] = true
+				if d, perr := time.ParseInLocation("2006-01-02", e.Day, time.Local); perr == nil &&
+					(d.Weekday() == time.Saturday || d.Weekday() == time.Sunday) {
+					weekend++
+				}
 			}
 			days := workingDaysBetween(monthFrom, today)
-			t := statTile{Label: "Daily reports filed", Value: fmt.Sprint(len(filed)), Period: monthSoFar,
+			if wd := today.Weekday(); wd != time.Saturday && wd != time.Sunday && !filed[docs.ReportDay(now)] {
+				days--
+			}
+			done := len(filed) - weekend
+			t := statTile{Label: "Daily reports filed", Value: fmt.Sprint(done), Period: monthSoFar,
 				Href: "/reports/daily?from=" + docs.ReportDay(monthFrom) + "&to=" + docs.ReportDay(now) + "&person=" + url.QueryEscape(person)}
+			if weekend > 0 {
+				t.Detail = fmt.Sprintf("+%d on a weekend", weekend)
+			}
 			if days > 0 {
-				t.Of, t.Percent, t.HasPercent = fmt.Sprintf("%d working days", days), percentOf(len(filed), days), true
+				t.Of, t.Percent, t.HasPercent = fmt.Sprintf("%d working days", days), percentOf(done, days), true
 			}
 			tiles = append(tiles, t)
 		} else {
@@ -308,20 +325,30 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 	if s.sales != nil {
 		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, person, today,
 			monthFrom, monthFrom.AddDate(0, 1, 0))
+		// Deals that came over from Twenty carry no owner, so a person who owns none would read $0 on every tile
+		// beside a pipeline of hundreds. When this person owns nothing at all, the tiles are the whole pipeline
+		// the viewer may see, and say so.
+		scope, ownerQ := "", "&owner="+url.QueryEscape(person)
+		if err == nil && st.OpenCount+st.WonCount+st.LostCount+st.Overdue == 0 {
+			if all, aerr := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, "", today,
+				monthFrom, monthFrom.AddDate(0, 1, 0)); aerr == nil && all.OpenCount+all.WonCount+all.LostCount > 0 {
+				st, scope, ownerQ = all, "All owners: ", ""
+			}
+		}
 		if err != nil {
 			s.log.WarnContext(ctx, "stats: deals", "error", err)
 		} else {
-			own := "/deals?view=table&owner=" + url.QueryEscape(person)
+			own := "/deals?view=table" + ownerQ
 			closed := own + "&closedfrom=" + dayStr(monthFrom) + "&closedto=" + dayStr(monthTo)
 			g := statGroup{Key: "deals", Title: "Deals", Tiles: []statTile{
 				{Label: "Open pipeline", Value: sums(st.Open), Detail: plural(st.OpenCount, "open deal", "open deals"),
-					Period: "right now", Href: own + "&open=1"},
+					Period: scope + "right now", Href: own + "&open=1"},
 				{Label: "Past expected close", Value: fmt.Sprint(st.Overdue), Period: "open, close date before " + today.Format("2 Jan"),
 					Href: own + "&overdue=1", Tone: toneIf(st.Overdue > 0)},
 				{Label: "Won this month", Value: sums(st.Won), Detail: plural(st.WonCount, "deal", "deals"),
-					Period: monthLabel, Href: closed + "&stage=won"},
+					Period: scope + monthLabel, Href: closed + "&stage=won"},
 				{Label: "Lost this month", Value: fmt.Sprint(st.LostCount), Detail: sums(st.Lost),
-					Period: monthLabel, Href: closed + "&stage=lost"},
+					Period: scope + monthLabel, Href: closed + "&stage=lost"},
 			}}
 			p.Groups = append(p.Groups, g)
 			peak := 0
@@ -335,7 +362,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 			}
 			cf := today.AddDate(0, 0, -90)
 			rows, _, err := s.sales.Deals(ctx, id.OrgID, id.Subjects, crm.ListQuery{
-				Owner: person, ClosedFrom: &cf, Sort: "closed", Desc: true, Limit: 5})
+				Owner: ownerID(scope, person), ClosedFrom: &cf, Sort: "closed", Desc: true, Limit: 5})
 			if err == nil {
 				for _, d := range rows {
 					if d.Stage != crm.StageWon && d.Stage != crm.StageLost {
@@ -359,6 +386,13 @@ func workingDaysBetween(first, last time.Time) int {
 		}
 	}
 	return n
+}
+
+func ownerID(scope, person string) string {
+	if scope != "" {
+		return ""
+	}
+	return person
 }
 
 func toneIf(b bool) string {
