@@ -87,6 +87,10 @@ func fillFixtures(end time.Time) map[string]page {
 			{Label: "Failed", Value: "1", Period: "last 7 days", Href: "/social", Tone: "bad"}, {Label: "Channels", Value: "5", Period: "5 connected", Href: "/social"}},
 			Rows: []teamRow{{Title: "Our new EmberCORE view is live", Detail: "LinkedIn, 2026-11-25T15:00:00Z", Href: "/social"}}},
 		{Key: "forms", Title: "Forms", Href: "/forms", Notice: "Forms did not answer: timed out"},
+		{Key: "github", Title: "GitHub, last 30 days", Href: "/github", Tiles: []statTile{
+			{Label: "Commits", Value: "42", Period: "in 3 repositories", Href: "/github"}, {Label: "Pull requests", Value: "7", Detail: "9 opened", Period: "merged", Href: "/github"},
+			{Label: "Issues", Value: "3", Detail: "4 opened", Period: "closed", Href: "/github"}, {Label: "CI runs", Value: "30", Detail: "90% passed", Period: "3 failed", Href: "/github", Tone: "bad"}},
+			Rows: []teamRow{{Title: "org/app", Detail: "42 commits, 7 PRs merged, v2.0.0", Href: "https://github.com/org/app"}}},
 	}},
 		WeekTitle: "15 to 21 Nov", PrevWeek: "/?day=2026-11-08", NextWeek: "/?day=2026-11-22", Today: "/?day=2026-11-17",
 		Month:    buildMonth(day(2), day(2), nil, mine),

@@ -1073,6 +1073,73 @@
      "Rows": null,
      "Tiles": null,
      "Title": "Forms"
+    },
+    {
+     "Href": "/github",
+     "Key": "github",
+     "Notice": "",
+     "Rows": [
+      {
+       "Detail": "42 commits, 7 PRs merged, v2.0.0",
+       "Href": "https://github.com/org/app",
+       "Title": "org/app"
+      }
+     ],
+     "Tiles": [
+      {
+       "Detail": "",
+       "Exact": "",
+       "HasPercent": false,
+       "Href": "/github",
+       "Label": "Commits",
+       "Note": "",
+       "Of": "",
+       "Percent": 0,
+       "Period": "in 3 repositories",
+       "Tone": "",
+       "Value": "42"
+      },
+      {
+       "Detail": "9 opened",
+       "Exact": "",
+       "HasPercent": false,
+       "Href": "/github",
+       "Label": "Pull requests",
+       "Note": "",
+       "Of": "",
+       "Percent": 0,
+       "Period": "merged",
+       "Tone": "",
+       "Value": "7"
+      },
+      {
+       "Detail": "4 opened",
+       "Exact": "",
+       "HasPercent": false,
+       "Href": "/github",
+       "Label": "Issues",
+       "Note": "",
+       "Of": "",
+       "Percent": 0,
+       "Period": "closed",
+       "Tone": "",
+       "Value": "3"
+      },
+      {
+       "Detail": "90% passed",
+       "Exact": "",
+       "HasPercent": false,
+       "Href": "/github",
+       "Label": "CI runs",
+       "Note": "",
+       "Of": "",
+       "Percent": 0,
+       "Period": "3 failed",
+       "Tone": "bad",
+       "Value": "30"
+      }
+     ],
+     "Title": "GitHub, last 30 days"
     }
    ]
   },
