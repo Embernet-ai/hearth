@@ -39,7 +39,7 @@
     <div class="numgrid">
     {#each groups as g (g.Key)}
       <div class={'numgroup g-' + g.Key}>
-      <h3 class="grouptitle">{g.Title}</h3>
+      <h3 class="grouptitle">{g.Title}{#if g.Key === 'deals'}{#if g.Tiles[0]?.Period.startsWith('All owners')}<a class="chip" href="/?deals=mine">Only mine</a>{:else}<a class="chip" href="/">All owners</a>{/if}{/if}</h3>
       <div class="stats" style:--cols={g.Tiles.length > 4 ? 3 : g.Tiles.length}>
         {#each g.Tiles as t, i (t.Label)}
           <a class={'stat ' + (t.Tone ?? '')} href={t.Href}>
@@ -113,6 +113,7 @@
   .numbers header form { gap: var(--s-2); }
   .numbers header select { min-width: 12rem; }
   .grouptitle { margin: var(--s-4) 0 var(--s-2); }
+  .grouptitle .chip { margin-left: var(--s-3); text-transform: none; letter-spacing: 0; }
   .grouptitle .muted { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: var(--s-2); }
   .period { display: block; }
   .flat { margin: 0 0 var(--s-3); }

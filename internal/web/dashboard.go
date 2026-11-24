@@ -123,7 +123,7 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d := s.buildDashboard(r.Context(), id, pickedDay(r.URL.Query().Get("day")))
-	stats, status, why := s.statsFor(r.Context(), id, r.URL.Query().Get("person"))
+	stats, status, why := s.statsFor(r.Context(), id, r.URL.Query().Get("person"), r.URL.Query().Get("deals") == "mine")
 	if stats == nil {
 		s.fail(w, r, status, why)
 		return

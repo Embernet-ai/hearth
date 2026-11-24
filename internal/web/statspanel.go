@@ -130,7 +130,7 @@ func plural(n int, one, many string) string {
 
 // statsFor builds the panel for the person asked about. It returns an HTTP
 // status and message instead of a panel when the viewer may not ask.
-func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) (*statsPanel, int, string) {
+func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, mine bool) (*statsPanel, int, string) {
 	me := id.PrincipalID
 	person := me
 	if asked != "" {
@@ -325,20 +325,18 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 
 	// Deals.
 	if s.sales != nil {
-		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, person, today,
-			monthFrom, monthFrom.AddDate(0, 1, 0))
-		// Deals that came over from Twenty carry no owner, so a person who owns none would read $0 on every tile
-		// beside a pipeline of hundreds. When this person owns nothing at all, the tiles are the whole pipeline
-		// the viewer may see, and say so.
-		scope, ownerQ := "", "&owner="+url.QueryEscape(person)
-		if err == nil && st.OpenCount+st.WonCount+st.LostCount+st.Overdue == 0 {
-			if all, aerr := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, "", today,
-				monthFrom, monthFrom.AddDate(0, 1, 0)); aerr == nil && all.OpenCount+all.WonCount+all.LostCount > 0 {
-				st, scope, ownerQ = all, "All owners: ", ""
-			}
+		// Sales shows everything a person with sales access may see, whoever owns it: the default is all deals and all
+		// owners (Patrick 2026-11-24). "Mine" is a filter somebody turns on with ?deals=mine, never the starting point,
+		// and what the viewer may see is still the CRM's own access rule, so a person with no sales access reads none.
+		scope, ownerQ, who := "All owners: ", "", ""
+		if mine {
+			scope, ownerQ, who = "", "&owner="+url.QueryEscape(person), person
 		}
+		st, err := s.sales.PersonStats(ctx, id.OrgID, id.Subjects, who, today, monthFrom, monthFrom.AddDate(0, 1, 0))
 		if err != nil {
 			s.log.WarnContext(ctx, "stats: deals", "error", err)
+		} else if !mine && st.OpenCount+st.WonCount+st.LostCount+st.Overdue == 0 {
+			// Nothing the viewer may see in sales: no sales access reads as no deals group, not a row of zeros.
 		} else {
 			own := "/deals?view=table" + ownerQ
 			closed := own + "&closedfrom=" + dayStr(monthFrom) + "&closedto=" + dayStr(monthTo)
@@ -364,7 +362,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string) 
 			}
 			cf := today.AddDate(0, 0, -90)
 			rows, _, err := s.sales.Deals(ctx, id.OrgID, id.Subjects, crm.ListQuery{
-				Owner: ownerID(scope, person), ClosedFrom: &cf, Sort: "closed", Desc: true, Limit: 5})
+				Owner: who, ClosedFrom: &cf, Sort: "closed", Desc: true, Limit: 5})
 			if err == nil {
 				for _, d := range rows {
 					if d.Stage != crm.StageWon && d.Stage != crm.StageLost {
@@ -388,13 +386,6 @@ func workingDaysBetween(first, last time.Time) int {
 		}
 	}
 	return n
-}
-
-func ownerID(scope, person string) string {
-	if scope != "" {
-		return ""
-	}
-	return person
 }
 
 func toneIf(b bool) string {
