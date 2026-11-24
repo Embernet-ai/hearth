@@ -472,7 +472,7 @@ func (s *Server) mailPrecheck(w http.ResponseWriter, r *http.Request) (*auth.Ide
 
 func (s *Server) connectFail(w http.ResponseWriter, r *http.Request, err error, what string) {
 	switch {
-	case errors.Is(err, connect.ErrDisabled), errors.Is(err, connect.ErrScope):
+	case errors.Is(err, connect.ErrNotConnected), errors.Is(err, connect.ErrReconnect), errors.Is(err, connect.ErrDisabled), errors.Is(err, connect.ErrScope):
 		s.fail(w, r, http.StatusConflict, "Connect your account first: "+what+" needs it. Settings, Connectors.")
 	default:
 		s.log.WarnContext(r.Context(), "connector", "what", what, "error", err)

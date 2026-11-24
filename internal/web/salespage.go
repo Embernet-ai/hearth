@@ -733,7 +733,7 @@ func (s *Server) deleteActivity(w http.ResponseWriter, r *http.Request) {
 // unassignedQueue is the list of records nobody owns, with a button to claim
 // each and a picker to hand it to somebody else.
 func (s *Server) unassignedQueue(w http.ResponseWriter, r *http.Request) {
-	if !s.salesOn(w, r) {
+	if _, ok := s.salesAccess(w, r); !ok {
 		return
 	}
 	id := auth.From(r.Context())

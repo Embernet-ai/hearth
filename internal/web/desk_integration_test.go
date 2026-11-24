@@ -6,6 +6,8 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/authz"
+	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
@@ -118,7 +121,7 @@ func (f *deskFx) do(as, method, path string, form url.Values) *httptest.Response
 
 func TestDeskRoutesAreForSalesAndSuperAdminsOnly(t *testing.T) {
 	f := newDeskFx(t)
-	gets := []string{"/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
+	gets := []string{"/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
 	for _, p := range gets {
 		if w := f.do(f.out, "GET", p, nil); w.Code != http.StatusNotFound {
 			t.Errorf("GET %s as an outsider = %d, want 404", p, w.Code)
@@ -232,5 +235,28 @@ func TestTheRailOffersSalesOnlyToSales(t *testing.T) {
 	}
 	if !nav(f.member) || !nav(f.admin) || nav(f.out) {
 		t.Errorf("nav: member %v admin %v outsider %v, want true true false", nav(f.member), nav(f.admin), nav(f.out))
+	}
+}
+
+// A person whose connected account is missing or revoked is told to connect it, not that the provider failed.
+func TestAMailActionOnAnAccountThatIsNotConnectedSaysToConnectIt(t *testing.T) {
+	srv, err := New(Deps{Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, e := range map[string]error{"not connected": connect.ErrNotConnected, "revoked": connect.ErrReconnect,
+		"wrapped": fmt.Errorf("google: this account is not connected: %w", connect.ErrNotConnected)} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/crm/email", nil)
+		r.Header.Set("Accept", "application/json")
+		srv.connectFail(w, r, e, "sending mail")
+		if w.Code != http.StatusConflict || !strings.Contains(w.Header().Get("X-Hearth-Reason"), "Connect your account first") {
+			t.Errorf("%s: status %d reason %q, want 409 Connect your account first", name, w.Code, w.Header().Get("X-Hearth-Reason"))
+		}
+	}
+	w := httptest.NewRecorder()
+	srv.connectFail(w, httptest.NewRequest("POST", "/crm/email", nil), errors.New("quota exceeded"), "sending mail")
+	if w.Code != http.StatusBadGateway {
+		t.Errorf("a real provider failure = %d, want 502", w.Code)
 	}
 }

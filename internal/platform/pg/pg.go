@@ -42,7 +42,8 @@ type Options struct {
 	JobsMaxConns int32
 	// WebStatementTimeout bounds any single query on the web pool.
 	WebStatementTimeout time.Duration
-	// ConnectTimeout bounds the initial connection at startup.
+	// ConnectTimeout bounds the initial connection at startup. Open keeps trying within it, because a name that does not
+	// resolve for a few seconds, or a database that is restarting, is not a reason to give up a scheduled job's whole run.
 	ConnectTimeout time.Duration
 }
 
@@ -53,7 +54,7 @@ func DefaultOptions(dsn string) Options {
 		WebMaxConns:         20,
 		JobsMaxConns:        8,
 		WebStatementTimeout: 15 * time.Second,
-		ConnectTimeout:      10 * time.Second,
+		ConnectTimeout:      30 * time.Second,
 	}
 }
 
@@ -70,12 +71,12 @@ func Open(ctx context.Context, opts Options) (*Pools, error) {
 	ctx, cancel := context.WithTimeout(ctx, opts.ConnectTimeout)
 	defer cancel()
 
-	web, err := open(ctx, opts.DSN, opts.WebMaxConns, opts.WebStatementTimeout)
+	web, err := openRetry(ctx, opts.DSN, opts.WebMaxConns, opts.WebStatementTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("pg: web pool: %w", err)
 	}
 
-	jobs, err := open(ctx, opts.DSN, opts.JobsMaxConns, 0)
+	jobs, err := openRetry(ctx, opts.DSN, opts.JobsMaxConns, 0)
 	if err != nil {
 		web.Close()
 		return nil, fmt.Errorf("pg: jobs pool: %w", err)
@@ -83,7 +84,7 @@ func Open(ctx context.Context, opts Options) (*Pools, error) {
 
 	// Two connections, never more. This pool exists to hold LISTEN, and a
 	// listener that gets recycled stops delivering silently.
-	listen, err := open(ctx, opts.DSN, 2, 0)
+	listen, err := openRetry(ctx, opts.DSN, 2, 0)
 	if err != nil {
 		web.Close()
 		jobs.Close()
@@ -93,10 +94,38 @@ func Open(ctx context.Context, opts Options) (*Pools, error) {
 	return &Pools{Web: web, Jobs: jobs, Listen: listen}, nil
 }
 
+// retryEvery is how long Open waits between tries while the database is unreachable.
+var retryEvery = 2 * time.Second
+
+// openPool is open, replaceable by a test.
+var openPool = open
+
+// openRetry opens one pool, trying again every few seconds until ctx ends. A DSN that does not parse is wrong
+// whatever the network does, so it is never retried; anything else (a name that does not resolve, a refused
+// connection, a database still starting) is. The error returned is the last one seen.
+func openRetry(ctx context.Context, dsn string, maxConns int32, stmtTimeout time.Duration) (*pgxpool.Pool, error) {
+	for {
+		pool, err := openPool(ctx, dsn, maxConns, stmtTimeout)
+		if err == nil {
+			return pool, nil
+		}
+		if errors.Is(err, errBadDSN) {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(retryEvery):
+		}
+	}
+}
+
+var errBadDSN = errors.New("bad DSN")
+
 func open(ctx context.Context, dsn string, maxConns int32, stmtTimeout time.Duration) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("parse DSN: %w", err)
+		return nil, fmt.Errorf("parse DSN: %w: %w", errBadDSN, err)
 	}
 	cfg.MaxConns = maxConns
 	cfg.MinConns = 0
