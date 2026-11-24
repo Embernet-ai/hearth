@@ -78,7 +78,7 @@ func fillFixtures(end time.Time) map[string]page {
 		stats.Weeks = append(stats.Weeks, barRow{Label: h, Value: fmt.Sprintf("%dh", 30+i), Percent: 60 + i*5, Href: "/time", Current: i == 7})
 	}
 	dash := &dashboard{ReportDay: "2026-11-21", Mine: mine, Week: week, Stats: stats, WeekTitle: "15 to 21 Nov", PrevWeek: "/?day=2026-11-08", NextWeek: "/?day=2026-11-22", Today: "/?day=2026-11-17",
-		Month: buildMonth(day(2), day(2), nil, mine),
+		Month:    buildMonth(day(2), day(2), nil, mine),
 		Watching: []*docs.Row{task("w1", "Shutdown window plan", "in_progress"), task("w2", "Fire watch roster", "todo"), task("w3", "Paint booth filter change", "todo")},
 		Upcoming: []cal.Entry{{ID: "u1", Title: "Safety walk", StartsAt: end, Place: "Plant floor"}, {ID: "u2", Title: "Line 3 shutdown", StartsAt: end.AddDate(0, 0, 2), AllDay: true},
 			{ID: "u3", Title: "Replace the guard switch on line 3", DocumentID: "m1", StartsAt: end.AddDate(0, 0, 3), AllDay: true}}}
