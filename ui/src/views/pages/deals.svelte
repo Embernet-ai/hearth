@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { ownerselect, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
+  import { bulkbar, ownerselect, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -41,6 +41,7 @@
     {#if F.t(dot?.Deals)}
     <table  class="list"  data-deal-table>
       <thead><tr>
+        <th></th>
         <th><a  href={(S(F.index(dot?.SortLinks, "name")))}>Deal</a></th>
         <th><a  href={(S(F.index(dot?.SortLinks, "stage")))}>Stage</a></th>
         <th><a  href={(S(F.index(dot?.SortLinks, "amount")))}>Amount</a></th>
@@ -51,8 +52,9 @@
       </tr></thead>
       <tbody>
         {#each F.rng(dot?.Deals) as [k3, d3]}
-          {@render grouprow(dot, k3, 7)}
+          {@render grouprow(dot, k3, 8)}
           <tr  data-deal={S(d3?.ID)}>
+            <td><input  type="checkbox"  name="ids"  value={S(d3?.ID)}  form="bulkform"  aria-label="Select"></td>
             <td><a  href={("/deals/" + S(d3?.ID))}>{d3?.Name}</a></td>
             <td><span  class="tag">{F.stageName(d3?.Stage)}</span></td>
             <td  class="muted small">{d3?.Amount}</td>
@@ -65,6 +67,7 @@
       </tbody>
     </table>
     {@render pager(dot?.Pager)}
+    {@render bulkbar(dot, "deal")}
     {:else}
       <p  class="muted">No deals match.</p>
     {/if}
@@ -82,6 +85,8 @@
                   {#if F.t(d5?.CompanyName)}<span  class="muted small">{d5?.CompanyName}</span>{/if}
                   {#if F.t(d5?.AmountCents)}<span  class="tag">{d5?.Amount}</span>{/if}
                   {#if F.t(d5?.OwnerName)}<span  class="muted small">{d5?.OwnerName}</span>{/if}
+                  {#if d5?.CloseDate}<span  class={"muted small" + (new Date(d5.CloseDate) < new Date() && !['won','lost','no_response'].includes(d5.Stage) ? " overdue" : "")}  data-close>closes {d5.CloseDate.slice(0, 10)}</span>{/if}
+                  {#if d5?.StageChangedAt}<span  class="muted small"  data-age>{Math.max(0, Math.floor((Date.now() - new Date(d5.StageChangedAt).getTime()) / 864e5))}d in stage</span>{/if}
                 </div>
                 <form  method="post"  action={"/deals/" + S(d5?.ID) + "/move"}  class="row"  style="margin-top:.35rem">
                   <select  name="stage"  data-autosubmit aria-label="Stage">

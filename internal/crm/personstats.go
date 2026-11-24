@@ -59,7 +59,7 @@ type PersonStats struct {
 func (s *Service) PersonStats(ctx context.Context, orgID string, actor core.Subjects,
 	owner string, today, from, to time.Time) (*PersonStats, error) {
 
-	keys := actor.Keys()
+	keys := keysOf(actor)
 	out := &PersonStats{}
 
 	rows, err := s.db.Query(ctx, `

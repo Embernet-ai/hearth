@@ -340,7 +340,7 @@ func (s *Service) TagsInUse(ctx context.Context, orgID string, actor core.Subjec
 	rows, err := s.db.Query(ctx, `SELECT min(g.tag), count(*) FROM company_tags g
 		JOIN companies c ON c.id=g.company_id
 		WHERE c.org_id=$1 AND c.deleted_at IS NULL AND `+visible("company", "c", 2)+`
-		GROUP BY lower(g.tag) ORDER BY 2 DESC, 1 LIMIT 200`, orgID, actor.Keys())
+		GROUP BY lower(g.tag) ORDER BY 2 DESC, 1 LIMIT 200`, orgID, keysOf(actor))
 	if err != nil {
 		return nil, fmt.Errorf("crm: tags in use: %w", err)
 	}

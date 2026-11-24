@@ -289,7 +289,7 @@ func (s *Service) GetCompany(ctx context.Context, orgID string, actor core.Subje
 func (s *Service) Companies(ctx context.Context, orgID string, actor core.Subjects,
 	kind, search string) ([]*Company, error) {
 
-	args := []any{orgID, actor.Keys()}
+	args := []any{orgID, keysOf(actor)}
 	where := ""
 	if kind != "" && validKinds[kind] {
 		args = append(args, kind)
@@ -306,11 +306,11 @@ func (s *Service) Companies(ctx context.Context, orgID string, actor core.Subjec
 		         WHERE ct.company_id = c.id AND ct.deleted_at IS NULL)::int
 		FROM companies c
 		WHERE c.org_id = $1 AND c.deleted_at IS NULL`+where+`
-		  AND EXISTS (
+		  AND ($2::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'company' AND g.entity_id = c.id
 		         AND g.subject_key = ANY($2)
-		         AND (g.expires_at IS NULL OR g.expires_at > now()))
+		         AND (g.expires_at IS NULL OR g.expires_at > now())))
 		ORDER BY c.name`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("crm: list companies: %w", err)
@@ -524,7 +524,7 @@ func (s *Service) GetContact(ctx context.Context, orgID string, actor core.Subje
 func (s *Service) Contacts(ctx context.Context, orgID string, actor core.Subjects,
 	companyID, search string) ([]*Contact, error) {
 
-	args := []any{orgID, actor.Keys()}
+	args := []any{orgID, keysOf(actor)}
 	where := ""
 	if companyID != "" {
 		args = append(args, companyID)
@@ -542,11 +542,11 @@ func (s *Service) Contacts(ctx context.Context, orgID string, actor core.Subject
 		FROM contacts ct
 		LEFT JOIN companies co ON co.id = ct.company_id AND co.deleted_at IS NULL
 		WHERE ct.org_id = $1 AND ct.deleted_at IS NULL`+where+`
-		  AND EXISTS (
+		  AND ($2::text[] @> ARRAY['*super'] OR EXISTS (
 		      SELECT 1 FROM grants g
 		       WHERE g.entity_type = 'contact' AND g.entity_id = ct.id
 		         AND g.subject_key = ANY($2)
-		         AND (g.expires_at IS NULL OR g.expires_at > now()))
+		         AND (g.expires_at IS NULL OR g.expires_at > now())))
 		ORDER BY ct.name`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("crm: list contacts: %w", err)

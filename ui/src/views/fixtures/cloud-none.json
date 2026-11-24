@@ -133,6 +133,7 @@
  "DeptApplyNow": false,
  "DeptPending": 0,
  "DeptToDecide": null,
+ "Desk": null,
  "Details": null,
  "Diff": null,
  "DiffFrom": null,

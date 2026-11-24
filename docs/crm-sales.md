@@ -24,6 +24,31 @@ holds the pipeline.
   details:** owner, LinkedIn, other emails, other phones. A new company kind,
   `prospect`.
 
+## The daily work
+
+The sidebar group is **CRM**: Contacts, Companies, Deals, Follow-ups, Forecast, Sales reports, and Unassigned. Team chat is its
+own group, Chat. People who do not work sales keep Contacts and Companies and see the records their grants already show them;
+the rest of the group is offered to the Sales team and to super admins only, and every address behind it answers 404 to anyone else.
+
+- **Everybody's by default.** The board, the follow-up queue, the forecast and the report start with every deal and every owner.
+  A filter narrows them to one person, "Mine" included, and it is never what a page opens with. A super admin sees every record
+  whether or not they are on the Sales team.
+- **Follow-ups** (`/crm/followups`). What the team owes people: a title, a day, who has it, and the company, person or deal it is
+  about. Add one from any record, see them on the record, and work the queue by overdue, today, or the next seven days. The person who
+  has one is told when it is due within a day, once a day, in their inbox, and the notice opens the record.
+- **Deal fields.** A deal shows its close date and how many days it has sat in its stage. A lost deal carries why it was lost.
+- **Forecast** (`/crm/forecast`). Open deals by the month they are expected to close, with a bucket for those past their date and
+  those with none. Every stage has a chance of closing (New 10, Screening 20, Meeting 40, Proposal 60, Customer 90), and the
+  weighted value is the amount times that chance. Won this month sits beside it. A CSV of the lot.
+- **Sales reports** (`/crm/reports`). For any period: the pipeline by stage, what was won and lost, win rate, average won deal, days
+  from made to won, each person's pipeline and results, what each person logged (notes, calls, meetings, emails), and deals made by month.
+- **Bulk change.** Tick rows on the deals table, the companies list or the contacts list and set an owner, move deals to a stage,
+  or add a tag to companies. Each record goes through the same write a single edit uses, so a record the person may not edit is
+  left alone and named, and every change reaches EmberOps through the sync like any other.
+- **Email and meetings from a record.** Through the person's own connected Google or Microsoft account (Settings, Connectors), send
+  an email or book a meeting with a Meet or Teams link, with the invitation mailed to the other side. Both land on the timeline of the
+  record and of the company or person it belongs with. Meetings and emails can also be logged after the fact, beside notes and calls.
+
 ## Types and tags
 
 A company can be several things at once: client, prospect, vendor, partner,
@@ -60,5 +85,6 @@ Sales team the same way once it exists.
 - Needs Postgres. With `HEARTH_BACKEND=emberops` the pages are not offered, and
   nothing else changes; the existing `crm.Store` interface is untouched.
 - Migration 00048 only adds columns with defaults and new tables. No existing row
-  is rewritten.
+  is rewritten. Migration 00067 adds meetings and emails to the timeline, a deal's lost reason and the time it
+  entered its stage (kept by a trigger, so every writer is covered), and the follow-ups table.
 - Deals, notes, and calls are not in global search yet, only on their own pages.

@@ -26,10 +26,20 @@ not a quietly empty record.
 | `GET`, `PATCH /v1/contacts/{id}` | |
 | `GET /v1/deals` | `q`, `stage`, `owner`, `company_id`, `contact_id` (the deals a person is the point of contact on), `sort`, `limit`, `offset` |
 | `POST /v1/deals` | `name`, `stage` (new, screening, meeting, proposal, customer, won, lost, no_response), `amount_cents`, `currency`, `close_date` (YYYY-MM-DD), `company_id`, `contact_id`, `owner_id`, `notes` |
-| `GET`, `PATCH /v1/deals/{id}` | moving a deal is a PATCH of `stage` |
-| `POST /v1/activities` | `kind` (note or call), `title`, `body`, `occurred_at`, `direction` (inbound or outbound), `disposition`, `duration_ms`, `targets` (a list of `{type: company, contact or deal, id}`) |
+| `GET`, `PATCH /v1/deals/{id}` | moving a deal is a PATCH of `stage`; `lost_reason` says why a deal was lost. A deal reads back `stage_changed_at`, `closed_at`, `probability_percent` and `weighted_cents` |
+| `POST /v1/activities` | `kind` (note, call, meeting or email), `title`, `body`, `occurred_at`, `direction` (inbound or outbound, for calls and emails), `disposition`, `duration_ms`, `targets` (a list of `{type: company, contact or deal, id}`) |
 | `GET /v1/{companies,contacts,deals}/{id}/activities` | the timeline, newest first |
+| `GET /v1/followups` | `assignee` (a person id, `me`, or `none`), `status` (`open`, `done`, `all`; open by default), `due` (`overdue`, `today`, `week`), `target_type` and `target_id`, `limit`, `offset`. Everybody's unless `assignee` says otherwise. Returns `{followups, total}` |
+| `POST /v1/followups` | `title`, `target {type: company, contact or deal, id}`, `due` (YYYY-MM-DD), `assignee_id` (the caller by default), `body` |
+| `PATCH /v1/followups/{id}` | `done` (true or false), `due` (an empty string clears it), `assignee_id` |
+| `DELETE /v1/followups/{id}` | |
+| `GET /v1/crm/forecast` | `owner` (a person id, `me`, or `none`). Open deals weighted by stage chance, in buckets: `overdue`, each month, `none`; per owner; won this month |
+| `GET /v1/crm/reports` | `from`, `to` (YYYY-MM-DD, the last 30 days by default), `owner`. Pipeline by stage, won, lost, win rate, average won deal, days to win, owners, activity by person, deals made by month |
+| `POST /v1/crm/bulk` | `type` (company, contact, deal), `ids` (at most 500), and any of `owner_id` (empty clears), `stage` (deals), `add_tag`, `add_type` (companies). Returns `{changed, failed}`; a record the caller may not edit is named in `failed` and the rest are changed |
 | `GET /v1/crm/stats` | companies, contacts, deals, open deals (not won, lost, or no response), open value in cents, and count and value by stage, over what the caller can see |
+
+The follow-up, forecast, report and bulk routes are for people who work sales (the Sales team) and super admins. A token whose person
+does not is told 404 on all of them. A read token can list and read them and cannot write.
 
 ## Sending a create twice
 

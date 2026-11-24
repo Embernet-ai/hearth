@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { timeline, addactivity, ownerselect, favstar } from './shared.svelte';
+  import { followupspanel, mailpanel, timeline, addactivity, ownerselect, favstar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -92,6 +92,8 @@
     <button  type="submit">Add a deal</button>
   </form>
 
+  {@render followupspanel(dot)}
+  {@render mailpanel(dot)}
   {@render timeline(dot)}
   {@render addactivity(F.dict("Type", "company", "ID", dot?.Company?.ID))}
   {/if}

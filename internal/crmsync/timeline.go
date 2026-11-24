@@ -68,6 +68,18 @@ func commentHTML(a activity) string {
 			head += ", " + strings.TrimSpace(a.Disposition)
 		}
 	}
+	switch a.Kind {
+	case "meeting":
+		head = "Hearth meeting"
+		if a.DurationMS > 0 {
+			head += fmt.Sprintf(", %d min", (a.DurationMS+59999)/60000)
+		}
+	case "email":
+		head = "Hearth email"
+		if a.Direction != "" {
+			head += ", " + a.Direction
+		}
+	}
 	when := a.At.UTC().Format("2006-01-02 15:04") + " UTC"
 	if a.Author != "" {
 		when += ", " + a.Author

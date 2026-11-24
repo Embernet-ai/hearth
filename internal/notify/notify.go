@@ -75,6 +75,12 @@ func hrefOf(entityType, entityID string) string {
 		return "/departments/requests/" + entityID
 	case core.EntityTimeOff:
 		return "/time-off#r-" + entityID
+	case core.EntityDeal:
+		return "/deals/" + entityID
+	case core.EntityCompany:
+		return "/companies/" + entityID
+	case core.EntityContact:
+		return "/contacts/" + entityID
 	default:
 		return "/documents/" + entityID
 	}

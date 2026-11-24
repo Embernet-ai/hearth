@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { timeline, addactivity, ownerselect, favstar } from './shared.svelte';
+  import { followupspanel, mailpanel, timeline, addactivity, ownerselect, favstar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -44,11 +44,17 @@
     </select>
     <label>Owner</label>
     {@render ownerselect(F.dict("Name", "owner", "People", dot?.Owners, "Selected", F.deref_s(dot?.Deal?.OwnerID)))}
+    {#if dot?.Deal?.Stage === "lost" || dot?.Deal?.LostReason}
+    <label  for="lost_reason">Why it was lost</label>
+    <input  id="lost_reason"  name="lost_reason"  maxlength="500"  value={S(dot?.Deal?.LostReason)}  placeholder="price, timing, went with a competitor">
+    {/if}
     <label  for="notes">Notes</label>
     <textarea  id="notes"  name="notes"  rows="3">{dot?.Deal?.Notes}</textarea>
     <div  class="row"><button  type="submit"  class="primary">Save</button></div>
   </form>
 
+  {@render followupspanel(dot)}
+  {@render mailpanel(dot)}
   {@render timeline(dot)}
   {@render addactivity(F.dict("Type", "deal", "ID", dot?.Deal?.ID))}
 
