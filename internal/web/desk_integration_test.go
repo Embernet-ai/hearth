@@ -22,16 +22,48 @@ import (
 
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/authz"
+	"github.com/Embernet-ai/hearth/internal/calls"
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crmmarketing"
+	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/fake"
+	"github.com/Embernet-ai/hearth/internal/mautic"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
 	"github.com/Embernet-ai/hearth/internal/platform/pg/pgtest"
 )
 
+type fakeMautic struct{ calls []string }
+
+func (f *fakeMautic) SegmentsBrief(context.Context) ([]mautic.Segment, error) {
+	return []mautic.Segment{{ID: 1, Name: "Expo"}, {ID: 2, Name: "Hearth: all contacts"}}, nil
+}
+func (f *fakeMautic) CampaignsBrief(context.Context) ([]mautic.Campaign, error) {
+	return []mautic.Campaign{{ID: 7, Name: "Welcome", Published: true}}, nil
+}
+func (f *fakeMautic) ContactSegments(context.Context, int64) ([]int64, error)  { return []int64{2}, nil }
+func (f *fakeMautic) ContactCampaigns(context.Context, int64) ([]int64, error) { return nil, nil }
+func (f *fakeMautic) SegmentAdd(context.Context, int64, int64) error {
+	f.calls = append(f.calls, "seg+")
+	return nil
+}
+func (f *fakeMautic) SegmentRemove(context.Context, int64, int64) error {
+	f.calls = append(f.calls, "seg-")
+	return nil
+}
+func (f *fakeMautic) CampaignAdd(context.Context, int64, int64) error {
+	f.calls = append(f.calls, "camp+")
+	return nil
+}
+func (f *fakeMautic) CampaignRemove(context.Context, int64, int64) error {
+	f.calls = append(f.calls, "camp-")
+	return nil
+}
+
 type deskFx struct {
+	mkt    *fakeMautic
 	ops    *fake.Frappe
 	t      *testing.T
 	srv    *Server
@@ -64,11 +96,12 @@ func newDeskFx(t *testing.T) *deskFx {
 	ops := fake.New(map[string]string{"svc": "hearth-service"})
 	t.Cleanup(ops.Close)
 	opsURL, _ := url.Parse(ops.URL)
-	srv, err := New(Deps{Log: log, Sales: svc, CRM: svc, Authz: az, Ops: emberops.New(emberops.Config{BaseURL: opsURL, Service: emberops.StaticToken("svc")})})
+	mkt := &fakeMautic{}
+	srv, err := New(Deps{Calls: calls.New(pools.Web, az, nil), Docs: docs.New(pools.Web, az), CRMMarketing: crmmarketing.New(pools.Web, mkt), Log: log, Sales: svc, CRM: svc, Authz: az, Ops: emberops.New(emberops.Config{BaseURL: opsURL, Service: emberops.StaticToken("svc")})})
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &deskFx{pool: pools.Web, ops: ops, t: t, srv: srv, az: az, org: uuid.NewString(), member: uuid.NewString(), other: uuid.NewString(), out: uuid.NewString(), admin: uuid.NewString()}
+	f := &deskFx{mkt: mkt, pool: pools.Web, ops: ops, t: t, srv: srv, az: az, org: uuid.NewString(), member: uuid.NewString(), other: uuid.NewString(), out: uuid.NewString(), admin: uuid.NewString()}
 	exec := func(sql string, args ...any) {
 		t.Helper()
 		if _, err := pools.Web.Exec(ctx, sql, args...); err != nil {
@@ -88,7 +121,7 @@ func newDeskFx(t *testing.T) *deskFx {
 	t.Cleanup(func() {
 		c := context.Background()
 		for _, q := range []string{`DELETE FROM crm_followups WHERE org_id=$1`, `DELETE FROM crm_activities WHERE org_id=$1`,
-			`DELETE FROM external_refs WHERE org_id=$1`, `DELETE FROM deals WHERE org_id=$1`, `DELETE FROM capability_grants WHERE org_id=$1`, `DELETE FROM teams WHERE org_id=$1`} {
+			`DELETE FROM mautic_links WHERE org_id=$1`, `DELETE FROM contacts WHERE org_id=$1`, `DELETE FROM external_refs WHERE org_id=$1`, `DELETE FROM deals WHERE org_id=$1`, `DELETE FROM capability_grants WHERE org_id=$1`, `DELETE FROM teams WHERE org_id=$1`} {
 			_, _ = pools.Web.Exec(c, q, f.org)
 		}
 	})
@@ -100,6 +133,7 @@ func newDeskFx(t *testing.T) *deskFx {
 	f.mux = http.NewServeMux()
 	srv.salesRoutes(f.mux)
 	srv.deskRoutes(f.mux)
+	f.mux.HandleFunc("GET /contacts/{id}", srv.getContact)
 	return f
 }
 
@@ -351,5 +385,71 @@ func TestADealPageShowsItsEmberOpsQuotesAndReportsTotalQuoted(t *testing.T) {
 	// A person outside sales gets the page refused, and so none of EmberOps's data about it.
 	if w := f.do(f.out, "GET", "/deals/"+f.deal, nil); strings.Contains(w.Body.String(), "SAL-QTN-9") {
 		t.Error("a person outside sales was shown the quote")
+	}
+}
+
+func TestAContactsMauticPanelAndMovingThem(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	svc := f.srv.sales.(*crm.Service)
+	linked, err := svc.CreateContact(ctx, f.org, f.subj(f.member), crm.Contact{Name: "In Mautic", Email: "in@m.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose, err := svc.CreateContact(ctx, f.org, f.subj(f.member), crm.Contact{Name: "Not In Mautic", Email: "not@m.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []*crm.Contact{linked, loose} {
+		if err := svc.Share(ctx, f.org, f.subj(f.member), c.Ref()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.pool.Exec(ctx, `INSERT INTO mautic_links (contact_id, org_id, mautic_id, payload_hash, segments, tags) VALUES ($1,$2,77,'h','{}','{}')`, linked.ID, f.org); err != nil {
+		t.Fatal(err)
+	}
+	var env struct {
+		Page struct {
+			Desk struct {
+				Mautic struct {
+					Segments []struct {
+						Name           string
+						Member, Locked bool
+					}
+				}
+				MauticNote string
+			}
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/contacts/"+linked.ID, nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.Mautic.Segments) != 2 || !env.Page.Desk.Mautic.Segments[1].Locked || !env.Page.Desk.Mautic.Segments[1].Member {
+		t.Fatalf("panel = %+v (%v)", env, err)
+	}
+	env.Page.Desk.MauticNote = ""
+	if err := json.Unmarshal(f.do(f.other, "GET", "/contacts/"+loose.ID, nil).Body.Bytes(), &env); err != nil || !strings.Contains(env.Page.Desk.MauticNote, "not in Mautic yet") {
+		t.Errorf("a contact not in Mautic: note %q (%v)", env.Page.Desk.MauticNote, err)
+	}
+	form := func(id string, seg string, on string) url.Values {
+		return url.Values{"contact_id": {id}, "id": {seg}, "on": {on}}
+	}
+	if w := f.do(f.out, "POST", "/crm/mautic/segment", form(linked.ID, "1", "1")); w.Code != http.StatusNotFound {
+		t.Errorf("a person outside sales moving a contact = %d, want 404", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/segment", form(linked.ID, "2", "0")); w.Code != http.StatusConflict {
+		t.Errorf("a segment the sync keeps = %d, want 409", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/segment", form(loose.ID, "1", "1")); w.Code != http.StatusConflict {
+		t.Errorf("a contact not in Mautic = %d, want 409", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/segment", form(linked.ID, "1", "1")); w.Code != http.StatusSeeOther {
+		t.Errorf("add to a segment = %d, want 303", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/campaign", form(linked.ID, "7", "1")); w.Code != http.StatusSeeOther {
+		t.Errorf("add to a campaign = %d, want 303", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/campaign", form(linked.ID, "x", "1")); w.Code != http.StatusBadRequest {
+		t.Errorf("a campaign id that is not a number = %d, want 400", w.Code)
+	}
+	if len(f.mkt.calls) != 2 || f.mkt.calls[0] != "seg+" || f.mkt.calls[1] != "camp+" {
+		t.Errorf("Mautic was asked %v, want seg+ then camp+ only", f.mkt.calls)
 	}
 }

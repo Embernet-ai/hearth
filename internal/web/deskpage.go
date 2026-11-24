@@ -22,6 +22,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
+	"github.com/Embernet-ai/hearth/internal/crmmarketing"
 	"github.com/Embernet-ai/hearth/internal/crmops"
 )
 
@@ -45,6 +46,9 @@ type deskData struct {
 	// EmberOps is the record's quotes and call logs from EmberOps, and Quoted what has been quoted in the report's period.
 	EmberOps *crmops.Panel
 	Quoted   *crmops.Totals
+	// Mautic is a contact's segments and campaigns, and MauticNote says why there are none to show.
+	Mautic     *crmmarketing.Panel
+	MauticNote string
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -60,6 +64,8 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /crm/bulk", s.bulkChange)
 	mux.HandleFunc("GET /crm/duplicates", s.duplicatesPage)
 	mux.HandleFunc("POST /crm/merge", s.mergeRecords)
+	mux.HandleFunc("POST /crm/mautic/segment", s.mauticSegment)
+	mux.HandleFunc("POST /crm/mautic/campaign", s.mauticCampaign)
 	mux.HandleFunc("POST /crm/email", s.emailFromRecord)
 	mux.HandleFunc("POST /crm/meeting", s.meetingFromRecord)
 }
@@ -300,6 +306,9 @@ func (s *Server) deskFor(r *http.Request, ref core.Ref, p *page) {
 	}
 	d.Followups = rows
 	d.EmberOps = s.emberOpsPanel(r, ref, p)
+	if ref.Type == core.EntityContact {
+		d.Mautic, d.MauticNote = s.mauticPanel(r, ref, p)
+	}
 	p.Desk = d
 }
 
@@ -659,4 +668,73 @@ func (s *Server) mergeRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, recordPath(core.Ref{Type: typ, ID: survivor}), http.StatusSeeOther)
+}
+
+// -----------------------------------------------------------------------------
+// A contact's place in Mautic
+// -----------------------------------------------------------------------------
+
+func (s *Server) mauticPanel(r *http.Request, ref core.Ref, p *page) (*crmmarketing.Panel, string) {
+	if s.crmMkt == nil {
+		return nil, ""
+	}
+	id := auth.From(r.Context())
+	optedOut := p.Details != nil && p.Details.MarketingOptOutAt != nil
+	panel, err := s.crmMkt.For(r.Context(), id.OrgID, ref.ID, optedOut)
+	if errors.Is(err, crmmarketing.ErrNotLinked) {
+		return nil, "This person is not in Mautic yet. The marketing sync adds anybody with an email address."
+	}
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load the Mautic panel", "error", err)
+		return nil, ""
+	}
+	return panel, ""
+}
+
+func (s *Server) mauticMove(w http.ResponseWriter, r *http.Request, set func(ctx context.Context, org, contact string, n int64, on bool) error) {
+	if _, ok := s.salesAccess(w, r); !ok {
+		return
+	}
+	if s.crmMkt == nil {
+		s.fail(w, r, http.StatusNotFound, "Mautic is not connected on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	id := auth.From(r.Context())
+	ref := core.Ref{Type: core.EntityContact, ID: strings.TrimSpace(r.FormValue("contact_id"))}
+	if err := s.az.Require(r.Context(), id.Subjects, ref, core.AccessEdit); err != nil {
+		s.fail(w, r, http.StatusNotFound, "no such thing")
+		return
+	}
+	n, err := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "which one?")
+		return
+	}
+	switch err := set(r.Context(), id.OrgID, ref.ID, n, r.FormValue("on") != "0"); {
+	case err == nil:
+	case errors.Is(err, crmmarketing.ErrNotLinked), errors.Is(err, crmmarketing.ErrLocked):
+		s.fail(w, r, http.StatusConflict, strings.TrimPrefix(err.Error(), "crmmarketing: "))
+		return
+	default:
+		s.log.WarnContext(r.Context(), "move a contact in Mautic", "error", err)
+		s.fail(w, r, http.StatusBadGateway, "Mautic would not do that: "+err.Error())
+		return
+	}
+	http.Redirect(w, r, "/contacts/"+ref.ID+"#mautic", http.StatusSeeOther)
+}
+
+func (s *Server) mauticSegment(w http.ResponseWriter, r *http.Request) {
+	s.mauticMove(w, r, func(ctx context.Context, org, c string, n int64, on bool) error {
+		return s.crmMkt.SetSegment(ctx, org, c, n, on)
+	})
+}
+
+func (s *Server) mauticCampaign(w http.ResponseWriter, r *http.Request) {
+	s.mauticMove(w, r, func(ctx context.Context, org, c string, n int64, on bool) error {
+		return s.crmMkt.SetCampaign(ctx, org, c, n, on)
+	})
 }

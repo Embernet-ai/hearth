@@ -29,6 +29,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
+	"github.com/Embernet-ai/hearth/internal/crmmarketing"
 	"github.com/Embernet-ai/hearth/internal/crmops"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
 	"github.com/Embernet-ai/hearth/internal/docs"
@@ -541,7 +542,7 @@ func run() error {
 		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
-		Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
+		CRMMarketing: crmMarketingFor(pools, marketingClient), Marketing: marketingClient, Forms: formsClient, Social: socialClient, Tools: toolCards,
 		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
 		OIDCName: cfg.OIDCName, HideLocalLogin: !cfg.LocalLoginForm,
@@ -953,4 +954,12 @@ func opsLister(c *emberops.Client) crmops.Lister {
 		return nil
 	}
 	return c
+}
+
+// crmMarketingFor is the contact page's Mautic panel, or a true nil when Mautic is not connected.
+func crmMarketingFor(pools *pg.Pools, c *mautic.Client) *crmmarketing.Service {
+	if c == nil {
+		return nil
+	}
+	return crmmarketing.New(pools.Web, c)
 }

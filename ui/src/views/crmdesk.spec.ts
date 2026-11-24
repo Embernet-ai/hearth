@@ -78,3 +78,18 @@ describe('what EmberOps adds to a record', () => {
     expect(d.querySelector('[data-report-quoted]')?.textContent).toContain('3 quotations');
   });
 });
+
+describe('a contact in Mautic', () => {
+  const base = { Contact: { ID: 'c1', Name: 'Dana' }, Companies: [], Activities: [], Owners: [], Details: {}, SalesOn: true };
+  test('shows the segments with a way in or out, and the ones the sync keeps without one', () => {
+    const d = draw('contact', page({ ...base, Desk: { Followups: [], Today: '2026-11-24', Mautic: { OptedOut: true, Segments: [{ ID: 1, Name: 'Expo', Member: false, Locked: false }, { ID: 2, Name: 'Hearth: all contacts', Member: true, Locked: true }], Campaigns: [{ ID: 7, Name: 'Welcome', Member: true }] } } }));
+    expect(d.querySelectorAll('[data-mautic-segments] form').length).toBe(1);
+    expect(text(d)).toContain('kept by the sync');
+    expect(d.querySelector('[data-mautic-optout]')).not.toBeNull();
+    expect(d.querySelector('[data-mautic-campaigns] input[name="on"]')?.getAttribute('value')).toBe('0');
+  });
+  test('says when the person is not in Mautic yet', () => {
+    const d = draw('contact', page({ ...base, Desk: { Followups: [], Today: '2026-11-24', MauticNote: 'This person is not in Mautic yet. The marketing sync adds anybody with an email address.' } }));
+    expect(text(d)).toContain('not in Mautic yet');
+  });
+});

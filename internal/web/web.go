@@ -38,6 +38,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crm/crmviews"
+	"github.com/Embernet-ai/hearth/internal/crmmarketing"
 	"github.com/Embernet-ai/hearth/internal/crmops"
 	"github.com/Embernet-ai/hearth/internal/deptreq"
 	"github.com/Embernet-ai/hearth/internal/docs"
@@ -100,6 +101,8 @@ type Server struct {
 	sales crm.Sales
 	// crmOps reads EmberOps's quotes and call logs for a record. Nil when the installation does not run on EmberOps.
 	crmOps *crmops.Service
+	// crmMkt is the contact page's Mautic panel.
+	crmMkt *crmmarketing.Service
 	// crmViews are the saved views of the companies, contacts and deals lists. Nil switches the saving off.
 	crmViews *crmviews.Service
 	mail     *mailint.Service
@@ -224,12 +227,14 @@ type Deps struct {
 	Marketing    *mautic.Client
 	Forms        *forms.Client
 	// Ops is the EmberOps client, nil when the installation does not run on EmberOps. The CRM reads quotes and call logs from it.
-	Ops    crmops.Lister
-	Social *social.Client
-	Tools  []tools.Tool
-	Box    connect.Sealer
-	SCIM   *scim.Service
-	Search *search.Service
+	Ops crmops.Lister
+	// CRMMarketing shows a contact's Mautic segments and campaigns on their page. Nil when Mautic is not connected.
+	CRMMarketing *crmmarketing.Service
+	Social       *social.Client
+	Tools        []tools.Tool
+	Box          connect.Sealer
+	SCIM         *scim.Service
+	Search       *search.Service
 	// Playground is Settings -> Tutorial's personal practice organisation.
 	Playground *playground.Service
 	// TimeOff is requesting and deciding days away.
@@ -282,6 +287,7 @@ func New(d Deps) (*Server, error) {
 		microsoft:  d.Microsoft,
 		marketing:  d.Marketing,
 		crmOps:     newCRMOps(d.Ops),
+		crmMkt:     d.CRMMarketing,
 		forms:      d.Forms,
 		social:     d.Social,
 		tools:      d.Tools,

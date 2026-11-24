@@ -1,7 +1,7 @@
 <script lang="ts" module>
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  export { emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -265,6 +265,49 @@
       <li><span  class="tag">{c.Type}</span> <a  href={c.URL}  target="_blank"  rel="noopener">{c.Start}</a> <span  class="muted small">{c.From} to {c.To}{c.Seconds ? ', ' + Math.ceil(c.Seconds / 60) + ' min' : ''}{c.Status ? ', ' + c.Status : ''}</span></li>
     {/each}
   </ul>
+{/if}
+{/if}
+{/snippet}
+
+{#snippet mauticpanel(dot)}
+{#if dot?.Desk?.Mautic || dot?.Desk?.MauticNote}
+<h3  id="mautic">In Mautic</h3>
+{#if dot.Desk.MauticNote}<p  class="muted small">{dot.Desk.MauticNote}</p>{/if}
+{#if dot.Desk.Mautic}
+  {#if dot.Desk.Mautic.OptedOut}<p  class="muted small"  data-mautic-optout>Marketing email is off for this person. Mautic will not send to them.</p>{/if}
+  <p  class="muted small">What Mautic recorded for them (sent, opened, clicked, forms, unsubscribed) is on the timeline.</p>
+  <ul  class="files"  data-mautic-segments>
+    {#each dot.Desk.Mautic.Segments || [] as sg (sg.ID)}
+      <li>
+        <span  class={'tag' + (sg.Member ? ' on' : '')}>{sg.Member ? 'in' : 'not in'}</span> {sg.Name}
+        {#if sg.Locked}<span  class="muted small">kept by the sync</span>
+        {:else}
+          <form  method="post"  action="/crm/mautic/segment"  class="inline">
+            <input  type="hidden"  name="contact_id"  value={dot.Contact?.ID} />
+            <input  type="hidden"  name="id"  value={sg.ID} />
+            <input  type="hidden"  name="on"  value={sg.Member ? '0' : '1'} />
+            <button  type="submit"  class="ghost small">{sg.Member ? 'Remove' : 'Add'}</button>
+          </form>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+  {#if dot.Desk.Mautic.Campaigns?.length}
+    <h4>Campaigns</h4>
+    <ul  class="files"  data-mautic-campaigns>
+      {#each dot.Desk.Mautic.Campaigns as c (c.ID)}
+        <li>
+          <span  class={'tag' + (c.Member ? ' on' : '')}>{c.Member ? 'in' : 'not in'}</span> {c.Name}
+          <form  method="post"  action="/crm/mautic/campaign"  class="inline">
+            <input  type="hidden"  name="contact_id"  value={dot.Contact?.ID} />
+            <input  type="hidden"  name="id"  value={c.ID} />
+            <input  type="hidden"  name="on"  value={c.Member ? '0' : '1'} />
+            <button  type="submit"  class="ghost small">{c.Member ? 'Remove' : 'Add'}</button>
+          </form>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 {/if}
 {/if}
 {/snippet}
