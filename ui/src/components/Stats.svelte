@@ -98,7 +98,7 @@
       <h3 class="grouptitle">Recently closed</h3>
       <ul class="plain recent">
         {#each recent as r (r.Href)}
-          <li><span class="tag">{r.Kind}</span><a class="rtitle" href={r.Href}>{r.Title}</a>{#if r.Detail}<span class="muted small">{r.Detail}</span>{/if}{#if r.When}<span class="muted small rwhen">{r.When}</span>{/if}</li>
+          <li><span class="tag">{r.Kind}</span><a class="rtitle" href={r.Href}>{r.Title}</a><span class="muted small rmeta">{#if r.Detail}{r.Detail}{/if}{#if r.Detail && r.When}&nbsp;&middot;&nbsp;{/if}{#if r.When}{r.When}{/if}</span></li>
         {/each}
       </ul>
       </div>
@@ -136,9 +136,12 @@
   .stagebars .track { height: 6px; background: var(--hover); border-radius: 3px; overflow: hidden; }
   .stagebars .track span { display: block; height: 100%; background: var(--edge); }
   .stagebars .val { font-size: var(--t-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-  .recent li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-3); margin: var(--s-2) 0; }
-  .recent .rtitle { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
-  .recent .rwhen { white-space: nowrap; margin-left: auto; }
+  .recent { margin: 0; padding: 0; }
+  .recent li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: var(--s-1) var(--s-3); margin: 0; padding: var(--s-2) 0; border-bottom: 1px solid var(--line); }
+  .recent li:last-child { border-bottom: 0; }
+  .recent .rtitle { min-width: 0; overflow-wrap: anywhere; }
+  .recent .rmeta { white-space: nowrap; text-align: right; }
+  @media (max-width: 26rem) { .recent li { grid-template-columns: minmax(0, 1fr) auto; } .recent li .tag { grid-column: 1 / -1; justify-self: start; } }
   @media (max-width: 40rem) {
     .weeks { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: var(--s-3); }
     .stagebars a { grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: var(--s-2); }
