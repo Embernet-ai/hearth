@@ -239,7 +239,7 @@ func fixtures() map[string]page {
 				{Space: sp("e-red", "Red Team", "folder", &eng, 3)},
 			}
 			q := docs.Query{SpaceID: &eng, Direct: true}
-			return page{Title: "Everything", Heading: "Everything", Wide: true, SpaceID: eng, SpaceName: "Engineering", Query: q, ViewKind: "table", Base: "/documents", Total: 0, Shown: 0,
+			return page{Title: "Everything", Heading: "Everything", Wide: true, SpaceID: eng, SpaceName: "Engineering", Query: q, ViewKind: "table", Base: "/documents", Total: 0, Shown: 0, ClosedHidden: 1,
 				Org:           []*orgNode{root, {Space: sp("s-sales", "Sales", "department", nil, 239)}},
 				Crumbs:        []crumb{{ID: eng, Name: "Engineering"}},
 				SpaceChildren: []*plant.Space{sp("p-click", "Line 3 backlog", "project", &eng, 14)},

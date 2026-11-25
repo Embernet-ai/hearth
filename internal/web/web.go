@@ -515,11 +515,14 @@ type page struct {
 	CurrentURL string
 	Total      int
 	Shown      int
-	Tabs       []ViewTab
-	GroupBy    string
-	GroupOpts  []FieldOption
-	ColumnOpts []FieldOption
-	Columns    []docs.Field
+	// ClosedHidden is how many done and cancelled items the default view leaves out, so the count on the page and the side
+	// panel's count (every live document at that level) can be read together.
+	ClosedHidden int
+	Tabs         []ViewTab
+	GroupBy      string
+	GroupOpts    []FieldOption
+	ColumnOpts   []FieldOption
+	Columns      []docs.Field
 	// GroupedTable is Table's rows arranged the same way Board's Groups are --
 	// Table always groups now (defaulted to status, same as Board), so this
 	// replaced the old flat TableRows entirely rather than sitting alongside it.

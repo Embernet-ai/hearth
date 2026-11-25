@@ -20,6 +20,12 @@ describe('a department as a directory', () => {
     expect(d.querySelector('h1')?.textContent).toBe('Engineering');
   });
 
+  test('the count says what the default view leaves out, so it agrees with the side panel', () => {
+    const a = d.querySelector('a[data-closed-hidden]');
+    expect(a?.textContent).toBe('1 closed');
+    expect(a?.getAttribute('href')).toBe('/documents?closed=1&space=e-eng');
+  });
+
   test('projects stay reachable under the folders', () => {
     expect(d.querySelector('[data-dir-projects] a[href="/documents?space=p-click"]')).not.toBeNull();
   });

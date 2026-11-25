@@ -92,6 +92,7 @@ SaveTarget
 CurrentURL
 Total
 Shown
+ClosedHidden
 Tabs
 GroupBy
 GroupOpts

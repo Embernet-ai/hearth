@@ -246,6 +246,7 @@
       <span  class="muted small">
         {#if F.t(F.lt(dot?.Shown, dot?.Total))}{dot?.Shown} of {dot?.Total}{:else}{dot?.Total}{/if}
       </span>
+      {#if dot?.ClosedHidden}<a  class="muted small"  data-closed-hidden  href={(S(dot?.Base) + S(F.toggleClosed(dot?.Query, dot?.ViewKind)))}>{dot?.ClosedHidden} closed</a>{/if}
       <nav  class="viewtabs">
         {#each F.rng(dot?.Tabs) as [k18, d18]}<a  class={"chip " + S((F.t(d18?.On) ? ("on") : ""))}  href={(S(d18?.Href))}>{d18?.Label}</a>{/each}
       </nav>
