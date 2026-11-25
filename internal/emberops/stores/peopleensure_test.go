@@ -89,3 +89,34 @@ func TestAnAgentWithNoEmailGetsNoEmberOpsAccount(t *testing.T) {
 		t.Fatal("a bot got a User")
 	}
 }
+
+// Found live 2026-11-25: a person whose email already has an Employee under another Hearth id (made by hand, or for an
+// earlier account) was refused as a duplicate and could not log time. The Employee is taken over, not made twice.
+const hand = "55555555-5555-5555-5555-555555555555"
+
+func TestAnEmployeeAlreadyOnThisEmailIsTakenOver(t *testing.T) {
+	e := newEnv(t)
+	e.f.Put("Employee", map[string]any{"name": "HR-EMP-00050", "hearth_id": "99999999-9999-9999-9999-999999999999", "user_id": "nia@fireballz.ai", "first_name": "Old Nia"})
+	e.f.Put("Employee", map[string]any{"name": "HR-EMP-00051", "user_id": "hand@fireballz.ai", "first_name": "No id"})
+	src := persons{
+		newbie: {"id": newbie, "display_name": "Nia New", "email": "nia@fireballz.ai", "kind": "user", "status": "active"},
+		hand:   {"id": hand, "display_name": "Hand", "email": "hand@fireballz.ai", "kind": "user", "status": "active"},
+	}
+	p := &stores.People{Base: e.base, Source: src}
+	for i := 0; i < 2; i++ {
+		for _, who := range []string{newbie, hand} {
+			if err := p.Ensure(e.ctx, org, who); err != nil {
+				t.Fatalf("run %d, %s: %v", i, who, err)
+			}
+		}
+	}
+	got := map[string]string{}
+	for _, m := range e.f.All("Employee") {
+		if m["user_id"] == "nia@fireballz.ai" || m["user_id"] == "hand@fireballz.ai" {
+			got[m["name"].(string)], _ = m["hearth_id"].(string)
+		}
+	}
+	if len(got) != 2 || got["HR-EMP-00050"] != newbie || got["HR-EMP-00051"] != hand {
+		t.Fatalf("employees = %v", got)
+	}
+}

@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -81,8 +82,43 @@ func (p *People) put(ctx context.Context, rec mapping.Rec) error {
 	emp := mapping.EmployeeDoc(rec)
 	delete(emp, "doctype")
 	delete(emp, "hearth_id")
+	if err := p.adoptEmployee(ctx, id, rec.S("email")); err != nil {
+		return err
+	}
 	if _, err := p.C.Upsert(ctx, "Employee", id, emp); err != nil {
 		return fmt.Errorf("emberops: make the Employee for %s: %w", id, err)
+	}
+	return nil
+}
+
+// adoptEmployee takes over the Employee an email already has in EmberOPS when it carries another person's Hearth id
+// or none (made by hand, by the migration under an older id, or for an earlier account with the same email). A User can
+// be on one Employee only, so upserting by the new id would be refused as a duplicate and the person would have no
+// Employee to log time as. The Employee is given this person's id and the upsert then updates it.
+func (p *People) adoptEmployee(ctx context.Context, id, email string) error {
+	if email == "" {
+		return nil
+	}
+	rows, err := p.C.List(ctx, emberops.ListQuery{Doctype: "Employee", Fields: []string{"name", "hearth_id"},
+		Filters: []emberops.Filter{emberops.F("user_id", email)}, Limit: 5})
+	if err != nil {
+		return fmt.Errorf("emberops: look up the Employee for %s: %w", id, err)
+	}
+	for _, r := range rows {
+		have, _ := r["hearth_id"].(string)
+		if strings.EqualFold(have, id) {
+			return nil
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	name, _ := rows[0]["name"].(string)
+	if name == "" {
+		return nil
+	}
+	if _, err := p.C.Update(ctx, "Employee", name, map[string]any{"hearth_id": strings.ToLower(id)}); err != nil {
+		return fmt.Errorf("emberops: take over the Employee %s for %s: %w", name, id, err)
 	}
 	return nil
 }

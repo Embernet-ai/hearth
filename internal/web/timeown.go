@@ -201,9 +201,22 @@ func (s *Server) postMyTime(w http.ResponseWriter, r *http.Request) {
 	}
 	entry, err := s.time.LogOwn(r.Context(), id.OrgID, id.Subjects, docID,
 		minutes, on, r.FormValue("note"))
+	// With EmberOPS holding the time, a person who has not signed in since their account was set up there (or whose
+	// Employee was taken away) has no Employee to log as. Make it now, by the same code the sign-in runs, and try once more.
+	if err != nil && s.people != nil && strings.Contains(err.Error(), "Employee not found") {
+		if perr := s.people.Ensure(r.Context(), id.OrgID, id.PrincipalID); perr != nil {
+			s.log.WarnContext(r.Context(), "could not make the person's EmberOPS Employee", "error", perr)
+		} else {
+			entry, err = s.time.LogOwn(r.Context(), id.OrgID, id.Subjects, docID, minutes, on, r.FormValue("note"))
+		}
+	}
 	if err != nil {
 		s.log.WarnContext(r.Context(), "log own time refused", "error", err)
-		s.fail(w, r, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "timelog: "))
+		msg := strings.TrimPrefix(err.Error(), "timelog: ")
+		if strings.Contains(msg, "Employee not found") {
+			msg = "your hours could not be saved yet because your EmberOPS account is still being set up. Try again in a minute, and tell an admin if it keeps happening."
+		}
+		s.fail(w, r, http.StatusBadRequest, msg)
 		return
 	}
 	for _, tagID := range r.Form["tags"] {

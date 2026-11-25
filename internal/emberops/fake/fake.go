@@ -571,6 +571,16 @@ func (f *Frappe) upsert(doctype, hid string, vals map[string]any, user string) (
 			return nil, invalid(why)
 		}
 	}
+	if created && doctype == "Employee" {
+		// ERPNext: one User is one Employee.
+		if u, _ := vals["user_id"].(string); u != "" {
+			for _, o := range f.docs["Employee"] {
+				if ou, _ := o["user_id"].(string); strings.EqualFold(ou, u) {
+					return nil, invalid("User " + u + " is already assigned to Employee " + o["name"].(string))
+				}
+			}
+		}
+	}
 	if created {
 		d = map[string]any{"owner": user}
 	} else if err := f.decidedTimeOff(doctype, d, vals); err != nil {
