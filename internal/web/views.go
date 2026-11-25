@@ -501,7 +501,7 @@ func (s *Server) renderList(w http.ResponseWriter, r *http.Request, req listRequ
 	}
 
 	if saved, err := s.views.List(ctx, id.OrgID, id.PrincipalID); err == nil {
-		p.SavedViews = saved
+		p.SavedViews, p.Me = saved, id.PrincipalID
 	} else {
 		s.log.ErrorContext(ctx, "list saved views", "error", err)
 	}
