@@ -121,3 +121,20 @@ describe('the reports depth', () => {
     expect(text(d)).toContain('No deals lost in this period.');
   });
 });
+
+describe('the timeline', () => {
+  const acts = [{ ID: 'a1', Kind: 'call', Title: 'Rang', Direction: 'outbound', Disposition: 'voicemail', OccurredAt: '2026-11-20T15:00:00Z', ByName: 'Pat' }, { ID: 'a2', Kind: 'note', Title: 'Noted', Body: 'x', OccurredAt: '2026-11-21T15:00:00Z' }];
+  const drawn = () => draw('deal', page({ Path: '/deals/d1', Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], SalesOn: true, Activities: acts, Desk: { Followups: [], Today: '2026-11-24' } }));
+  test('has a filter by kind when there is more than one entry', () => {
+    const d = drawn();
+    expect(d.querySelectorAll('[data-timeline-filter]').length).toBe(5);
+    expect(d.querySelector('[data-activity="a1"]')?.getAttribute('data-kind')).toBe('call');
+  });
+  test('each entry can be edited, a call with its direction and outcome and a note without', () => {
+    const d = drawn();
+    expect(d.querySelector('[data-activity="a1"] form[action="/activities/a1/edit"] select[name="direction"]')).not.toBeNull();
+    expect(d.querySelector('[data-activity="a1"] input[name="disposition"]')).not.toBeNull();
+    expect(d.querySelector('[data-activity="a2"] form[action="/activities/a2/edit"]')).not.toBeNull();
+    expect(d.querySelector('[data-activity="a2"] select[name="direction"]')).toBeNull();
+  });
+});

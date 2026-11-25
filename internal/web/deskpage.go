@@ -67,6 +67,7 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /crm/bulk", s.bulkChange)
 	mux.HandleFunc("GET /crm/duplicates", s.duplicatesPage)
 	mux.HandleFunc("POST /crm/merge", s.mergeRecords)
+	mux.HandleFunc("POST /activities/{id}/edit", s.editActivity)
 	mux.HandleFunc("POST /crm/mautic/segment", s.mauticSegment)
 	mux.HandleFunc("POST /crm/mautic/campaign", s.mauticCampaign)
 	mux.HandleFunc("POST /crm/email", s.emailFromRecord)
@@ -758,4 +759,51 @@ func (s *Server) formResponses(r *http.Request, p *page) []crmforms.Entry {
 		return nil
 	}
 	return got
+}
+
+// -----------------------------------------------------------------------------
+// Editing a timeline entry
+// -----------------------------------------------------------------------------
+
+func (s *Server) editActivity(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	e := crm.ActivityEdit{}
+	set := func(name string) *string {
+		if _, has := r.Form[name]; !has {
+			return nil
+		}
+		v := r.FormValue(name)
+		return &v
+	}
+	e.Title, e.Body, e.Direction, e.Disposition = set("title"), set("body"), set("direction"), set("disposition")
+	if v := strings.TrimSpace(r.FormValue("when")); v != "" {
+		t, err := time.ParseInLocation("2006-01-02T15:04", v, time.Local)
+		if err != nil {
+			s.fail(w, r, http.StatusBadRequest, "that is not a date and time")
+			return
+		}
+		e.OccurredAt = &t
+	}
+	if v := strings.TrimSpace(r.FormValue("minutes")); v != "" {
+		m, err := strconv.ParseFloat(v, 64)
+		if err != nil || m < 0 {
+			s.fail(w, r, http.StatusBadRequest, "minutes is a number")
+			return
+		}
+		ms := int64(m * 60000)
+		e.DurationMs = &ms
+	}
+	if _, err := desk.UpdateActivity(r.Context(), id.OrgID, id.Subjects, r.PathValue("id"), e); err != nil {
+		s.crmFail(w, r, err, "you cannot change that")
+		return
+	}
+	http.Redirect(w, r, localBack(r.FormValue("back"), "/deals")+"#timeline", http.StatusSeeOther)
 }

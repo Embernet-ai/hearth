@@ -478,3 +478,36 @@ func TestAContactsMauticPanelAndMovingThem(t *testing.T) {
 		t.Errorf("Mautic was asked %v, want seg+ then camp+ only", f.mkt.calls)
 	}
 }
+
+func TestEditingATimelineEntryThroughTheRoute(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	svc := f.srv.sales.(*crm.Service)
+	a, err := svc.AddActivity(ctx, f.org, f.subj(f.member), crm.Activity{Kind: crm.ActCall, Title: "Rang", Body: "no answer", Targets: []core.Ref{{Type: core.EntityDeal, ID: f.deal}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"title": {"Rang Dana"}, "body": {"left a voicemail"}, "direction": {"outbound"}, "disposition": {"voicemail"}, "when": {"2026-11-20T14:30"}, "minutes": {"2"}, "back": {"/deals/" + f.deal}}
+	if w := f.do(f.out, "POST", "/activities/"+a.ID+"/edit", form); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider editing = %d, want 404", w.Code)
+	}
+	w := f.do(f.other, "POST", "/activities/"+a.ID+"/edit", form)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/deals/"+f.deal+"#timeline" {
+		t.Fatalf("edit = %d to %q", w.Code, w.Header().Get("Location"))
+	}
+	acts, _ := svc.ActivitiesFor(ctx, f.org, f.subj(f.member), core.Ref{Type: core.EntityDeal, ID: f.deal})
+	if len(acts) != 1 || acts[0].Title != "Rang Dana" || acts[0].Disposition != "voicemail" || acts[0].Direction != "outbound" || *acts[0].DurationMs != 120000 {
+		t.Errorf("entry after the edit = %+v", acts)
+	}
+	for name, v := range map[string]url.Values{"a bad date": {"when": {"yesterday"}}, "bad minutes": {"minutes": {"lots"}}, "emptied": {"title": {""}, "body": {""}}} {
+		if w := f.do(f.other, "POST", "/activities/"+a.ID+"/edit", v); w.Code != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", name, w.Code)
+		}
+	}
+	if w := f.do(f.other, "POST", "/activities/"+uuid.NewString()+"/edit", url.Values{"title": {"x"}}); w.Code != http.StatusNotFound {
+		t.Errorf("an entry that is not there = %d, want 404", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/activities/"+a.ID+"/edit", url.Values{"title": {"x"}, "back": {"https://evil.example/"}}); w.Header().Get("Location") != "/deals#timeline" {
+		t.Errorf("an off-site back = %q, want a local one", w.Header().Get("Location"))
+	}
+}

@@ -36,6 +36,7 @@ the rest of the group is offered to the Sales team and to super admins only, and
 - **Follow-ups** (`/crm/followups`). What the team owes people: a title, a day, who has it, and the company, person or deal it is
   about. Add one from any record, see them on the record, and work the queue by overdue, today, or the next seven days. The person who
   has one is told when it is due within a day, once a day, in their inbox, and the notice opens the record.
+- **Timeline.** Filter a record's timeline to notes, calls, meetings or emails with one click, and edit any entry (what it says, when it happened, a call's direction, outcome and length). The author may, and so may anybody who can edit every record the entry is about. Its kind and what it is about never change, and EmberOps's copy of the Comment follows the edit on the next sync.
 - **Deal fields.** A deal shows its close date and how many days it has sat in its stage. A lost deal carries why it was lost.
 - **Forecast** (`/crm/forecast`). Open deals by the month they are expected to close, with a bucket for those past their date and
   those with none. Every stage has a chance of closing (New 10, Screening 20, Meeting 40, Proposal 60, Customer 90), and the
