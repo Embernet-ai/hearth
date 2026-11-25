@@ -173,6 +173,7 @@ func (s *Service) SetLostReason(ctx context.Context, orgID string, actor core.Su
 // Followup is something owed to a company, a contact, or a deal, and when.
 type Followup struct {
 	ID           string
+	Kind         string
 	Title        string
 	Body         string
 	Status       string
@@ -189,6 +190,8 @@ type Followup struct {
 
 // FollowupParams is a new follow-up.
 type FollowupParams struct {
+	// Kind is todo (the default), call, email or meeting.
+	Kind     string
 	Title    string
 	Body     string
 	DueAt    *time.Time
@@ -197,7 +200,13 @@ type FollowupParams struct {
 }
 
 // FollowupQuery filters the queue. Empty means everybody's, open and done, which is the sales default.
+// FollowupKinds are the kinds of follow-up, in the order a form offers them.
+var FollowupKinds = []string{"todo", "call", "email", "meeting"}
+
+func validFollowupKind(k string) bool { return contains(FollowupKinds, k) }
+
 type FollowupQuery struct {
+	Kind     string // one of FollowupKinds, or "" for all
 	Assignee string // a person id, or "none"
 	Status   string // "open", "done", or "" for both
 	Due      string // "overdue", "today", "week", or ""
@@ -238,6 +247,12 @@ func (s *Service) AddFollowup(ctx context.Context, orgID string, actor core.Subj
 	if !validTarget(p.Target.Type) {
 		return nil, fmt.Errorf("%w: a follow-up is about a company, a contact, or a deal", ErrInvalid)
 	}
+	if p.Kind == "" {
+		p.Kind = "todo"
+	}
+	if !validFollowupKind(p.Kind) {
+		return nil, fmt.Errorf("%w: %q is not a kind of follow-up", ErrInvalid, p.Kind)
+	}
 	if err := s.authz.Require(ctx, actor, p.Target, core.AccessEdit); err != nil {
 		return nil, err
 	}
@@ -248,7 +263,7 @@ func (s *Service) AddFollowup(ctx context.Context, orgID string, actor core.Subj
 	if err := s.checkOwner(ctx, orgID, assignee); err != nil {
 		return nil, err
 	}
-	f := &Followup{ID: uuid.NewString(), Title: p.Title, Body: strings.TrimSpace(p.Body), Status: "open",
+	f := &Followup{ID: uuid.NewString(), Kind: p.Kind, Title: p.Title, Body: strings.TrimSpace(p.Body), Status: "open",
 		DueAt: p.DueAt, AssigneeID: assignee, Target: p.Target}
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -256,9 +271,9 @@ func (s *Service) AddFollowup(ctx context.Context, orgID string, actor core.Subj
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	err = tx.QueryRow(ctx, `
-		INSERT INTO crm_followups (id, org_id, title, body, due_at, assignee_id, target_type, target_id, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING created_at`,
-		f.ID, orgID, f.Title, f.Body, f.DueAt, assignee, string(p.Target.Type), p.Target.ID, principal).Scan(&f.CreatedAt)
+		INSERT INTO crm_followups (id, org_id, title, body, due_at, assignee_id, target_type, target_id, created_by, kind)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING created_at`,
+		f.ID, orgID, f.Title, f.Body, f.DueAt, assignee, string(p.Target.Type), p.Target.ID, principal, p.Kind).Scan(&f.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("crm: add follow-up: %w", err)
 	}
@@ -341,6 +356,54 @@ func (s *Service) RescheduleFollowup(ctx context.Context, orgID string, actor co
 	return nil
 }
 
+// SnoozeFollowup pushes a follow-up out by days (1 to 365): from its due day, or from today when that has passed or there is
+// none, so a late one lands in the future and never in the past.
+func (s *Service) SnoozeFollowup(ctx context.Context, orgID string, actor core.Subjects, id string, days int) error {
+	if days < 1 || days > 365 {
+		return fmt.Errorf("%w: snooze by 1 to 365 days", ErrInvalid)
+	}
+	ref, err := s.followupTarget(ctx, orgID, id)
+	if err != nil {
+		return err
+	}
+	if err := s.authz.Require(ctx, actor, ref, core.AccessEdit); err != nil {
+		return ErrNotFound
+	}
+	_, err = s.db.Exec(ctx, `UPDATE crm_followups SET updated_at = now(),
+		due_at = GREATEST(date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', coalesce(due_at, '-infinity'::timestamptz)) + make_interval(days => $3)
+		WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL`, id, orgID, days)
+	if err != nil {
+		return fmt.Errorf("crm: snooze follow-up: %w", err)
+	}
+	return nil
+}
+
+// CompleteFollowups completes (or reopens) many follow-ups, each through the single write, so a follow-up the caller may not
+// edit is named and the rest go through.
+func (s *Service) CompleteFollowups(ctx context.Context, orgID string, actor core.Subjects, ids []string, done bool) (*BulkResult, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("%w: pick at least one follow-up", ErrInvalid)
+	}
+	if len(ids) > 500 {
+		return nil, fmt.Errorf("%w: at most 500 at a time", ErrInvalid)
+	}
+	res := &BulkResult{}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		if err := s.SetFollowupDone(ctx, orgID, actor, id, done); err != nil {
+			res.Failed = append(res.Failed, BulkFailure{ID: id, Why: err.Error()})
+			continue
+		}
+		res.Done++
+	}
+	return res, nil
+}
+
 // DeleteFollowup removes a follow-up.
 func (s *Service) DeleteFollowup(ctx context.Context, orgID string, actor core.Subjects, id string) error {
 	ref, err := s.followupTarget(ctx, orgID, id)
@@ -378,6 +441,10 @@ func (s *Service) Followups(ctx context.Context, orgID string, actor core.Subjec
 		args = append(args, q.Status)
 		where += fmt.Sprintf(" AND f.status = $%d", len(args))
 	}
+	if validFollowupKind(q.Kind) {
+		args = append(args, q.Kind)
+		where += fmt.Sprintf(" AND f.kind = $%d", len(args))
+	}
 	where += ownerFilter("f.assignee_id", q.Assignee, &args)
 	now := time.Now()
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -406,7 +473,7 @@ func (s *Service) Followups(ctx context.Context, orgID string, actor core.Subjec
 	}
 	args = append(args, limit, q.Offset)
 	rows, err := s.db.Query(ctx, fmt.Sprintf(`
-		SELECT f.id::text, f.title, f.body, f.status, f.due_at, coalesce(f.assignee_id::text,''), coalesce(p.display_name,''),
+		SELECT f.id::text, f.kind, f.title, f.body, f.status, f.due_at, coalesce(f.assignee_id::text,''), coalesce(p.display_name,''),
 		       f.target_type, f.target_id::text, coalesce(de.name, co.name, ct.name, ''), f.completed_at, f.created_at `+
 		followupFrom+where+`
 		ORDER BY (f.status = 'done'), f.due_at NULLS LAST, f.created_at, f.id LIMIT $%d OFFSET $%d`, len(args)-1, len(args)), args...)
@@ -418,7 +485,7 @@ func (s *Service) Followups(ctx context.Context, orgID string, actor core.Subjec
 	for rows.Next() {
 		f := &Followup{}
 		var tt string
-		if err := rows.Scan(&f.ID, &f.Title, &f.Body, &f.Status, &f.DueAt, &f.AssigneeID, &f.AssigneeName,
+		if err := rows.Scan(&f.ID, &f.Kind, &f.Title, &f.Body, &f.Status, &f.DueAt, &f.AssigneeID, &f.AssigneeName,
 			&tt, &f.Target.ID, &f.TargetName, &f.CompletedAt, &f.CreatedAt); err != nil {
 			return nil, 0, fmt.Errorf("crm: scan follow-up: %w", err)
 		}
@@ -591,6 +658,8 @@ type Desk interface {
 	RescheduleFollowup(ctx context.Context, orgID string, actor core.Subjects, id string, due *time.Time, assignee string) error
 	DeleteFollowup(ctx context.Context, orgID string, actor core.Subjects, id string) error
 	UpdateActivity(ctx context.Context, orgID string, actor core.Subjects, id string, e ActivityEdit) (*Activity, error)
+	SnoozeFollowup(ctx context.Context, orgID string, actor core.Subjects, id string, days int) error
+	CompleteFollowups(ctx context.Context, orgID string, actor core.Subjects, ids []string, done bool) (*BulkResult, error)
 	Followups(ctx context.Context, orgID string, actor core.Subjects, q FollowupQuery) ([]*Followup, int, error)
 	Forecast(ctx context.Context, orgID string, actor core.Subjects, owner string, now time.Time) (*Forecast, error)
 	SalesReport(ctx context.Context, orgID string, actor core.Subjects, from, to time.Time, owner string) (*SalesReport, error)

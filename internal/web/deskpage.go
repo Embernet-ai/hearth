@@ -32,6 +32,7 @@ type deskData struct {
 	Followups []*crm.Followup
 	Total     int
 	Who       string
+	Kind      string
 	Status    string
 	Due       string
 	Forecast  *crm.Forecast
@@ -67,7 +68,9 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /crm/followups", s.followupsPage)
 	mux.HandleFunc("GET /crm/followups.csv", s.followupsCSV)
 	mux.HandleFunc("POST /crm/followups", s.addFollowup)
+	mux.HandleFunc("POST /crm/followups/bulk", s.bulkFollowups)
 	mux.HandleFunc("POST /crm/followups/{id}/done", s.doneFollowup)
+	mux.HandleFunc("POST /crm/followups/{id}/snooze", s.snoozeFollowup)
 	mux.HandleFunc("POST /crm/followups/{id}/due", s.dueFollowup)
 	mux.HandleFunc("POST /crm/followups/{id}/delete", s.deleteFollowup)
 	mux.HandleFunc("GET /crm/forecast", s.forecastPage)
@@ -155,7 +158,7 @@ func ownerParam(r *http.Request) string {
 func (s *Server) followupQuery(r *http.Request) (crm.FollowupQuery, deskData) {
 	v := r.URL.Query()
 	who := v.Get("who")
-	q := crm.FollowupQuery{Status: v.Get("status"), Due: v.Get("due"), Assignee: who}
+	q := crm.FollowupQuery{Status: v.Get("status"), Due: v.Get("due"), Assignee: who, Kind: v.Get("kind")}
 	if who == "me" {
 		q.Assignee = auth.From(r.Context()).PrincipalID
 	}
@@ -170,7 +173,7 @@ func (s *Server) followupQuery(r *http.Request) (crm.FollowupQuery, deskData) {
 		pg = 1
 	}
 	q.Limit, q.Offset = pageSize, (pg-1)*pageSize
-	return q, deskData{Who: who, Status: v.Get("status"), Due: q.Due}
+	return q, deskData{Who: who, Status: v.Get("status"), Due: q.Due, Kind: q.Kind}
 }
 
 func (s *Server) followupsPage(w http.ResponseWriter, r *http.Request) {
@@ -235,7 +238,7 @@ func (s *Server) addFollowup(w http.ResponseWriter, r *http.Request) {
 		assignee = id.PrincipalID
 	}
 	_, err := desk.AddFollowup(r.Context(), id.OrgID, id.Subjects, crm.FollowupParams{
-		Title: r.FormValue("title"), Body: r.FormValue("body"), DueAt: dayOf(r.FormValue("due")), Assignee: assignee, Target: ref})
+		Kind: r.FormValue("kind"), Title: r.FormValue("title"), Body: r.FormValue("body"), DueAt: dayOf(r.FormValue("due")), Assignee: assignee, Target: ref})
 	if err != nil {
 		s.crmFail(w, r, err, "you cannot add a follow-up there")
 		return
@@ -270,6 +273,51 @@ func (s *Server) doneFollowup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, localBack(r.FormValue("back"), "/crm/followups"), http.StatusSeeOther)
+}
+
+func (s *Server) snoozeFollowup(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	days, _ := strconv.Atoi(r.FormValue("days"))
+	if err := desk.SnoozeFollowup(r.Context(), id.OrgID, id.Subjects, r.PathValue("id"), days); err != nil {
+		s.crmFail(w, r, err, "you cannot change that follow-up")
+		return
+	}
+	http.Redirect(w, r, localBack(r.FormValue("back"), "/crm/followups"), http.StatusSeeOther)
+}
+
+func (s *Server) bulkFollowups(w http.ResponseWriter, r *http.Request) {
+	desk, ok := s.salesAccess(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	res, err := desk.CompleteFollowups(r.Context(), id.OrgID, id.Subjects, r.Form["ids"], r.FormValue("done") != "0")
+	if err != nil {
+		s.crmFail(w, r, err, "you cannot change those")
+		return
+	}
+	back := localBack(r.FormValue("back"), "/crm/followups")
+	msg := fmt.Sprintf("Changed %d.", res.Done)
+	if n := len(res.Failed); n > 0 {
+		msg += fmt.Sprintf(" %d could not be changed.", n)
+	}
+	sep := "?"
+	if strings.Contains(back, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, back+sep+"notice="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (s *Server) dueFollowup(w http.ResponseWriter, r *http.Request) {

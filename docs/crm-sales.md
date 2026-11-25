@@ -33,7 +33,7 @@ the rest of the group is offered to the Sales team and to super admins only, and
 - **Everybody's by default.** The board, the follow-up queue, the forecast and the report start with every deal and every owner.
   A filter narrows them to one person, "Mine" included, and it is never what a page opens with. A super admin sees every record
   whether or not they are on the Sales team.
-- **Follow-ups** (`/crm/followups`). What the team owes people: a title, a day, who has it, and the company, person or deal it is
+- **Follow-ups** (`/crm/followups`). A follow-up is a to do, a call, an email, or a meeting, and the queue filters by kind. Push one out with +1d, +3d or +7d (from its due day, or from today when it is late), tick many and mark them done together. What the team owes people: a title, a day, who has it, and the company, person or deal it is
   about. Add one from any record, see them on the record, and work the queue by overdue, today, or the next seven days. The person who
   has one is told when it is due within a day, once a day, in their inbox, and the notice opens the record.
 - **Timeline.** Filter a record's timeline to notes, calls, meetings or emails with one click, and edit any entry (what it says, when it happened, a call's direction, outcome and length). The author may, and so may anybody who can edit every record the entry is about. Its kind and what it is about never change, and EmberOps's copy of the Comment follows the edit on the next sync.

@@ -862,3 +862,85 @@ func TestCustomPropertiesOnCompaniesContactsAndDeals(t *testing.T) {
 		t.Errorf("company fields = %d, want the one made for companies", len(defs))
 	}
 }
+
+func TestFollowupKindsSnoozeAndBulkComplete(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	d, err := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Kinds"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().AddDate(0, 0, -5)
+	soon := time.Now().AddDate(0, 0, 2)
+	mk := func(kind, title string, due *time.Time) *crm.Followup {
+		fu, err := f.svc.AddFollowup(ctx, f.org, alice, crm.FollowupParams{Kind: kind, Title: title, DueAt: due, Target: d.Ref()})
+		if err != nil {
+			t.Fatalf("%s: %v", title, err)
+		}
+		return fu
+	}
+	call, mail, todo, nodate := mk("call", "Ring", &past), mk("email", "Write", &soon), mk("", "Plain", nil), mk("meeting", "Demo", nil)
+	if todo.Kind != "todo" || call.Kind != "call" {
+		t.Errorf("kinds = %q and %q, want todo by default and call", todo.Kind, call.Kind)
+	}
+	if _, err := f.svc.AddFollowup(ctx, f.org, alice, crm.FollowupParams{Kind: "carrier pigeon", Title: "x", Target: d.Ref()}); !errors.Is(err, crm.ErrInvalid) {
+		t.Errorf("an unknown kind: got %v, want ErrInvalid", err)
+	}
+	if rows, n, _ := f.svc.Followups(ctx, f.org, bob, crm.FollowupQuery{Kind: "call"}); n != 1 || rows[0].ID != call.ID {
+		t.Errorf("the calls = %d, want only Ring", n)
+	}
+	// Snooze: a late one lands in the future, from today; one still ahead moves from its own day; none starts from today.
+	if err := f.svc.SnoozeFollowup(ctx, f.org, bob, call.ID, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.SnoozeFollowup(ctx, f.org, bob, mail.ID, 7); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.SnoozeFollowup(ctx, f.org, bob, nodate.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	due := map[string]time.Time{}
+	rows, _, _ := f.svc.Followups(ctx, f.org, bob, crm.FollowupQuery{})
+	for _, r := range rows {
+		if r.DueAt != nil {
+			due[r.Title] = *r.DueAt
+		}
+	}
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	if got := due["Ring"]; !got.Equal(today.AddDate(0, 0, 3)) {
+		t.Errorf("a late follow-up snoozed 3 days is due %v, want %v (from today)", got, today.AddDate(0, 0, 3))
+	}
+	if got := due["Write"]; got.Sub(soon).Round(time.Second) != 7*24*time.Hour {
+		t.Errorf("a follow-up ahead snoozed 7 days is due %v, want 7 days after %v", got, soon)
+	}
+	if got := due["Demo"]; !got.Equal(today.AddDate(0, 0, 1)) {
+		t.Errorf("one with no date snoozed a day is due %v, want tomorrow", got)
+	}
+	for _, days := range []int{0, -1, 366} {
+		if err := f.svc.SnoozeFollowup(ctx, f.org, bob, call.ID, days); !errors.Is(err, crm.ErrInvalid) {
+			t.Errorf("snooze by %d: got %v, want ErrInvalid", days, err)
+		}
+	}
+	if err := f.svc.SnoozeFollowup(ctx, f.org, out, call.ID, 1); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("an outsider snoozing: got %v, want ErrNotFound", err)
+	}
+	// Bulk complete.
+	res, err := f.svc.CompleteFollowups(ctx, f.org, bob, []string{call.ID, mail.ID, todo.ID, call.ID, uuid.NewString()}, true)
+	if err != nil || res.Done != 3 || len(res.Failed) != 1 {
+		t.Fatalf("bulk done = %+v (%v), want 3 done and the stranger named", res, err)
+	}
+	if _, n, _ := f.svc.Followups(ctx, f.org, bob, crm.FollowupQuery{Status: "open"}); n != 1 {
+		t.Errorf("open after the bulk = %d, want only the meeting", n)
+	}
+	if res, _ := f.svc.CompleteFollowups(ctx, f.org, out, []string{nodate.ID}, true); res.Done != 0 || len(res.Failed) != 1 {
+		t.Errorf("an outsider completed %d", res.Done)
+	}
+	for name, e := range map[string]error{"none": func() error { _, err := f.svc.CompleteFollowups(ctx, f.org, bob, nil, true); return err }()} {
+		if !errors.Is(e, crm.ErrInvalid) {
+			t.Errorf("%s: got %v, want ErrInvalid", name, e)
+		}
+	}
+}

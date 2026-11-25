@@ -185,6 +185,7 @@
     {#each dot.Desk.Followups as f (f.ID)}
       <li  data-followup={f.ID}>
         <span  class={"tag" + (f.Overdue ? " overdue" : "")}>{f.Status === "done" ? "done" : f.DueAt ? "due " + f.DueAt.slice(0, 10) : "no date"}</span>
+        {#if f.Kind && f.Kind !== "todo"}<span  class="tag"  data-kind={f.Kind}>{f.Kind}</span>{/if}
         <strong>{f.Title}</strong>
         <span  class="muted small">{f.AssigneeName}</span>
         {#if f.Body}<div  class="muted small"  style="white-space:pre-wrap">{f.Body}</div>{/if}
@@ -206,6 +207,7 @@
 <form  method="post"  action="/crm/followups"  class="row wrap"  data-add-followup>
   <input  type="hidden"  name="target_type"  value={dot.FavoriteType || (dot.Deal ? "deal" : dot.Contact ? "contact" : "company")}>
   <input  type="hidden"  name="target_id"  value={dot.Deal?.ID || dot.Contact?.ID || dot.Company?.ID}>
+  <select  name="kind"  aria-label="Kind"><option  value="todo">To do</option><option  value="call">Call</option><option  value="email">Email</option><option  value="meeting">Meeting</option></select>
   <input  name="title"  placeholder="Follow up on"  style="min-width:14rem"  aria-label="Follow-up"  required>
   <input  name="due"  type="date"  aria-label="Due"  value={dot.Desk.Today}>
   <select  name="assignee"  aria-label="Assigned to">

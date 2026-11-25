@@ -645,3 +645,48 @@ func TestCustomFieldsThroughTheRoutes(t *testing.T) {
 		t.Errorf("delete = %d, want 303", w.Code)
 	}
 }
+
+func TestFollowupKindSnoozeAndBulkThroughTheRoutes(t *testing.T) {
+	f := newDeskFx(t)
+	mk := func(kind, title string) string {
+		if w := f.do(f.member, "POST", "/crm/followups", url.Values{"target_type": {"deal"}, "target_id": {f.deal}, "title": {title}, "kind": {kind}, "due": {"2000-01-01"}}); w.Code != http.StatusSeeOther {
+			t.Fatalf("add %s = %d", title, w.Code)
+		}
+		return ""
+	}
+	mk("call", "Ring")
+	mk("email", "Write")
+	var env struct {
+		Page struct {
+			Desk struct {
+				Followups []struct{ ID, Kind, Title string }
+			}
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/crm/followups?kind=call", nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.Followups) != 1 || env.Page.Desk.Followups[0].Kind != "call" {
+		t.Fatalf("calls = %+v (%v)", env, err)
+	}
+	if w := f.do(f.member, "POST", "/crm/followups", url.Values{"target_type": {"deal"}, "target_id": {f.deal}, "title": {"x"}, "kind": {"smoke signal"}}); w.Code != http.StatusBadRequest {
+		t.Errorf("an unknown kind = %d, want 400", w.Code)
+	}
+	id := env.Page.Desk.Followups[0].ID
+	if w := f.do(f.out, "POST", "/crm/followups/"+id+"/snooze", url.Values{"days": {"1"}}); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider snoozing = %d, want 404", w.Code)
+	}
+	if w := f.do(f.member, "POST", "/crm/followups/"+id+"/snooze", url.Values{"days": {"0"}}); w.Code != http.StatusBadRequest {
+		t.Errorf("snooze by 0 = %d, want 400", w.Code)
+	}
+	if w := f.do(f.member, "POST", "/crm/followups/"+id+"/snooze", url.Values{"days": {"3"}, "back": {"/crm/followups?kind=call"}}); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/crm/followups?kind=call" {
+		t.Errorf("snooze = %d to %q", w.Code, w.Header().Get("Location"))
+	}
+	if w := f.do(f.out, "POST", "/crm/followups/bulk", url.Values{"ids": {id}}); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider's bulk = %d, want 404", w.Code)
+	}
+	if w := f.do(f.member, "POST", "/crm/followups/bulk", url.Values{}); w.Code != http.StatusBadRequest {
+		t.Errorf("a bulk with nothing ticked = %d, want 400", w.Code)
+	}
+	w := f.do(f.member, "POST", "/crm/followups/bulk", url.Values{"ids": {id}, "done": {"1"}})
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "notice=Changed+1.") {
+		t.Errorf("bulk done = %d to %q", w.Code, w.Header().Get("Location"))
+	}
+}
