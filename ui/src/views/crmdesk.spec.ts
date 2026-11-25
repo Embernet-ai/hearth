@@ -236,3 +236,14 @@ describe('the deals board', () => {
     expect(d.querySelector('[data-chip="month"]')!.getAttribute('href')).toMatch(/closefrom=\d{4}-\d{2}-01&closeto=\d{4}-\d{2}-\d{2}/);
   });
 });
+
+describe('exporting the report', () => {
+  test('offers each table as a CSV over the same period and owner', () => {
+    const empty = { OpenCount: 0, Open: [], Weighted: [], WonCount: 0, Won: [], LostCount: 0, Lost: [], WinRate: -1, AvgWon: [], AvgCycleDays: 0, Pipeline: [], StageAge: [], LostReasons: [], Owners: [], Activity: [], Created: [] };
+    const d = draw('salesreports', page({ Owners: [], OwnerSel: 'p1', Desk: { From: '2026-11-01', To: '2026-11-30', Report: empty } }));
+    const links = [...d.querySelectorAll('[data-report-csv] a[data-csv]')].map((a) => a.getAttribute('data-csv'));
+    expect(links).toEqual(['owners', 'summary', 'stages', 'activity', 'lost', 'age', 'created']);
+    const href = d.querySelector('a[data-csv="lost"]')!.getAttribute('href')!;
+    expect(href).toBe('/crm/reports.csv?section=lost&from=2026-11-01&to=2026-11-30&owner=p1');
+  });
+});

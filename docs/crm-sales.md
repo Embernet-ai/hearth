@@ -45,7 +45,7 @@ the rest of the group is offered to the Sales team and to super admins only, and
   those with none. Every stage has a chance of closing (New 10, Screening 20, Meeting 40, Proposal 60, Customer 90), and the
   weighted value is the amount times that chance. Won this month sits beside it. A CSV of the lot.
 - **Sales reports** (`/crm/reports`). For any period: the pipeline by stage, what was won and lost, win rate, average won deal, days
-  from made to won, each person's pipeline and results, what each person logged (notes, calls, meetings, emails), and deals made by month.
+  from made to won, each person's pipeline and results, what each person logged (notes, calls, meetings, emails), and deals made by month. Export any table of it as a CSV (by person, totals, pipeline by stage, activity, why deals were lost, time in stage, deals made by month) over the same period and owner.
 - **Bulk change.** Tick rows on the deals table, the companies list or the contacts list and set an owner, move deals to a stage,
   or add a tag to companies. Each record goes through the same write a single edit uses, so a record the person may not edit is
   left alone and named, and every change reaches EmberOps through the sync like any other.

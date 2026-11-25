@@ -5,6 +5,7 @@ package web
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,7 +178,7 @@ func (f *deskFx) do(as, method, path string, form url.Values) *httptest.Response
 
 func TestDeskRoutesAreForSalesAndSuperAdminsOnly(t *testing.T) {
 	f := newDeskFx(t)
-	gets := []string{"/crm/properties", "/crm/duplicates", "/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
+	gets := []string{"/crm/reports.csv", "/crm/properties", "/crm/duplicates", "/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
 	for _, p := range gets {
 		if w := f.do(f.out, "GET", p, nil); w.Code != http.StatusNotFound {
 			t.Errorf("GET %s as an outsider = %d, want 404", p, w.Code)
@@ -779,5 +780,55 @@ func TestTheBoardWeighsEachColumnAndNamesItsNarrowing(t *testing.T) {
 	}
 	if w := f.do(f.out, "GET", "/deals?noclose=1", nil); w.Code != http.StatusOK || strings.Contains(w.Body.String(), `"Count":1`) {
 		t.Errorf("an outsider's board = %d %q", w.Code, w.Body.String()[:min(len(w.Body.String()), 120)])
+	}
+}
+
+func TestTheSalesReportAsCSV(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	svc := f.srv.sales.(*crm.Service)
+	won, err := svc.CreateDeal(ctx, f.org, f.subj(f.member), crm.Deal{Name: "=Won deal", AmountCents: 123456})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.MoveDeal(ctx, f.org, f.subj(f.member), won.ID, crm.StageWon, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AddActivity(ctx, f.org, f.subj(f.member), crm.Activity{Kind: crm.ActCall, Body: "rang", Targets: []core.Ref{won.Ref()}}); err != nil {
+		t.Fatal(err)
+	}
+	get := func(who, q string) (int, [][]string) {
+		w := f.do(who, "GET", "/crm/reports.csv"+q, nil)
+		rows, _ := csv.NewReader(strings.NewReader(w.Body.String())).ReadAll()
+		return w.Code, rows
+	}
+	code, rows := get(f.other, "?section=summary&from=2000-01-01&to=2100-01-01")
+	if code != http.StatusOK || len(rows) != 2 || rows[1][2] != "1" || rows[1][5] != "1" || rows[1][6] != "USD 1234.56" {
+		t.Fatalf("summary = %d %v, want 1 open (the fixture deal), 1 won worth USD 1234.56", code, rows)
+	}
+	for section, header := range map[string]string{"stages": "Stage", "activity": "Person", "lost": "Reason", "age": "Stage", "created": "Month", "": "Person"} {
+		q := "?from=2000-01-01&to=2100-01-01"
+		if section != "" {
+			q += "&section=" + section
+		}
+		if code, rows := get(f.other, q); code != http.StatusOK || len(rows) == 0 || rows[0][0] != header {
+			t.Errorf("section %q = %d %v, want a table starting with %q", section, code, rows, header)
+		}
+	}
+	if _, rows := get(f.other, "?section=activity&from=2000-01-01&to=2100-01-01"); len(rows) != 2 || rows[1][2] != "1" {
+		t.Errorf("activity = %v, want one person with one call", rows)
+	}
+	if code, _ := get(f.other, "?section=everything"); code != http.StatusBadRequest {
+		t.Errorf("a section that is not there = %d, want 400", code)
+	}
+	if _, rows := get(f.other, "?section=stages&owner=none&from=2000-01-01&to=2100-01-01"); len(rows) == 0 {
+		t.Error("filtering the export by owner returned nothing, not even a header")
+	}
+	// An outsider is refused, and a super admin outside the team gets the lot.
+	if code, _ := get(f.out, ""); code != http.StatusNotFound {
+		t.Errorf("an outsider's export = %d, want 404", code)
+	}
+	if code, rows := get(f.admin, "?section=summary&from=2000-01-01&to=2100-01-01"); code != http.StatusOK || rows[1][5] != "1" {
+		t.Errorf("a super admin's export = %d %v", code, rows)
 	}
 }
