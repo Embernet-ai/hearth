@@ -1047,3 +1047,47 @@ func TestListsFilterOnACustomField(t *testing.T) {
 		t.Error("no ids gave values")
 	}
 }
+
+func TestDealsFilterByExpectedCloseDate(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	day := func(s string) *time.Time { d, _ := time.Parse("2006-01-02", s); return &d }
+	mk := func(name, close string) {
+		d := crm.Deal{Name: name}
+		if close != "" {
+			d.CloseDate = day(close)
+		}
+		if _, err := f.svc.CreateDeal(ctx, f.org, alice, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("Early", "2026-12-01")
+	mk("Late", "2026-12-31")
+	mk("Next month", "2027-01-15")
+	mk("Undated", "")
+	n := func(who core.Subjects, q crm.ListQuery) int {
+		_, c, err := f.svc.Deals(ctx, f.org, who, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	if c := n(bob, crm.ListQuery{CloseFrom: day("2026-12-01"), CloseTo: day("2026-12-31")}); c != 2 {
+		t.Errorf("closing in December (both ends included) = %d, want 2", c)
+	}
+	if c := n(bob, crm.ListQuery{CloseFrom: day("2026-12-15")}); c != 2 {
+		t.Errorf("closing from the 15th = %d, want 2", c)
+	}
+	if c := n(bob, crm.ListQuery{CloseTo: day("2026-12-01")}); c != 1 {
+		t.Errorf("closing by the 1st = %d, want 1", c)
+	}
+	if c := n(bob, crm.ListQuery{NoCloseDate: true}); c != 1 {
+		t.Errorf("no close date = %d, want 1", c)
+	}
+	if c := n(out, crm.ListQuery{NoCloseDate: true}); c != 0 {
+		t.Errorf("an outsider's list = %d, want 0", c)
+	}
+}

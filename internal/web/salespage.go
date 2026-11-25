@@ -28,6 +28,9 @@ type dealCol struct {
 	Deals []*crm.Deal
 	Total int64
 	Count int
+	// Probability is the chance a deal in this stage closes, in percent, and Weighted the column's total by that chance.
+	Probability int
+	Weighted    int64
 }
 
 // pager is the footer of a paged list.
@@ -106,6 +109,7 @@ func listQueryOf(r *http.Request) crm.ListQuery {
 		Type: v.Get("type"), Tag: v.Get("tag"), PropKey: v.Get("pk"), PropValue: v.Get("pv"),
 		Open: v.Get("open") == "1", Overdue: v.Get("overdue") == "1",
 		ClosedFrom: day("closedfrom"), ClosedTo: day("closedto"),
+		CloseFrom: day("closefrom"), CloseTo: day("closeto"), NoCloseDate: v.Get("noclose") == "1",
 		Sort: v.Get("sort"), Desc: v.Get("desc") == "1", Group: v.Get("group"),
 		Limit: pageSize, Offset: (page - 1) * pageSize,
 	}
@@ -465,7 +469,16 @@ func (s *Server) listDeals(w http.ResponseWriter, r *http.Request) {
 	id := auth.From(r.Context())
 	q := listQueryOf(r)
 	mode := r.URL.Query().Get("view")
-	p := page{Title: "Deals", SalesOn: true, SearchText: q.Search, Owners: s.owners(r),
+	view := "all"
+	switch {
+	case q.Overdue:
+		view = "overdue"
+	case q.NoCloseDate:
+		view = "noclose"
+	case q.CloseFrom != nil || q.CloseTo != nil:
+		view = "month"
+	}
+	p := page{Title: "Deals", SalesOn: true, Filter: view, SearchText: q.Search, Owners: s.owners(r),
 		OwnerSel: q.Owner, DealStages: crm.Stages, DealStage: q.Stage, ViewMode: mode,
 		ExportURL: exportLink(r, "/deals.csv")}
 	if mode == "table" {
@@ -491,7 +504,7 @@ func (s *Server) listDeals(w http.ResponseWriter, r *http.Request) {
 		}
 		cols := map[string]*dealCol{}
 		for _, st := range crm.Stages {
-			c := &dealCol{Stage: st, Label: crm.StageLabel(st)}
+			c := &dealCol{Stage: st, Label: crm.StageLabel(st), Probability: crm.Probability(st)}
 			cols[st] = c
 		}
 		for _, d := range rows {
@@ -501,6 +514,7 @@ func (s *Server) listDeals(w http.ResponseWriter, r *http.Request) {
 			c.Count++
 		}
 		for _, st := range crm.Stages {
+			cols[st].Weighted = cols[st].Total * int64(cols[st].Probability) / 100
 			p.DealCols = append(p.DealCols, *cols[st])
 		}
 	}

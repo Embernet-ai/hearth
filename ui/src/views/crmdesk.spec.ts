@@ -217,3 +217,22 @@ describe('filtering a list by a custom field', () => {
     expect(d.querySelector('select[data-field-filter]')).toBeNull();
   });
 });
+
+describe('the deals board', () => {
+  const base = { SalesOn: true, SalesNav: true, Companies: [], Owners: [], DealStages: ['new'], SortLinks: {}, ViewMode: 'board', SearchText: 'acme', OwnerSel: 'p1' };
+  test('shows each column weighted by its stage chance, and none for a closed stage', () => {
+    const d = draw('deals', page({ ...base, Filter: 'all', DealCols: [{ Stage: 'proposal', Label: 'Proposal', Count: 2, Total: 200000, Probability: 60, Weighted: 120000, Deals: [] }, { Stage: 'won', Label: 'Won', Count: 1, Total: 5000, Probability: 100, Weighted: 5000, Deals: [] }] }));
+    expect(d.querySelectorAll('[data-weighted]').length).toBe(1);
+    expect(d.querySelector('[data-weighted]')?.textContent).toContain('60% chance');
+  });
+  test('has chips that narrow it and keep the search and owner, the one in use lit', () => {
+    const d = draw('deals', page({ ...base, Filter: 'overdue', DealCols: [] }));
+    expect(d.querySelector('[data-chip="overdue"].on')).not.toBeNull();
+    expect(d.querySelector('[data-chip="all"].on')).toBeNull();
+    const href = d.querySelector('[data-chip="noclose"]')!.getAttribute('href')!;
+    expect(href).toContain('q=acme');
+    expect(href).toContain('owner=p1');
+    expect(href).toContain('noclose=1');
+    expect(d.querySelector('[data-chip="month"]')!.getAttribute('href')).toMatch(/closefrom=\d{4}-\d{2}-01&closeto=\d{4}-\d{2}-\d{2}/);
+  });
+});
