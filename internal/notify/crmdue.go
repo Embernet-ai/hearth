@@ -14,7 +14,7 @@ import (
 // restart tells nobody twice.
 func (f *Fanout) handleFollowupsDue(ctx context.Context, j *jobs.Job) error {
 	rows, err := f.db.Query(ctx, `
-		SELECT f.id::text, f.title, f.assignee_id::text, f.due_at, f.target_type, f.target_id::text
+		SELECT f.id::text, f.title, f.assignee_id::text, f.due_at, f.target_type, f.target_id::text, f.kind
 		FROM crm_followups f
 		WHERE f.org_id = $1 AND f.deleted_at IS NULL AND f.status = 'open'
 		  AND f.assignee_id IS NOT NULL AND f.due_at IS NOT NULL
@@ -24,13 +24,13 @@ func (f *Fanout) handleFollowupsDue(ctx context.Context, j *jobs.Job) error {
 		return fmt.Errorf("notify: follow-up sweep: %w", err)
 	}
 	type due struct {
-		id, title, assignee, tt, tid string
-		at                           time.Time
+		id, title, assignee, tt, tid, kind string
+		at                                 time.Time
 	}
 	var list []due
 	for rows.Next() {
 		var d due
-		if err := rows.Scan(&d.id, &d.title, &d.assignee, &d.at, &d.tt, &d.tid); err != nil {
+		if err := rows.Scan(&d.id, &d.title, &d.assignee, &d.at, &d.tt, &d.tid, &d.kind); err != nil {
 			rows.Close()
 			return fmt.Errorf("notify: scan follow-up: %w", err)
 		}
@@ -44,7 +44,7 @@ func (f *Fanout) handleFollowupsDue(ctx context.Context, j *jobs.Job) error {
 	for _, d := range list {
 		created, err := f.svc.Deliver(ctx, Delivery{
 			OrgID: j.OrgID, PrincipalID: d.assignee, Reason: ReasonDueSoon,
-			Ref: core.Ref{Type: core.EntityType(d.tt), ID: d.tid}, Title: "Follow up: " + d.title,
+			Ref: core.Ref{Type: core.EntityType(d.tt), ID: d.tid}, Title: followupLabel(d.kind) + d.title,
 			Excerpt:   dueExcerpt(d.at),
 			DedupeKey: "crmfu:" + d.id + ":" + today,
 		})
@@ -62,4 +62,17 @@ func (f *Fanout) handleFollowupsDue(ctx context.Context, j *jobs.Job) error {
 		RunAfter: time.Now().Add(time.Hour),
 	})
 	return err
+}
+
+// followupLabel is how a reminder starts: "Call: ", "Email: ", "Meeting: ", or "Follow up: " for a plain to do.
+func followupLabel(kind string) string {
+	switch kind {
+	case "call":
+		return "Call: "
+	case "email":
+		return "Email: "
+	case "meeting":
+		return "Meeting: "
+	}
+	return "Follow up: "
 }

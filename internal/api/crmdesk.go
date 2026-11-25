@@ -16,6 +16,7 @@ import (
 func (s *Service) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/followups", s.crmDesk(s.listFollowups))
 	mux.HandleFunc("POST /v1/followups", s.crmDesk(s.createFollowup))
+	mux.HandleFunc("POST /v1/followups/bulk", s.crmDesk(s.bulkFollowups))
 	mux.HandleFunc("PATCH /v1/followups/{id}", s.crmDesk(s.patchFollowup))
 	mux.HandleFunc("DELETE /v1/followups/{id}", s.crmDesk(s.deleteFollowup))
 	mux.HandleFunc("GET /v1/crm/forecast", s.crmDesk(s.forecast))
@@ -67,7 +68,7 @@ func amtsJSON(in []crm.Amt) []amtJSON {
 
 func followupJSON(f *crm.Followup) map[string]any {
 	out := map[string]any{
-		"id": f.ID, "title": f.Title, "body": f.Body, "status": f.Status, "overdue": f.Overdue,
+		"id": f.ID, "kind": f.Kind, "title": f.Title, "body": f.Body, "status": f.Status, "overdue": f.Overdue,
 		"assignee_id": nil, "assignee_name": f.AssigneeName, "due": nil, "completed_at": f.CompletedAt, "created_at": f.CreatedAt,
 		"target": map[string]any{"type": string(f.Target.Type), "id": f.Target.ID, "name": f.TargetName},
 	}
@@ -83,7 +84,7 @@ func followupJSON(f *crm.Followup) map[string]any {
 func (s *Service) listFollowups(w http.ResponseWriter, r *http.Request, d crm.Desk) {
 	c := from(r)
 	v := r.URL.Query()
-	q := crm.FollowupQuery{Assignee: v.Get("assignee"), Status: v.Get("status"), Due: v.Get("due"),
+	q := crm.FollowupQuery{Assignee: v.Get("assignee"), Status: v.Get("status"), Due: v.Get("due"), Kind: v.Get("kind"),
 		Limit: queryInt(r, "limit", 100, 500), Offset: queryInt(r, "offset", 0, 0)}
 	if q.Assignee == "me" {
 		q.Assignee = c.PrincipalID
@@ -107,12 +108,15 @@ func (s *Service) listFollowups(w http.ResponseWriter, r *http.Request, d crm.De
 }
 
 type followupBody struct {
+	Kind     *string `json:"kind"`
 	Title    *string `json:"title"`
 	Body     *string `json:"body"`
 	Due      *string `json:"due"`
 	Assignee *string `json:"assignee_id"`
 	Done     *bool   `json:"done"`
-	Target   *struct {
+	// SnoozeDays pushes the due day out by this many days (1 to 365), from the due day or from today when that has passed.
+	SnoozeDays *int `json:"snooze_days"`
+	Target     *struct {
 		Type string `json:"type"`
 		ID   string `json:"id"`
 	} `json:"target"`
@@ -152,6 +156,9 @@ func (s *Service) createFollowup(w http.ResponseWriter, r *http.Request, d crm.D
 	if b.Assignee != nil {
 		p.Assignee = *b.Assignee
 	}
+	if b.Kind != nil {
+		p.Kind = *b.Kind
+	}
 	f, err := d.AddFollowup(r.Context(), c.OrgID, c.Subjects, p)
 	if err != nil {
 		crmErr(w, err, "you cannot add a follow-up there")
@@ -190,6 +197,12 @@ func (s *Service) patchFollowup(w http.ResponseWriter, r *http.Request, d crm.De
 			}
 		}
 		if err := d.RescheduleFollowup(r.Context(), c.OrgID, c.Subjects, id, due, assignee); err != nil {
+			crmErr(w, err, "you cannot change that follow-up")
+			return
+		}
+	}
+	if b.SnoozeDays != nil {
+		if err := d.SnoozeFollowup(r.Context(), c.OrgID, c.Subjects, id, *b.SnoozeDays); err != nil {
 			crmErr(w, err, "you cannot change that follow-up")
 			return
 		}
@@ -527,4 +540,32 @@ func (s *Service) deleteProperty(w http.ResponseWriter, r *http.Request, d crm.D
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+}
+
+type followupBulkBody struct {
+	IDs  []string `json:"ids"`
+	Done *bool    `json:"done"`
+}
+
+func (s *Service) bulkFollowups(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	var b followupBulkBody
+	if err := decode(r, &b); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	done := true
+	if b.Done != nil {
+		done = *b.Done
+	}
+	res, err := d.CompleteFollowups(r.Context(), c.OrgID, c.Subjects, b.IDs, done)
+	if err != nil {
+		crmErr(w, err, "you cannot change those")
+		return
+	}
+	failed := make([]map[string]any, 0, len(res.Failed))
+	for _, f := range res.Failed {
+		failed = append(failed, map[string]any{"id": f.ID, "why": f.Why})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"changed": res.Done, "failed": failed})
 }

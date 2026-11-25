@@ -184,3 +184,21 @@ describe('custom fields', () => {
     expect(text(other)).toContain('Only an admin adds or removes fields.');
   });
 });
+
+describe('follow-up kinds, snooze and bulk', () => {
+  test('the queue shows each kind, offers snooze and a bulk action', () => {
+    const d = draw('followups', page({ Owners: [], Pager: null, Path: '/crm/followups', Desk: { Who: '', Status: 'open', Due: '', Kind: 'call', Today: '2026-11-24', Followups: [
+      { ID: 'f1', Kind: 'call', Title: 'Ring Dana', Status: 'open', DueAt: '2026-11-30T00:00:00Z', AssigneeName: 'Pat', Target: { Type: 'deal', ID: 'd1' }, TargetName: 'Big', TargetHref: '/deals/d1' }] } }));
+    expect(d.querySelector('[data-kind="call"]')).not.toBeNull();
+    expect(d.querySelector('[data-kind-filter="call"].on')).not.toBeNull();
+    expect(d.querySelectorAll('[data-snooze]').length).toBe(3);
+    expect(d.querySelector('form#followupbulk button[value="1"]')).not.toBeNull();
+    expect(d.querySelector('input[name="ids"][form="followupbulk"]')?.getAttribute('value')).toBe('f1');
+  });
+  test('the record form offers the kinds and the list shows a kind that is not a plain to do', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true,
+      Desk: { Today: '2026-11-24', Followups: [{ ID: 'f1', Kind: 'meeting', Title: 'Demo', Status: 'open', DueAt: '2026-11-30T00:00:00Z' }] } }));
+    expect(d.querySelectorAll('[data-add-followup] select[name="kind"] option').length).toBe(4);
+    expect(d.querySelector('[data-followup="f1"] [data-kind="meeting"]')).not.toBeNull();
+  });
+});

@@ -30,9 +30,10 @@ not a quietly empty record.
 | `POST /v1/activities` | `kind` (note, call, meeting or email), `title`, `body`, `occurred_at`, `direction` (inbound or outbound, for calls and emails), `disposition`, `duration_ms`, `targets` (a list of `{type: company, contact or deal, id}`) |
 | `PATCH /v1/activities/{id}` | `title`, `body`, `occurred_at`, `direction`, `disposition`, `duration_ms`. The kind and the records it is about do not change. For people who work sales; refused 404 to anybody else |
 | `GET /v1/{companies,contacts,deals}/{id}/activities` | the timeline, newest first |
-| `GET /v1/followups` | `assignee` (a person id, `me`, or `none`), `status` (`open`, `done`, `all`; open by default), `due` (`overdue`, `today`, `week`), `target_type` and `target_id`, `limit`, `offset`. Everybody's unless `assignee` says otherwise. Returns `{followups, total}` |
-| `POST /v1/followups` | `title`, `target {type: company, contact or deal, id}`, `due` (YYYY-MM-DD), `assignee_id` (the caller by default), `body` |
-| `PATCH /v1/followups/{id}` | `done` (true or false), `due` (an empty string clears it), `assignee_id` |
+| `GET /v1/followups` | `assignee` (a person id, `me`, or `none`), `status` (`open`, `done`, `all`; open by default), `kind`, `due` (`overdue`, `today`, `week`), `target_type` and `target_id`, `limit`, `offset`. Everybody's unless `assignee` says otherwise. Returns `{followups, total}` |
+| `POST /v1/followups/bulk` | `ids` (at most 500), `done` (true by default, false reopens). Answers `{changed, failed}` |
+| `POST /v1/followups` | `title`, `kind` (todo, call, email or meeting), `target {type: company, contact or deal, id}`, `due` (YYYY-MM-DD), `assignee_id` (the caller by default), `body` |
+| `PATCH /v1/followups/{id}` | `snooze_days` (1 to 365: from the due day, or from today when late), `done` (true or false), `due` (an empty string clears it), `assignee_id` |
 | `DELETE /v1/followups/{id}` | |
 | `GET /v1/crm/forecast` | `owner` (a person id, `me`, or `none`). Open deals weighted by stage chance, in buckets: `overdue`, each month, `none`; per owner; won this month |
 | `GET /v1/crm/reports` | `from`, `to` (YYYY-MM-DD, the last 30 days by default), `owner`. Pipeline by stage, won, lost, win rate, average won deal, days to win, owners, activity by person, deals made by month |

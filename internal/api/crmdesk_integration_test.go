@@ -273,3 +273,41 @@ func TestCustomPropertiesOverTheAPI(t *testing.T) {
 		t.Errorf("a bad date on a deal = %d, want 400", code)
 	}
 }
+
+func TestFollowupKindsSnoozeAndBulkOverTheAPI(t *testing.T) {
+	f := crmSetup(t)
+	t.Cleanup(func() {
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM crm_followups WHERE org_id=$1`, f.org)
+	})
+	alice, bob, carol := f.token(t, f.alice, "write"), f.token(t, f.bob, "write"), f.token(t, f.carol, "write")
+	_, deal, _ := f.call(t, alice, "POST", "/v1/deals", map[string]any{"name": "Kinds API"})
+	tgt := map[string]any{"type": "deal", "id": deal["id"]}
+	_, a, _ := f.call(t, alice, "POST", "/v1/followups", map[string]any{"title": "Ring", "kind": "call", "due": "2000-01-01", "target": tgt})
+	_, b, _ := f.call(t, alice, "POST", "/v1/followups", map[string]any{"title": "Plain", "target": tgt})
+	if a["kind"] != "call" || b["kind"] != "todo" {
+		t.Fatalf("kinds = %v and %v", a["kind"], b["kind"])
+	}
+	if code, _, _ := f.call(t, alice, "POST", "/v1/followups", map[string]any{"title": "x", "kind": "pigeon", "target": tgt}); code != http.StatusBadRequest {
+		t.Errorf("an unknown kind = %d, want 400", code)
+	}
+	if _, l, _ := f.call(t, bob, "GET", "/v1/followups?kind=call", nil); l["total"].(float64) != 1 {
+		t.Errorf("calls = %v, want 1", l["total"])
+	}
+	code, sn, _ := f.call(t, bob, "PATCH", "/v1/followups/"+a["id"].(string), map[string]any{"snooze_days": 3})
+	if code != http.StatusOK || sn["overdue"] != false {
+		t.Errorf("snooze = %d %v, want it out of overdue", code, sn)
+	}
+	if code, _, _ := f.call(t, bob, "PATCH", "/v1/followups/"+a["id"].(string), map[string]any{"snooze_days": 0}); code != http.StatusBadRequest {
+		t.Errorf("snooze by 0 = %d, want 400", code)
+	}
+	if code, _, _ := f.call(t, carol, "POST", "/v1/followups/bulk", map[string]any{"ids": []string{a["id"].(string)}}); code != http.StatusNotFound {
+		t.Errorf("bulk by a person outside sales = %d, want 404", code)
+	}
+	code, res, _ := f.call(t, bob, "POST", "/v1/followups/bulk", map[string]any{"ids": []string{a["id"].(string), b["id"].(string)}})
+	if code != http.StatusOK || res["changed"].(float64) != 2 {
+		t.Errorf("bulk = %d %v", code, res)
+	}
+	if code, _, _ := f.call(t, bob, "POST", "/v1/followups/bulk", map[string]any{"ids": []string{}}); code != http.StatusBadRequest {
+		t.Errorf("bulk with none = %d, want 400", code)
+	}
+}
