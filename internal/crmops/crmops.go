@@ -67,6 +67,11 @@ type Panel struct {
 	// Opportunity is the record's EmberOps Opportunity, the one a quotation is made from. Empty when it has none, or when
 	// the installation cannot write.
 	Opportunity string
+	// Customer is true when the record is an EmberOps Customer, so the orders and invoices below mean something even when
+	// they are empty.
+	Customer bool
+	Orders   []Order
+	Invoices []Invoice
 }
 
 // Service reads the panel.
@@ -153,6 +158,12 @@ func (s *Service) For(ctx context.Context, links []crm.EmberOpsLink, phones []st
 			filters = []emberops.Filter{emberops.F("quotation_to", l.Label), emberops.F("party_name", l.Name)}
 			if l.Label == "Customer" {
 				customers = append(customers, l.Name)
+				p.Customer = true
+				orders, invoices, err := s.Selling(ctx, l.Name, time.Now())
+				if err != nil {
+					return nil, err
+				}
+				p.Orders, p.Invoices = append(p.Orders, orders...), append(p.Invoices, invoices...)
 			}
 			if p.NewQuoteURL == "" {
 				p.NewQuoteURL = s.newQuote("", l.Label, l.Name)
