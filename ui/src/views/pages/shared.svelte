@@ -273,6 +273,13 @@
   {/if}
   {#if type === "company"}<input  name="add_tag"  placeholder="add a tag"  aria-label="Add a tag">{/if}
   <button  type="submit"  class="ghost small">Apply</button>
+  {#if type === "contact" && dot?.Desk?.MauticChoices?.length}
+    <span  class="muted small">Or enrol them in Mautic:</span>
+    <select  name="target"  aria-label="Segment or campaign"  data-enrol-target>
+      {#each dot.Desk.MauticChoices as c}<option  value={c.Kind + ':' + c.ID}>{c.Kind === 'segment' ? 'Segment' : 'Campaign'}: {c.Name}</option>{/each}
+    </select>
+    <button  type="submit"  formaction="/crm/mautic/enrol"  class="ghost small"  data-enrol>Enrol</button>
+  {/if}
 </form>
 {/if}
 {/snippet}
