@@ -103,7 +103,8 @@ type Server struct {
 	// EmberOps, where those pages are not offered.
 	sales crm.Sales
 	// crmOps reads EmberOps's quotes and call logs for a record. Nil when the installation does not run on EmberOps.
-	crmOps *crmops.Service
+	crmOps  *crmops.Service
+	opsNums opsCache
 	// crmMkt is the contact page's Mautic panel.
 	crmMkt *crmmarketing.Service
 	// crmForms is the contact page's form responses.

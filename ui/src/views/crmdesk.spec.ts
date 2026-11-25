@@ -74,6 +74,17 @@ describe('what EmberOps adds to a record', () => {
     expect(d.querySelector('[data-no-quotes]')?.textContent).toContain('No quotations yet. Create one from this deal.');
     expect(d.querySelector('form[data-quote-from-deal][action="/crm/quote"] input[name=opportunity]')?.getAttribute('value')).toBe('CRM-OPP-1');
   });
+  test('a customer shows its orders and invoices, or says where they start', () => {
+    const base = { Contact: { ID: 'c1', Name: 'Acme' }, Companies: [], Activities: [], Owners: [], Details: {}, SalesOn: true };
+    const full = draw('contact', page({ ...base, Desk: { Followups: [], Today: '2026-11-25', EmberOps: { Quotes: [], Calls: [], Customer: true,
+      Orders: [{ Name: 'SAL-ORD-1', Status: 'To Bill', Total: 5000, Currency: 'USD', Delivered: 40, Billed: 0, URL: 'https://ops.example/app/sales-order/SAL-ORD-1' }],
+      Invoices: [{ Name: 'SINV-1', Status: 'Overdue', Total: 3000, Outstanding: 1200.5, Currency: 'USD', Due: '2026-11-01', Overdue: true, URL: 'https://ops.example/app/sales-invoice/SINV-1' }] } } }));
+    expect(full.querySelector('[data-emberops-orders] a[href$="SAL-ORD-1"]')).not.toBeNull();
+    expect(full.querySelector('[data-emberops-invoices]')?.textContent).toContain('Overdue');
+    const empty = draw('contact', page({ ...base, Desk: { Followups: [], Today: '2026-11-25', EmberOps: { Quotes: [], Calls: [], Customer: true, Orders: [], Invoices: [] } } }));
+    expect(empty.querySelector('[data-no-orders]')?.textContent).toContain('No orders yet.');
+    expect(empty.querySelector('[data-no-invoices]')?.textContent).toContain('No invoices yet.');
+  });
   test('a deal with nothing from EmberOps shows no EmberOps heading', () => {
     const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24' } }));
     expect(text(d)).not.toContain('In EmberOps');

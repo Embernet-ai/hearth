@@ -309,6 +309,32 @@
     <button  type="submit"  class="small">Create quotation</button>
   </form>
 {/if}
+{#if dot.Desk.EmberOps.Customer}
+  <h4>Orders</h4>
+  {#if dot.Desk.EmberOps.Orders?.length}
+    <table  class="list"  data-emberops-orders>
+      <thead><tr><th>Order</th><th>Status</th><th>Total</th><th>Delivered</th><th>Billed</th></tr></thead>
+      <tbody>
+        {#each dot.Desk.EmberOps.Orders as o (o.Name)}
+          <tr><td><a  href={o.URL}  target="_blank"  rel="noopener">{o.Name}</a></td><td><span  class="tag">{o.Status}</span></td>
+            <td class="muted small">{o.Total.toLocaleString(undefined, { style: 'currency', currency: o.Currency || 'USD' })}</td><td class="muted small">{Math.round(o.Delivered)}%</td><td class="muted small">{Math.round(o.Billed)}%</td></tr>
+        {/each}
+      </tbody>
+    </table>
+  {:else}<p  class="muted small"  data-no-orders>No orders yet. An order starts from an accepted quotation in EmberOps.</p>{/if}
+  <h4>Invoices</h4>
+  {#if dot.Desk.EmberOps.Invoices?.length}
+    <table  class="list"  data-emberops-invoices>
+      <thead><tr><th>Invoice</th><th>Status</th><th>Total</th><th>Owing</th><th>Due</th></tr></thead>
+      <tbody>
+        {#each dot.Desk.EmberOps.Invoices as i (i.Name)}
+          <tr><td><a  href={i.URL}  target="_blank"  rel="noopener">{i.Name}</a></td><td><span  class={'tag' + (i.Overdue ? ' bad' : '')}>{i.Overdue ? 'Overdue' : i.Status}</span></td>
+            <td class="muted small">{i.Total.toLocaleString(undefined, { style: 'currency', currency: i.Currency || 'USD' })}</td><td class="muted small">{i.Outstanding.toLocaleString(undefined, { style: 'currency', currency: i.Currency || 'USD' })}</td><td class="muted small">{i.Due}</td></tr>
+        {/each}
+      </tbody>
+    </table>
+  {:else}<p  class="muted small"  data-no-invoices>No invoices yet. They are made from an order in EmberOps.</p>{/if}
+{/if}
 {#if dot.Desk.EmberOps.NewQuoteURL}<p><a  class="chip"  href={dot.Desk.EmberOps.NewQuoteURL}  target="_blank"  rel="noopener"  data-new-quote>New quote in EmberOps</a></p>{/if}
 {#if dot.Desk.EmberOps.Calls?.length}
   <h4>Calls EmberOps logged</h4>
