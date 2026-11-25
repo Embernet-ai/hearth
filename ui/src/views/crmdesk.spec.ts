@@ -69,6 +69,11 @@ describe('what EmberOps adds to a record', () => {
     expect(d.querySelector('[data-emberops-calls]')?.textContent).toContain('3 min');
     expect(d.querySelector('a[data-new-quote]')?.getAttribute('href')).toContain('opportunity=CRM-OPP-1');
   });
+  test('a deal with an Opportunity and no quotation says where to start and offers Create quotation', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24', EmberOps: { Quotes: [], Calls: [], Opportunity: 'CRM-OPP-1', NewQuoteURL: 'https://ops.example/app/quotation/new?opportunity=CRM-OPP-1' } } }));
+    expect(d.querySelector('[data-no-quotes]')?.textContent).toContain('No quotations yet. Create one from this deal.');
+    expect(d.querySelector('form[data-quote-from-deal][action="/crm/quote"] input[name=opportunity]')?.getAttribute('value')).toBe('CRM-OPP-1');
+  });
   test('a deal with nothing from EmberOps shows no EmberOps heading', () => {
     const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24' } }));
     expect(text(d)).not.toContain('In EmberOps');

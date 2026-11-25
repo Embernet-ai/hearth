@@ -300,7 +300,14 @@
     </tbody>
   </table>
 {:else}
-  <p  class="muted small">No quotes yet.</p>
+  <p  class="muted small"  data-no-quotes>No quotations yet.{#if dot.Desk.EmberOps.Opportunity} Create one from this deal.{/if}</p>
+{/if}
+{#if dot.Desk.EmberOps.Opportunity}
+  <form  method="post"  action="/crm/quote"  data-quote-from-deal>
+    <input  type="hidden"  name="opportunity"  value={dot.Desk.EmberOps.Opportunity}>
+    <input  type="hidden"  name="back"  value={dot.Path}>
+    <button  type="submit"  class="small">Create quotation</button>
+  </form>
 {/if}
 {#if dot.Desk.EmberOps.NewQuoteURL}<p><a  class="chip"  href={dot.Desk.EmberOps.NewQuoteURL}  target="_blank"  rel="noopener"  data-new-quote>New quote in EmberOps</a></p>{/if}
 {#if dot.Desk.EmberOps.Calls?.length}

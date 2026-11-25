@@ -9,12 +9,14 @@ package crmops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/emberops"
@@ -24,6 +26,12 @@ import (
 type Lister interface {
 	List(ctx context.Context, lq emberops.ListQuery) ([]emberops.Row, error)
 	BaseURL() *url.URL
+}
+
+// Writer is the part of the EmberOps client that makes a quotation. The client has it; a read-only stand-in need not.
+type Writer interface {
+	Get(ctx context.Context, doctype, name string) (emberops.Row, error)
+	Insert(ctx context.Context, doctype string, values map[string]any) (emberops.Row, error)
 }
 
 // Quote is one Quotation as it shows on a record.
@@ -56,6 +64,9 @@ type Panel struct {
 	// NewQuoteURL opens a new Quotation in EmberOps with the record's party and opportunity filled in. Empty when the
 	// record has no EmberOps party yet.
 	NewQuoteURL string
+	// Opportunity is the record's EmberOps Opportunity, the one a quotation is made from. Empty when it has none, or when
+	// the installation cannot write.
+	Opportunity string
 }
 
 // Service reads the panel.
@@ -134,6 +145,9 @@ func (s *Service) For(ctx context.Context, links []crm.EmberOpsLink, phones []st
 			filters = []emberops.Filter{emberops.F("opportunity", l.Name)}
 			if p.NewQuoteURL == "" {
 				p.NewQuoteURL = s.newQuote(l.Name, "", "")
+			}
+			if _, ok := s.ops.(Writer); ok && p.Opportunity == "" {
+				p.Opportunity = l.Name
 			}
 		case "Customer", "Lead":
 			filters = []emberops.Filter{emberops.F("quotation_to", l.Label), emberops.F("party_name", l.Name)}
@@ -230,4 +244,54 @@ func (s *Service) QuotedBetween(ctx context.Context, from, to string) (*Totals, 
 	}
 	sort.Slice(t.ByStatus, func(i, j int) bool { return t.ByStatus[i].Status < t.ByStatus[j].Status })
 	return t, nil
+}
+
+// ErrNoWriter is returned on an installation whose EmberOps client cannot write.
+var ErrNoWriter = errors.New("crmops: this installation cannot make quotations")
+
+// QuoteFromDeal makes a draft Quotation in EmberOps from the deal's Opportunity: the same customer or lead, the same
+// company and currency, and one line for the deal at its amount, ready for somebody to price properly in EmberOps. It
+// returns the quotation's name and its page there. A draft that already exists for the Opportunity is returned as it is, so
+// pressing the button twice makes one quotation.
+func (s *Service) QuoteFromDeal(ctx context.Context, opportunity string, today time.Time) (name, link string, err error) {
+	w, ok := s.ops.(Writer)
+	if !ok {
+		return "", "", ErrNoWriter
+	}
+	ctx = emberops.WithUser(ctx, nil) // the service account, whoever is pressing
+	if strings.TrimSpace(opportunity) == "" {
+		return "", "", errors.New("crmops: no opportunity to quote")
+	}
+	have, err := s.ops.List(ctx, emberops.ListQuery{Doctype: "Quotation", Fields: []string{"name"},
+		Filters: []emberops.Filter{emberops.F("opportunity", opportunity), emberops.F("docstatus", 0)}, Limit: 1})
+	if err != nil {
+		return "", "", fmt.Errorf("crmops: look for a draft quotation: %w", err)
+	}
+	if len(have) > 0 {
+		n := str(have[0], "name")
+		return n, s.docURL("Quotation", n), nil
+	}
+	opp, err := w.Get(ctx, "Opportunity", opportunity)
+	if err != nil {
+		return "", "", fmt.Errorf("crmops: read the opportunity: %w", err)
+	}
+	to, party := str(opp, "opportunity_from"), str(opp, "party_name")
+	if to == "" || party == "" {
+		return "", "", errors.New("crmops: that opportunity has no customer or lead yet, so there is nobody to quote")
+	}
+	title := firstNonEmpty(str(opp, "title"), str(opp, "customer_name"), opportunity)
+	vals := map[string]any{
+		"quotation_to": to, "party_name": party, "opportunity": opportunity, "order_type": "Sales",
+		"company": str(opp, "company"), "transaction_date": today.Format("2006-01-02"), "valid_till": today.AddDate(0, 0, 30).Format("2006-01-02"),
+		"items": []map[string]any{{"item_name": title, "description": title, "qty": 1, "uom": "Nos", "rate": num(opp, "opportunity_amount")}},
+	}
+	if c := str(opp, "currency"); c != "" {
+		vals["currency"] = c
+	}
+	row, err := w.Insert(ctx, "Quotation", vals)
+	if err != nil {
+		return "", "", fmt.Errorf("crmops: make the quotation: %w", err)
+	}
+	n := str(row, "name")
+	return n, s.docURL("Quotation", n), nil
 }
