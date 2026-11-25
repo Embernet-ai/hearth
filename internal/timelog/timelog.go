@@ -130,9 +130,14 @@ var ErrNotAllowed = errors.New("you can only see your own time")
 var ErrDeleted = errors.New("timelog: that entry has been removed")
 
 type Service struct {
-	db    *pgxpool.Pool
-	authz Authorizer
+	db     *pgxpool.Pool
+	authz  Authorizer
+	notify Notifier
 }
+
+// SetNotifier makes a send back and a correction of sent back hours tell the
+// person who needs to hear it. Called once at start.
+func (s *Service) SetNotifier(n Notifier) { s.notify = n }
 
 func New(db *pgxpool.Pool, az Authorizer) *Service { return &Service{db: db, authz: az} }
 
@@ -315,6 +320,18 @@ func (s *Service) Correct(ctx context.Context, orgID string, actor core.Subjects
 		return errors.New("timelog: that duration is not plausible")
 	}
 
+	// Hours a manager sent back go back to waiting once the person fixes them,
+	// and the manager who sent them is told. Without this a corrected entry kept
+	// reading "sent back" and never returned to anybody's queue.
+	var wasSentBack bool
+	var sentBy *string
+	var author string
+	if err := s.db.QueryRow(ctx, `
+		SELECT COALESCE(approved = false, false), decided_by::text, principal_id::text
+		  FROM time_entries WHERE id = $1 AND org_id = $2`, entryID, orgID).Scan(&wasSentBack, &sentBy, &author); err != nil {
+		return fmt.Errorf("timelog: load entry: %w", err)
+	}
+
 	// make_interval rather than concatenating the number into a string. The
 	// same parameter is a count here and a duration on the next line, and
 	// building the interval by concatenation makes Postgres deduce two
@@ -331,10 +348,21 @@ func (s *Service) Correct(ctx context.Context, orgID string, actor core.Subjects
 		   SET minutes = $2::int,
 		       started_at = COALESCE($4::timestamptz, started_at),
 		       ended_at = COALESCE($4::timestamptz, started_at) + make_interval(mins => $2::int),
-		       note = COALESCE(NULLIF($3::text, ''), note)
+		       note = COALESCE(NULLIF($3::text, ''), note),
+		       approved = CASE WHEN approved = false THEN NULL ELSE approved END,
+		       decided_at = CASE WHEN approved = false THEN NULL ELSE decided_at END,
+		       decided_by = CASE WHEN approved = false THEN NULL ELSE decided_by END,
+		       decided_note = CASE WHEN approved = false THEN '' ELSE decided_note END
 		 WHERE id = $1`, entryID, minutes, strings.TrimSpace(note), on)
 	if err != nil {
 		return fmt.Errorf("timelog: correct: %w", err)
+	}
+	if wasSentBack && sentBy != nil && s.notify != nil {
+		var started time.Time
+		if err := s.db.QueryRow(ctx, `SELECT started_at FROM time_entries WHERE id = $1`, entryID).Scan(&started); err == nil {
+			s.notify.HoursResubmitted(ctx, orgID, Decision{EntryID: entryID, PersonID: author, DeciderID: *sentBy,
+				StartedAt: started, Minutes: minutes, Note: strings.TrimSpace(note)})
+		}
 	}
 	return nil
 }

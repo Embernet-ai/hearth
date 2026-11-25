@@ -69,6 +69,7 @@ type Options struct {
 	Loc           *time.Location
 	TimeOffNotify timeoff.Notifier
 	DeptReqNotify deptreq.Notifier
+	TimeNotify    timelog.Notifier
 	// Authz is Hearth's own access control, which still decides who may open
 	// what: *authz.Service.
 	Authz Authorizer
@@ -98,7 +99,7 @@ func EmberOPS(c *emberops.Client, p PG, o Options) Set {
 	dir := Directory{C: c}
 	set.Docs = &Docs{Store: p.Docs, Base: b, Dir: dir}
 	set.Views = &Views{Base: b, Dir: dir}
-	set.Time = &TimeLog{Store: p.Time, Base: b, Dir: dir, Authz: o.Authz, Docs: p.Docs}
+	set.Time = &TimeLog{Store: p.Time, Base: b, Dir: dir, Authz: o.Authz, Docs: p.Docs, Notify: o.TimeNotify}
 	set.Rules = &Rules{Base: b, Dir: dir, Events: p.Rules}
 	set.Calendar = &Calendar{Store: p.Calendar, Base: b, Dir: dir, PG: p.Calendar}
 	set.Teams = &TeamsMirror{Store: p.Teams, Base: b, Dir: dir}

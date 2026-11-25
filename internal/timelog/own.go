@@ -296,7 +296,8 @@ func (s *Service) PendingCount(ctx context.Context, orgID, actorID string) (int,
 func (s *Service) Decide(ctx context.Context, orgID, actorID, entryID string,
 	approve bool, note string) error {
 
-	tag, err := s.db.Exec(ctx, `
+	d := Decision{EntryID: entryID, DeciderID: actorID, Note: strings.TrimSpace(note)}
+	err := s.db.QueryRow(ctx, `
 		UPDATE time_entries t
 		   SET approved = $4, decided_at = now(), decided_by = $2,
 		       decided_note = $5
@@ -307,16 +308,20 @@ func (s *Service) Decide(ctx context.Context, orgID, actorID, entryID string,
 		   AND t.ended_at IS NOT NULL
 		   AND t.deleted_at IS NULL
 		   AND t.principal_id <> $2
-		   AND `+approverClause,
-		orgID, actorID, entryID, approve, strings.TrimSpace(note))
-	if err != nil {
+		   AND `+approverClause+`
+		RETURNING t.principal_id::text, t.started_at, COALESCE(t.minutes, 0)`,
+		orgID, actorID, entryID, approve, d.Note).Scan(&d.PersonID, &d.StartedAt, &d.Minutes)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("timelog: decide: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// Denied and absent are the same answer on purpose. Telling somebody
 		// that an entry exists but is not theirs to decide is telling them
 		// about work they are not entitled to know about.
 		return ErrNotYours
+	}
+	if !approve && s.notify != nil {
+		s.notify.HoursSentBack(ctx, orgID, d)
 	}
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/core"
 	"github.com/Embernet-ai/hearth/internal/notify"
+	"github.com/Embernet-ai/hearth/internal/timelog"
 	"github.com/Embernet-ai/hearth/internal/timeoff"
 )
 
@@ -195,5 +196,37 @@ func (t timeOffNotifier) TimeOffDecided(ctx context.Context, orgID, deciderID st
 		Ref:   core.Ref{Type: core.EntityTimeOff, ID: r.ID},
 		Title: "your time off request (" + span(r) + "): " + r.Status, ActorID: deciderID,
 		DedupeKey: "timeoff-decided:" + r.ID,
+	})
+}
+
+// NewTimeNotifier tells a person their hours were sent back, with the manager's
+// comment, and tells the manager when they are fixed and waiting again.
+func NewTimeNotifier(n *notify.Service) timelog.Notifier { return timeNotifier{n} }
+
+type timeNotifier struct{ n *notify.Service }
+
+func hoursLabel(d timelog.Decision) string {
+	return d.StartedAt.Format("2 Jan") + ", " + hoursAndMinutes(d.Minutes)
+}
+
+func (t timeNotifier) HoursSentBack(ctx context.Context, orgID string, d timelog.Decision) {
+	excerpt := d.Note
+	if excerpt == "" {
+		excerpt = "No comment was left. Open your hours to see which entry came back."
+	}
+	_, _ = t.n.Deliver(ctx, notify.Delivery{
+		OrgID: orgID, PrincipalID: d.PersonID, Reason: notify.ReasonChanged,
+		Ref:   core.Ref{Type: core.EntityTimeEntry, ID: d.EntryID},
+		Title: "sent back your hours (" + hoursLabel(d) + ") to fix", Excerpt: excerpt, ActorID: d.DeciderID,
+		DedupeKey: "time-sentback:" + d.EntryID + ":" + strconv.FormatInt(time.Now().UnixNano(), 10),
+	})
+}
+
+func (t timeNotifier) HoursResubmitted(ctx context.Context, orgID string, d timelog.Decision) {
+	_, _ = t.n.Deliver(ctx, notify.Delivery{
+		OrgID: orgID, PrincipalID: d.DeciderID, Reason: notify.ReasonChanged,
+		Ref:   core.Ref{Type: core.EntityTimeApproval, ID: d.EntryID},
+		Title: "fixed the hours you sent back (" + hoursLabel(d) + "), they are waiting for you again", ActorID: d.PersonID,
+		DedupeKey: "time-resubmitted:" + d.EntryID + ":" + strconv.FormatInt(time.Now().UnixNano(), 10),
 	})
 }

@@ -40,6 +40,11 @@ const (
 	// EntityDepartmentRequest is somebody asking which departments they belong
 	// in (internal/deptreq), for the same reason.
 	EntityDepartmentRequest EntityType = "department_request"
+	// EntityTimeEntry is hours a manager sent back, so the person is told and the
+	// notification opens the hours to fix. EntityTimeApproval is the same hours
+	// corrected and waiting again, which opens the manager's Approvals page.
+	EntityTimeEntry    EntityType = "time_entry"
+	EntityTimeApproval EntityType = "time_approval"
 )
 
 // Ref points at one specific thing.
