@@ -24,7 +24,7 @@ not a quietly empty record.
 | `GET /v1/contacts` | the same filters, plus `email` for an exact, case-insensitive lookup, and `company_id` |
 | `POST /v1/contacts` | `name`, `email`, `phone`, `title`, `notes`, `company_id`, `linkedin_url`, `extra_emails`, `extra_phones`, `owner_id`, `marketing_opt_out` (only `true`: it stops marketing email to the person and is never taken back here; the answer shows `marketing_opt_out`, `marketing_opt_out_at` and `marketing_opt_out_reason`, see mautic-sync.md) |
 | `GET`, `PATCH /v1/contacts/{id}` | |
-| `GET /v1/deals` | `q`, `stage`, `owner`, `company_id`, `contact_id` (the deals a person is the point of contact on), `sort`, `limit`, `offset` |
+| `GET /v1/deals` | `prop_key` and `prop_value` (a custom field, `*` for any value; the same on companies and contacts), `q`, `stage`, `owner`, `company_id`, `contact_id` (the deals a person is the point of contact on), `sort`, `limit`, `offset` |
 | `POST /v1/deals` | `name`, `stage` (new, screening, meeting, proposal, customer, won, lost, no_response), `amount_cents`, `currency`, `close_date` (YYYY-MM-DD), `company_id`, `contact_id`, `owner_id`, `notes` |
 | `GET`, `PATCH /v1/deals/{id}` | moving a deal is a PATCH of `stage`; `lost_reason` says why a deal was lost. A deal reads back `stage_changed_at`, `closed_at`, `probability_percent` and `weighted_cents` |
 | `POST /v1/activities` | `kind` (note, call, meeting or email), `title`, `body`, `occurred_at`, `direction` (inbound or outbound, for calls and emails), `disposition`, `duration_ms`, `targets` (a list of `{type: company, contact or deal, id}`) |

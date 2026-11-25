@@ -15,7 +15,7 @@
     const p = (n) => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  export { fieldspanel, formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { fieldfilter, fieldspanel, formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -397,5 +397,16 @@
   {/each}
   <div  class="row"><button  type="submit">Save fields</button></div>
 </form>
+{/if}
+{/snippet}
+
+{#snippet fieldfilter(dot)}
+{#if dot?.Desk?.PropDefs?.length && dot?.Desk?.PropKind}
+<label  class="muted small">Custom field
+  <select  name="pk"  aria-label="Custom field"  data-field-filter>
+    <option  value="">Any</option>
+    {#each dot.Desk.PropDefs as p}<option  value={p.Key}  selected={p.Key === dot.Desk.PropSel}>{p.Label}</option>{/each}
+  </select></label>
+<input  name="pv"  value={dot.Desk.PropVal || ''}  placeholder="is, or * for any value"  aria-label="Custom field value"  data-field-value>
 {/if}
 {/snippet}

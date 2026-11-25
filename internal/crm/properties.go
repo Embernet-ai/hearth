@@ -405,6 +405,7 @@ type Props interface {
 	PropertiesFor(ctx context.Context, orgID string, actor core.Subjects, ref core.Ref) ([]PropertyValue, error)
 	SetProperties(ctx context.Context, orgID string, actor core.Subjects, ref core.Ref, values map[string]any) error
 	ValidateProperties(ctx context.Context, orgID string, kind core.EntityType, values map[string]any) error
+	PropertyTexts(ctx context.Context, orgID string, kind core.EntityType, ids []string) (map[string]map[string]string, error)
 }
 
 var _ Props = (*Service)(nil)
@@ -433,4 +434,55 @@ func (s *Service) ValidateProperties(ctx context.Context, orgID string, kind cor
 		}
 	}
 	return nil
+}
+
+// propFilter is the WHERE for a list filtered on a custom field, or nothing when the query names none. The key is a parameter, never
+// part of the statement, and a key that is not one a field could have matches nothing rather than everything.
+func propFilter(kind core.EntityType, alias string, q ListQuery, args *[]any) string {
+	key := strings.TrimSpace(q.PropKey)
+	if key == "" {
+		return ""
+	}
+	if !propKeyRe.MatchString(key) {
+		return " AND FALSE"
+	}
+	*args = append(*args, storedKey(kind, key))
+	k := len(*args)
+	base := fmt.Sprintf(`EXISTS (SELECT 1 FROM property_values v JOIN property_defs pd ON pd.id = v.def_id
+		WHERE v.entity_type = '%s' AND v.entity_id = %s.id AND pd.key::text = $%d`, string(kind), alias, k)
+	val := strings.TrimSpace(q.PropValue)
+	if val == "" || val == "*" {
+		return " AND " + base + ")"
+	}
+	*args = append(*args, val)
+	return " AND " + base + fmt.Sprintf(` AND (CASE WHEN pd.data_type IN ('text','url','email','phone')
+		THEN (v.value #>> '{}') ILIKE '%%' || $%d || '%%' ELSE lower(v.value #>> '{}') = lower($%d) END))`, len(*args), len(*args))
+}
+
+// PropertyTexts is the custom field values of many records of one kind at once, by record id and then key, as text: one query for
+// a whole page or export. The records are ones the caller has already been shown.
+func (s *Service) PropertyTexts(ctx context.Context, orgID string, kind core.EntityType, ids []string) (map[string]map[string]string, error) {
+	out := map[string]map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.db.Query(ctx, `SELECT v.entity_id::text, d.key::text, v.value FROM property_values v JOIN property_defs d ON d.id = v.def_id
+		WHERE v.entity_type = $1 AND d.org_id = $2 AND v.entity_id = ANY($3::uuid[])`, string(kind), orgID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("crm: field values for a list: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, key string
+		var raw []byte
+		if err := rows.Scan(&id, &key, &raw); err != nil {
+			return nil, err
+		}
+		_, txt := textOf(raw)
+		if out[id] == nil {
+			out[id] = map[string]string{}
+		}
+		out[id][shownKey(kind, key)] = txt
+	}
+	return out, rows.Err()
 }

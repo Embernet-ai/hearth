@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { bulkbar, ownerselect, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
+  import { fieldfilter, bulkbar, ownerselect, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -27,6 +27,7 @@
       {#each F.rng(dot?.DealStages) as [k1, d1]}<option  value={S(d1)}  {...(F.t(F.eq(d1, dot?.DealStage)) ? {"selected": true} : {})}>{F.stageName(d1)}</option>{/each}
     </select>
     {/if}
+    {@render fieldfilter(dot)}
     <select  name="owner"  aria-label="Owner">
       <option  value="">Any owner</option>
       <option  value="none"  {...(F.t(F.eq(dot?.OwnerSel, "none")) ? {"selected": true} : {})}>Nobody</option>

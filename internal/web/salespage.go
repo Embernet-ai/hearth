@@ -103,7 +103,7 @@ func listQueryOf(r *http.Request) crm.ListQuery {
 	}
 	return crm.ListQuery{
 		Search: v.Get("q"), Kind: v.Get("kind"), Stage: v.Get("stage"), Owner: v.Get("owner"),
-		Type: v.Get("type"), Tag: v.Get("tag"),
+		Type: v.Get("type"), Tag: v.Get("tag"), PropKey: v.Get("pk"), PropValue: v.Get("pv"),
 		Open: v.Get("open") == "1", Overdue: v.Get("overdue") == "1",
 		ClosedFrom: day("closedfrom"), ClosedTo: day("closedto"),
 		Sort: v.Get("sort"), Desc: v.Get("desc") == "1", Group: v.Get("group"),
@@ -199,7 +199,7 @@ func (s *Server) companiesPage(w http.ResponseWriter, r *http.Request) bool {
 		CRMGroup: extras.CRMGroup, CRMGroupOptions: extras.CRMGroupOptions, CRMRowGroups: extras.CRMRowGroups, CRMGroupCounts: extras.CRMGroupCounts,
 		CRMViews: extras.CRMViews, CRMViewsOn: extras.CRMViewsOn, ListFrom: extras.ListFrom, Me: extras.Me,
 		CompanyTypes: types, TypeSel: q.Type, TagSel: q.Tag, TagList: tagList, CanManageTypes: admin,
-		Title: "Companies", SalesOn: true, CompanyRows: rows, Filter: q.Kind,
+		Title: "Companies", SalesOn: true, CompanyRows: rows, Filter: q.Kind, Desk: s.listFields(r, core.EntityCompany, nil),
 		SearchText: q.Search, CompanyKinds: crm.Kinds, Owners: s.owners(r), OwnerSel: q.Owner,
 		Sort: q.Sort, SortLinks: sortLinks(r, "name", "kind", "owner", "revenue", "contacts", "deals", "updated"),
 		Pager: pagerFor(r, q, len(rows), total), ExportURL: exportLink(r, "/companies.csv"),
@@ -237,7 +237,7 @@ func (s *Server) contactsPage(w http.ResponseWriter, r *http.Request) bool {
 		SearchText: q.Search, Owners: s.owners(r), OwnerSel: q.Owner, Sort: q.Sort,
 		SortLinks: sortLinks(r, "name", "company", "title", "email", "owner", "updated"),
 		Pager:     pagerFor(r, q, len(rows), total), ExportURL: exportLink(r, "/contacts.csv"),
-		Desk: s.mauticChoices(r),
+		Desk: s.listFields(r, core.EntityContact, s.mauticChoices(r)),
 	})
 	return true
 }
@@ -270,14 +270,19 @@ func (s *Server) companiesCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cw := s.csvHead(w, "companies")
-	_ = cw.Write([]string{"Name", "Kind", "Domain", "Website", "Owner", "City", "State", "Annual revenue", "People", "Deals", "Types", "Tags", "Notes", "Created"})
+	ids := make([]string, len(rows))
+	for i, c := range rows {
+		ids[i] = c.ID
+	}
+	extra := s.exportFields(r, core.EntityCompany, ids)
+	_ = cw.Write(append([]string{"Name", "Kind", "Domain", "Website", "Owner", "City", "State", "Annual revenue", "People", "Deals", "Types", "Tags", "Notes", "Created"}, extra.header()...))
 	for _, c := range rows {
 		rev := ""
 		if c.RevenueCents != nil {
 			rev = crm.Money(*c.RevenueCents, c.Currency)
 		}
-		_ = cw.Write([]string{safeCell(c.Name), c.Kind, c.Domain, safeCell(c.Website), c.OwnerName, c.City, c.State,
-			rev, strconv.Itoa(c.Contacts), strconv.Itoa(c.Deals), strings.Join(c.TypeLabels, "; "), safeCell(strings.Join(c.Tags, "; ")), safeCell(c.Notes), c.CreatedAt.Format("2006-01-02")})
+		_ = cw.Write(append([]string{safeCell(c.Name), c.Kind, c.Domain, safeCell(c.Website), c.OwnerName, c.City, c.State,
+			rev, strconv.Itoa(c.Contacts), strconv.Itoa(c.Deals), strings.Join(c.TypeLabels, "; "), safeCell(strings.Join(c.Tags, "; ")), safeCell(c.Notes), c.CreatedAt.Format("2006-01-02")}, extra.cells(c.ID)...))
 	}
 	cw.Flush()
 }
@@ -295,10 +300,15 @@ func (s *Server) contactsCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cw := s.csvHead(w, "contacts")
-	_ = cw.Write([]string{"Name", "Company", "Title", "Email", "Phone", "Owner", "LinkedIn", "Notes", "Created"})
+	ids := make([]string, len(rows))
+	for i, c := range rows {
+		ids[i] = c.ID
+	}
+	extra := s.exportFields(r, core.EntityContact, ids)
+	_ = cw.Write(append([]string{"Name", "Company", "Title", "Email", "Phone", "Owner", "LinkedIn", "Notes", "Created"}, extra.header()...))
 	for _, c := range rows {
-		_ = cw.Write([]string{safeCell(c.Name), safeCell(c.CompanyName), c.Title, c.Email, c.Phone, c.OwnerName,
-			c.LinkedIn, safeCell(c.Notes), c.CreatedAt.Format("2006-01-02")})
+		_ = cw.Write(append([]string{safeCell(c.Name), safeCell(c.CompanyName), c.Title, c.Email, c.Phone, c.OwnerName,
+			c.LinkedIn, safeCell(c.Notes), c.CreatedAt.Format("2006-01-02")}, extra.cells(c.ID)...))
 	}
 	cw.Flush()
 }
@@ -499,6 +509,7 @@ func (s *Server) listDeals(w http.ResponseWriter, r *http.Request) {
 		c := c.Company
 		p.Companies = append(p.Companies, &c)
 	}
+	p.Desk = s.listFields(r, core.EntityDeal, nil)
 	s.render(w, r, "deals", p)
 }
 
@@ -515,14 +526,19 @@ func (s *Server) dealsCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cw := s.csvHead(w, "deals")
-	_ = cw.Write([]string{"Deal", "Stage", "Amount", "Close date", "Company", "Contact", "Owner", "Created"})
+	ids := make([]string, len(rows))
+	for i, d := range rows {
+		ids[i] = d.ID
+	}
+	extra := s.exportFields(r, core.EntityDeal, ids)
+	_ = cw.Write(append([]string{"Deal", "Stage", "Amount", "Close date", "Company", "Contact", "Owner", "Created"}, extra.header()...))
 	for _, d := range rows {
 		cd := ""
 		if d.CloseDate != nil {
 			cd = d.CloseDate.Format("2006-01-02")
 		}
-		_ = cw.Write([]string{safeCell(d.Name), crm.StageLabel(d.Stage), fmt.Sprintf("%.2f", float64(d.AmountCents)/100),
-			cd, safeCell(d.CompanyName), safeCell(d.ContactName), d.OwnerName, d.CreatedAt.Format("2006-01-02")})
+		_ = cw.Write(append([]string{safeCell(d.Name), crm.StageLabel(d.Stage), fmt.Sprintf("%.2f", float64(d.AmountCents)/100),
+			cd, safeCell(d.CompanyName), safeCell(d.ContactName), d.OwnerName, d.CreatedAt.Format("2006-01-02")}, extra.cells(d.ID)...))
 	}
 	cw.Flush()
 }
@@ -925,4 +941,63 @@ func (s *Server) emberOpsLinks(r *http.Request, ref core.Ref) []crm.EmberOpsLink
 		s.log.WarnContext(r.Context(), "load EmberOps links", "error", err)
 	}
 	return links
+}
+
+// exportFields is the custom columns of a CSV: one per field of the kind, in label order, with each row's values.
+type exportFields struct {
+	defs []crm.PropertyDef
+	vals map[string]map[string]string
+}
+
+func (e exportFields) header() []string {
+	out := make([]string, 0, len(e.defs))
+	for _, d := range e.defs {
+		out = append(out, safeCell(d.Label))
+	}
+	return out
+}
+
+func (e exportFields) cells(id string) []string {
+	out := make([]string, 0, len(e.defs))
+	for _, d := range e.defs {
+		out = append(out, safeCell(e.vals[id][d.Key]))
+	}
+	return out
+}
+
+func (s *Server) exportFields(r *http.Request, kind core.EntityType, ids []string) exportFields {
+	p, ok := s.sales.(crm.Props)
+	if !ok {
+		return exportFields{}
+	}
+	id := auth.From(r.Context())
+	defs, err := p.PropertyDefs(r.Context(), id.OrgID, kind)
+	if err != nil || len(defs) == 0 {
+		return exportFields{}
+	}
+	vals, err := p.PropertyTexts(r.Context(), id.OrgID, kind, ids)
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load custom field values for an export", "error", err)
+		return exportFields{}
+	}
+	return exportFields{defs: defs, vals: vals}
+}
+
+// listFields puts the custom fields of a kind on a list page, with the filter in use, so the filter bar can offer them.
+func (s *Server) listFields(r *http.Request, kind core.EntityType, d *deskData) *deskData {
+	p, ok := s.sales.(crm.Props)
+	if !ok {
+		return d
+	}
+	id := auth.From(r.Context())
+	defs, err := p.PropertyDefs(r.Context(), id.OrgID, kind)
+	if err != nil || len(defs) == 0 {
+		return d
+	}
+	if d == nil {
+		d = &deskData{}
+	}
+	d.PropDefs, d.PropKind = defs, string(kind)
+	d.PropSel, d.PropVal = r.URL.Query().Get("pk"), r.URL.Query().Get("pv")
+	return d
 }

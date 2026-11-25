@@ -944,3 +944,106 @@ func TestFollowupKindsSnoozeAndBulkComplete(t *testing.T) {
 		}
 	}
 }
+
+func TestListsFilterOnACustomField(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	t.Cleanup(func() {
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM property_values WHERE def_id IN (SELECT id FROM property_defs WHERE org_id=$1)`, f.org)
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM property_defs WHERE org_id=$1`, f.org)
+	})
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	admin := f.subj(t, f.superAdmin(t))
+	for _, d := range []crm.PropertyInput{
+		{Kind: core.EntityCompany, Label: "Industry", DataType: crm.PropSelect, Options: []string{"Plating", "Rewinds"}},
+		{Kind: core.EntityCompany, Label: "Notes on fit", DataType: crm.PropText},
+		{Kind: core.EntityContact, Label: "Buyer", DataType: crm.PropBoolean},
+		{Kind: core.EntityDeal, Label: "Line speed", DataType: crm.PropNumber},
+	} {
+		if _, err := f.svc.SaveProperty(ctx, f.org, admin, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mkCo := func(name string, v map[string]any) *crm.Company {
+		c, err := f.svc.CreateCompany(ctx, f.org, alice, crm.Company{Name: name, Kind: crm.KindProspect})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.svc.Share(ctx, f.org, alice, c.Ref())
+		if v != nil {
+			if err := f.svc.SetProperties(ctx, f.org, alice, c.Ref(), v); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return c
+	}
+	a := mkCo("Alpha", map[string]any{"industry": "Rewinds", "notes_on_fit": "great fit, large motors"})
+	mkCo("Beta", map[string]any{"industry": "Plating"})
+	mkCo("Gamma", nil)
+	count := func(q crm.ListQuery) int {
+		_, n, err := f.svc.CompaniesPage(ctx, f.org, bob, q)
+		if err != nil {
+			t.Fatalf("filter %+v: %v", q, err)
+		}
+		return n
+	}
+	if n := count(crm.ListQuery{PropKey: "industry", PropValue: "rewinds"}); n != 1 {
+		t.Errorf("a choice, any case = %d, want 1", n)
+	}
+	if n := count(crm.ListQuery{PropKey: "industry", PropValue: "Rew"}); n != 0 {
+		t.Errorf("part of a choice = %d, want 0 (a choice matches whole)", n)
+	}
+	if n := count(crm.ListQuery{PropKey: "notes_on_fit", PropValue: "LARGE"}); n != 1 {
+		t.Errorf("inside a text field = %d, want 1", n)
+	}
+	if n := count(crm.ListQuery{PropKey: "industry", PropValue: "*"}); n != 2 {
+		t.Errorf("any value = %d, want the two that have one", n)
+	}
+	if n := count(crm.ListQuery{PropKey: "industry"}); n != 2 {
+		t.Errorf("a field with no value named = %d, want the two that have one", n)
+	}
+	for _, key := range []string{"nope", "Bad Key", "industry' OR 1=1 --", "x\"; DROP TABLE companies; --"} {
+		if n := count(crm.ListQuery{PropKey: key, PropValue: "x"}); n != 0 {
+			t.Errorf("the key %q matched %d, want none", key, n)
+		}
+	}
+	if n := count(crm.ListQuery{PropKey: "industry", PropValue: "Rewinds", Owner: "none"}); n != 1 {
+		t.Errorf("a custom filter beside another = %d, want 1", n)
+	}
+	if _, n, _ := f.svc.CompaniesPage(ctx, f.org, out, crm.ListQuery{PropKey: "industry", PropValue: "*"}); n != 0 {
+		t.Errorf("an outsider's filtered list = %d, want 0", n)
+	}
+	// Contacts and deals filter the same way, each on their own kind's fields.
+	ct, _ := f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "Buyer One", Email: "b1@x.example"})
+	f.svc.CreateContact(ctx, f.org, alice, crm.Contact{Name: "Not Buyer", Email: "b2@x.example"})
+	for _, id := range []core.Ref{ct.Ref()} {
+		f.svc.Share(ctx, f.org, alice, id)
+	}
+	if err := f.svc.SetProperties(ctx, f.org, alice, ct.Ref(), map[string]any{"buyer": "yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, n, _ := f.svc.ContactsPage(ctx, f.org, bob, crm.ListQuery{PropKey: "buyer", PropValue: "true"}); n != 1 {
+		t.Errorf("contacts that are buyers = %d, want 1", n)
+	}
+	d1, _ := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Fast line"})
+	f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Slow line"})
+	if err := f.svc.SetProperties(ctx, f.org, alice, d1.Ref(), map[string]any{"line_speed": "120"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, n, _ := f.svc.Deals(ctx, f.org, bob, crm.ListQuery{PropKey: "line_speed", PropValue: "120"}); n != 1 {
+		t.Errorf("deals at 120 = %d, want 1", n)
+	}
+	if _, n, _ := f.svc.Deals(ctx, f.org, bob, crm.ListQuery{PropKey: "industry", PropValue: "*"}); n != 0 {
+		t.Errorf("a company field used on deals = %d, want 0 (fields belong to their kind)", n)
+	}
+	// Values for a page at once.
+	texts, err := f.svc.PropertyTexts(ctx, f.org, core.EntityCompany, []string{a.ID})
+	if err != nil || texts[a.ID]["industry"] != "Rewinds" || texts[a.ID]["notes_on_fit"] == "" {
+		t.Errorf("texts = %v (%v)", texts, err)
+	}
+	if none, _ := f.svc.PropertyTexts(ctx, f.org, core.EntityCompany, nil); len(none) != 0 {
+		t.Error("no ids gave values")
+	}
+}
