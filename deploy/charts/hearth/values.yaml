@@ -165,6 +165,7 @@ secretKeys:
   marketingClientSecret: MARKETING_CLIENT_SECRET
   formsAPIKey: FORMS_API_KEY
   socialAPIKey: SOCIAL_API_KEY
+  cascadeAPIKey: CASCADE_API_KEY
 
 # ─── Bring your own Postgres ───────────────────────────────────────────────────
 # Set postgresql.enabled to false and say where yours is. Either give the pieces
@@ -745,6 +746,12 @@ forms:
   apiKeyKey: ""
 social:
   url: ""   # the social publishing app's public API, for example https://social.example.com
+  secret: ""
+  apiKeyKey: ""
+# Automation is Cascade, the workflow engine: its workflows, runs and numbers for the Sales team and super admins. Give its
+# address and an API key (hlc_...) in the existing secret under CASCADE_API_KEY.
+cascade:
+  url: ""   # for example https://flows.example.com
   secret: ""
   apiKeyKey: ""
 

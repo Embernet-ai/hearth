@@ -139,6 +139,12 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		d.Team.Sections = append(append([]teamSection{}, d.Team.Sections...), *gh)
 	}
+	if au := s.automationSection(r.Context(), id); au != nil {
+		if d.Team == nil {
+			d.Team = &teamPanel{}
+		}
+		d.Team.Sections = append(append([]teamSection{}, d.Team.Sections...), *au)
+	}
 	s.render(w, r, "dashboard", page{Title: "Dashboard", Dash: d})
 }
 

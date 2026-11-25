@@ -34,6 +34,7 @@ import (
 	cal "github.com/Embernet-ai/hearth/internal/calendar"
 	"github.com/Embernet-ai/hearth/internal/calls"
 	"github.com/Embernet-ai/hearth/internal/canvas"
+	"github.com/Embernet-ai/hearth/internal/cascade"
 	"github.com/Embernet-ai/hearth/internal/channels"
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
@@ -151,6 +152,8 @@ type Server struct {
 	panel      panelCache
 	github     *github.Service
 	forms      *forms.Client
+	cascade    *cascade.Client
+	autoCache  autoCache
 	social     *social.Client
 	tools      []tools.Tool
 	box        connect.Sealer
@@ -238,6 +241,7 @@ type Deps struct {
 	Connect      *connect.Service
 	Marketing    *mautic.Client
 	Forms        *forms.Client
+	Cascade      *cascade.Client
 	// Ops is the EmberOps client, nil when the installation does not run on EmberOps. The CRM reads quotes and call logs from it.
 	Ops crmops.Lister
 	// CRMMarketing shows a contact's Mautic segments and campaigns on their page. Nil when Mautic is not connected.
@@ -306,6 +310,7 @@ func New(d Deps) (*Server, error) {
 		crmMkt:     d.CRMMarketing,
 		crmForms:   d.CRMForms,
 		forms:      d.Forms,
+		cascade:    d.Cascade,
 		social:     d.Social,
 		github:     d.GitHub,
 		tools:      d.Tools,
@@ -646,9 +651,12 @@ type page struct {
 	FormsArea  *FormsView     `json:",omitempty"`
 	SocialArea *SocialView    `json:",omitempty"`
 	GitHubArea *GitHubView    `json:",omitempty"`
-	ToolsList  *ToolsView     `json:",omitempty"`
-	ToolsOn    bool           `json:",omitempty"`
-	CloudOn    bool           `json:",omitempty"`
+	// AutomationArea is the Automation page (Cascade); AutomationOn shows its entry in the rail to who may use it.
+	AutomationArea *AutomationView `json:",omitempty"`
+	AutomationOn   bool            `json:",omitempty"`
+	ToolsList      *ToolsView      `json:",omitempty"`
+	ToolsOn        bool            `json:",omitempty"`
+	CloudOn        bool            `json:",omitempty"`
 	// ConnectorsOn is whether the Settings page links to the Connectors page.
 	ConnectorsOn bool                 `json:",omitempty"`
 	CloudLinks   []connect.FileLink   `json:",omitempty"`
@@ -964,6 +972,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	p.Version = s.version
 	p.SalesNav = s.salesNav(r)
 	p.ToolsOn = len(s.tools) > 0
+	p.AutomationOn = s.automationAllowed(r.Context(), p.Identity)
 	p.Today = time.Now().Format("2006-01-02")
 	// The list page drives its space filter entirely from this query param and
 	// never sets SpaceID itself, so reading it here is the only place it comes
@@ -1346,6 +1355,11 @@ func (s *Server) Routes() http.Handler {
 	authed.HandleFunc("POST /marketing/contact/{id}/send", s.postMarketingContactSend)
 	authed.HandleFunc("POST /marketing/email/{id}/test", s.postMarketingEmailTest)
 	authed.HandleFunc("POST /marketing/segment/{id}/delete", s.postMarketingSegmentDelete)
+	authed.HandleFunc("GET /automation", s.getAutomation)
+	authed.HandleFunc("POST /automation/workflows/{id}/run", s.postAutomationRun)
+	authed.HandleFunc("POST /automation/workflows/{id}/active", s.postAutomationActive)
+	authed.HandleFunc("POST /automation/executions/{id}/retry", s.postAutomationRetry)
+	authed.HandleFunc("POST /automation/executions/{id}/stop", s.postAutomationStop)
 	authed.HandleFunc("GET /forms", s.getForms)
 	authed.HandleFunc("POST /forms", s.postFormsSave)
 	authed.HandleFunc("POST /forms/{id}/status", s.postFormsStatus)

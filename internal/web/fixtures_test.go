@@ -23,6 +23,7 @@ import (
 
 	"github.com/Embernet-ai/hearth/internal/auth"
 	"github.com/Embernet-ai/hearth/internal/authz"
+	"github.com/Embernet-ai/hearth/internal/cascade"
 	"github.com/Embernet-ai/hearth/internal/channels"
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/core"
@@ -290,7 +291,13 @@ func fixtures() map[string]page {
 				Comments: []*channels.Message{{AuthorName: "Yara", Body: "thanks", CreatedAt: end}},
 			}}},
 		"dailyreports-filed": {RepMineToday: "abc", RepFrom: "a", RepTo: "b"},
-		"github-none":        {GitHubArea: &GitHubView{Configured: true}},
+		"automation-off":     {Title: "Automation", AutomationArea: &AutomationView{}},
+		"automation": {Title: "Automation", AutomationOn: true, AutomationArea: &AutomationView{Configured: true, EditorURL: "https://flows.example", HasNumbers: true,
+			Day: cascade.Stat{Total: 12, Failed: 1}, Week: cascade.Stat{Total: 29, Failed: 2},
+			Approvals:  []cascade.Approval{{ID: "a1", Title: "Send the quote?", WorkflowName: "Quote to customer", Status: "pending", RequestedAt: time.Date(2026, 11, 25, 9, 0, 0, 0, time.UTC)}},
+			Workflows:  []AutomationWorkflow{{Workflow: cascade.Workflow{ID: "w1", Name: "Contact Form to Sales", Active: true}, LastStatus: "succeeded", LastAt: "2026-11-25 08:00"}, {Workflow: cascade.Workflow{ID: "w2", Name: "Dormant"}}},
+			Executions: []AutomationRun{{Execution: cascade.Execution{ID: "e1", WorkflowName: "Contact Form to Sales", Status: "failed", Error: "boom"}, When: "2026-11-25 08:00", Duration: "1.2s"}, {Execution: cascade.Execution{ID: "e2", WorkflowName: "Quote to customer", Status: "running"}, When: "2026-11-25 09:00", CanStop: true}}}},
+		"github-none": {GitHubArea: &GitHubView{Configured: true}},
 		"github-connected": {GitHubArea: &GitHubView{Configured: true, Connected: true, Login: "octo", Days: 30, Chosen: []string{"org/app"},
 			Choices: []GitHubChoice{{Name: "org/app", Private: true, Chosen: true}, {Name: "org/site"}},
 			Total:   &github.Metrics{Commits: 42, PRsOpened: 9, PRsMerged: 7, IssuesOpened: 4, IssuesClosed: 3, Releases: 2, Runs: 30, RunsPassed: 27, RunsFailed: 3},

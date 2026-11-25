@@ -43,6 +43,8 @@
  },
  "AuditKinds": null,
  "AuditMore": 0,
+ "AutomationArea": null,
+ "AutomationOn": false,
  "Bars": null,
  "Base": "",
  "BaseURL": "",

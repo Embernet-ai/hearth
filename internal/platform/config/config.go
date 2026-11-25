@@ -180,6 +180,7 @@ type Config struct {
 	MarketingURL, MarketingClientID, MarketingClientSecret string
 	FormsURL, FormsAPIKey                                  string
 	SocialURL, SocialAPIKey                                string
+	CascadeURL, CascadeAPIKey                              string
 	ToolsJSON                                              string
 	// ConnectorsEvery is how often the connectors pull. Zero means every ten minutes.
 	ConnectorsEvery time.Duration
@@ -411,10 +412,12 @@ func Load() (*Config, error) {
 	cfg.FormsAPIKey = os.Getenv("HEARTH_FORMS_API_KEY")
 	cfg.SocialURL = strings.TrimSpace(os.Getenv("HEARTH_SOCIAL_URL"))
 	cfg.SocialAPIKey = os.Getenv("HEARTH_SOCIAL_API_KEY")
+	cfg.CascadeURL = strings.TrimSpace(os.Getenv("HEARTH_CASCADE_URL"))
+	cfg.CascadeAPIKey = os.Getenv("HEARTH_CASCADE_API_KEY")
 	cfg.ToolsJSON = os.Getenv("HEARTH_TOOLS")
 	for _, a := range []struct{ name, url, cred string }{
 		{"MARKETING", cfg.MarketingURL, cfg.MarketingClientID + cfg.MarketingClientSecret},
-		{"FORMS", cfg.FormsURL, cfg.FormsAPIKey}, {"SOCIAL", cfg.SocialURL, cfg.SocialAPIKey},
+		{"FORMS", cfg.FormsURL, cfg.FormsAPIKey}, {"SOCIAL", cfg.SocialURL, cfg.SocialAPIKey}, {"CASCADE", cfg.CascadeURL, cfg.CascadeAPIKey},
 	} {
 		if a.url != "" && !strings.HasPrefix(a.url, "http://") && !strings.HasPrefix(a.url, "https://") {
 			fail("HEARTH_%s_URL must start with http:// or https://, got %q", a.name, a.url)
