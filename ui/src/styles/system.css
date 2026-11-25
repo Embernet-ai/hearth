@@ -277,3 +277,4 @@ main label[style*="white-space:nowrap"] { white-space: normal !important; }
 /* ---- the wordmark in the side panel: the mark, then Hearth ---------------------------------------------------------------------- */
 .brand { display: inline-flex; align-items: center; gap: var(--s-2); }
 .brand .mark { flex: none; display: block; }
+.viewsbar nav.filters { display: contents; }

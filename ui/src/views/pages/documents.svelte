@@ -18,9 +18,19 @@
   </form>
 
   <div  class="toolbar row">
-    <button  type="button"  class="chip"  popovertarget="pop-filter">Filter</button>
-    <div  id="pop-filter"  popover class="popover">
-      
+    <div  class="viewsbar"  data-dept-views>
+      <span  class="muted small">Views</span>
+      {#each F.rng(dot?.SavedViews) as [kv, dv]}
+        <span  class="viewchip">
+          <a  class={"chip " + S((F.t(F.and(dot?.SavedView, F.eq(dot?.SavedView?.ID, dv?.ID))) ? ("on") : ""))}  href={(S(dv?.Path))}>{dv?.Name}{#if F.t(dv?.Shared) && dv?.OwnerID !== dot?.Me}<span  class="muted"> &middot; shared</span>{/if}</a>
+          {#if dv?.OwnerID === dot?.Me}
+            <form  class="inline"  method="post"  action={("/views/" + S(dv?.ID) + "/delete")}>
+              <button  type="submit"  class="ghost small"  aria-label={("Remove the view " + S(dv?.Name))}  title="Remove this view">&times;</button>
+            </form>
+          {/if}
+        </span>
+      {/each}
+      <span  class="muted small">Status</span>
       <nav  class="filters">
         <a  class={"chip " + S((F.t(F.not(F.hasFilter(dot?.Query, F.col("status")))) ? ("on") : ""))}             href={(S(dot?.Base) + S(F.clearStatus(dot?.Query, dot?.ViewKind)))}>All</a>
         {#each F.rng(dot?.Statuses) as [k2, d2]}{@const v_s = d2}
@@ -28,7 +38,6 @@
         {/each}
       </nav>
       {#if F.t(dot?.PropDefs)}
-        
         <nav  class="filters">
           {#each F.rng(dot?.PropDefs) as [k3, d3]}{@const v_d = d3}
             {#if F.t(F.eq(v_d?.DataType, "select"))}
