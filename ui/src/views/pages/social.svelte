@@ -31,6 +31,9 @@
     {:else}<p  class="muted"  data-no-activity>Nothing from the publishing app yet.</p>{/if}
   {:else if v.Tab === 'media'}
     <h2>Media</h2>
+    {#if v.MediaOff}
+      <p  class="muted"  data-media-off>The publishing app on this installation has no media library, so there is nothing to list or add here.</p>
+    {:else}
     <form  method="post"  action="/social/media"  class="row"  data-media-upload>
       <input  type="url"  name="url"  placeholder="Address of an image or video to add"  aria-label="Address of a file"  required>
       <button  type="submit">Add to the library</button>
@@ -38,6 +41,7 @@
     {#if v.Media && v.Media.length}
       <ul  class="list"  data-media>{#each v.Media as m}<li><a  href={m.Path}  target="_blank"  rel="noopener">{m.OriginalName || m.Path}</a> <span  class="muted small">{(m.CreatedAt ?? '').slice(0, 10)}</span></li>{/each}</ul>
     {:else}<p  class="muted">No files in the media library.</p>{/if}
+    {/if}
   {:else}
     <h2>Channels</h2>
     {#if v.Channels && v.Channels.length}

@@ -326,6 +326,7 @@
     "Path": "https://u.example/banner.png"
    }
   ],
+  "MediaOff": false,
   "Metrics": null,
   "Notice": "",
   "Notifications": null,

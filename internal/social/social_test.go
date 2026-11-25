@@ -3,6 +3,7 @@ package social
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -130,5 +131,21 @@ func TestPostizStatusGroupAnalyticsNotificationsAndMedia(t *testing.T) {
 			t.Errorf("call %d = %v, want %q", i, calls, w)
 			break
 		}
+	}
+}
+
+// Live 2026-11-25: Fireball's Postiz answers the media library with 404 "Cannot GET /public/v1/media".
+func TestAPublishingAppWithNoMediaLibrarySaysSo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"Cannot GET /public/v1/media?page=1","error":"Not Found","statusCode":404}`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "k")
+	if _, err := c.MediaLibrary(context.Background(), "", 1); !errors.Is(err, ErrNotOffered) {
+		t.Errorf("MediaLibrary err = %v, want ErrNotOffered", err)
+	}
+	if _, err := c.UploadFromURL(context.Background(), "https://example.com/a.png"); !errors.Is(err, ErrNotOffered) {
+		t.Errorf("UploadFromURL err = %v, want ErrNotOffered", err)
 	}
 }

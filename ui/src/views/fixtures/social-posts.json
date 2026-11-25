@@ -328,6 +328,7 @@
   ],
   "Configured": true,
   "Media": null,
+  "MediaOff": false,
   "Metrics": null,
   "Notice": "",
   "Notifications": null,

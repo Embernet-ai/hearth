@@ -50,6 +50,8 @@ func areaErr(err error) string {
 	switch {
 	case errors.Is(err, social.ErrRateLimited):
 		return err.Error()
+	case errors.Is(err, social.ErrNotOffered):
+		return "The publishing app on this installation does not offer that."
 	case errors.Is(err, forms.ErrNotFound):
 		return "That form is not there any more."
 	}
@@ -422,6 +424,8 @@ type SocialView struct {
 	PostMetrics   []social.Metric
 	Notifications []social.Notification
 	Media         []social.Media
+	// MediaOff is true when the publishing app has no media library to read or add to, so the tab says so and offers no form.
+	MediaOff bool
 }
 
 func (s *Server) getSocial(w http.ResponseWriter, r *http.Request) {
@@ -455,7 +459,9 @@ func (s *Server) getSocial(w http.ResponseWriter, r *http.Request) {
 				v.Notice = areaErr(err)
 			}
 		case "media":
-			if v.Media, err = s.social.MediaLibrary(ctx, q.Get("q"), 1); err != nil {
+			if v.Media, err = s.social.MediaLibrary(ctx, q.Get("q"), 1); errors.Is(err, social.ErrNotOffered) {
+				v.MediaOff = true
+			} else if err != nil {
 				v.Notice = areaErr(err)
 			}
 		}

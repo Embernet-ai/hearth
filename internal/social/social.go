@@ -20,6 +20,10 @@ import (
 	"time"
 )
 
+// ErrNotOffered means this publishing app answers 404 for the call, as a version without the public media library does
+// ("Cannot GET /public/v1/media"). It is not a fault to show raw: the page says the app does not offer it.
+var ErrNotOffered = errors.New("social: this publishing app does not offer that")
+
 // ErrRateLimited means the app's hourly allowance for the key is used up.
 var ErrRateLimited = errors.New("social: the social app's hourly request limit was reached; try again in a few minutes")
 
@@ -127,6 +131,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return ErrRateLimited
+	case resp.StatusCode == http.StatusNotFound && strings.Contains(string(raw), "Cannot "):
+		return ErrNotOffered
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("social: the social app refused the key (%d)", resp.StatusCode)
 	case resp.StatusCode >= 300:
