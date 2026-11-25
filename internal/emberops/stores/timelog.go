@@ -40,6 +40,9 @@ type TimeLog struct {
 	// Docs answers what a document is (its kind and title) and whether the
 	// caller may open it. It is the Postgres document store.
 	Docs docs.Store
+	// Notify tells the person their hours were sent back, and the manager they
+	// were fixed. Nil tells nobody.
+	Notify timelog.Notifier
 }
 
 var _ timelog.Store = (*TimeLog)(nil)
@@ -651,7 +654,26 @@ func (s *TimeLog) Correct(ctx context.Context, orgID string, actor core.Subjects
 	if n := strings.TrimSpace(note); n != "" {
 		vals["description"] = n
 	}
-	return s.patch(ctx, entryID, emp, vals)
+	// Hours a manager sent back go back to waiting once the person fixes them,
+	// and the manager who sent them is told.
+	sentBack := r.S("hearth_approval") == "denied"
+	if sentBack {
+		vals["hearth_approval"], vals["hearth_decided_by"] = "pending", nil
+		vals["hearth_decided_at"], vals["hearth_decision_note"] = nil, nil
+	}
+	if err := s.patch(ctx, entryID, emp, vals); err != nil {
+		return err
+	}
+	if sentBack && s.Notify != nil {
+		if by := r.S("hearth_decided_by"); by != "" {
+			users, uerr := s.Dir.UserIDs(ctx)
+			if deciderID := users[by]; uerr == nil && deciderID != "" {
+				s.Notify.HoursResubmitted(ctx, orgID, timelog.Decision{EntryID: entryID, PersonID: actor.Principal(), DeciderID: deciderID,
+					StartedAt: start, Minutes: minutes, Note: strings.TrimSpace(note)})
+			}
+		}
+	}
+	return nil
 }
 
 func (s *TimeLog) Remove(ctx context.Context, orgID string, actor core.Subjects, entryID string) error {
@@ -917,13 +939,18 @@ func (s *TimeLog) decide(ctx context.Context, orgID, actorID string, ids []strin
 	}
 	now := time.Now()
 	for _, id := range ids {
-		_, emp, err := s.owner(ctx, byID[strings.ToLower(id)])
+		r := byID[strings.ToLower(id)]
+		person, emp, err := s.owner(ctx, r)
 		if err != nil {
 			return 0, err
 		}
 		if err := s.patch(ctx, id, emp, map[string]any{"hearth_approval": status, "hearth_decided_by": emberops.Ref(actorID),
 			"hearth_decided_at": s.tsv(now), "hearth_decision_note": strings.TrimSpace(note)}); err != nil {
 			return 0, err
+		}
+		if !approve && s.Notify != nil {
+			s.Notify.HoursSentBack(ctx, orgID, timelog.Decision{EntryID: id, PersonID: person, DeciderID: actorID,
+				StartedAt: r.T("from_time", s.loc()), Minutes: minutesOf(r), Note: strings.TrimSpace(note)})
 		}
 	}
 	return len(ids), nil

@@ -472,6 +472,7 @@ func run() error {
 	auditSvc := audit.New(pools.Web)
 	scimSvc := scim.New(pools.Web, teamsSvc, authSvc, log)
 
+	timeSvc.SetNotifier(web.NewTimeNotifier(notifySvc))
 	timeOffSvc := timeoff.New(pools.Web, web.NewTimeOffNotifier(notifySvc))
 	deptReqSvc := deptreq.New(pools.Web, web.NewDeptRequestNotifier(notifySvc))
 
@@ -500,6 +501,7 @@ func run() error {
 			CRMPartiesInEmberOPS: cfg.EmberOPSCRMParties == "emberops",
 			TimeOffNotify:        web.NewTimeOffNotifier(notifySvc),
 			DeptReqNotify:        web.NewDeptRequestNotifier(notifySvc),
+			TimeNotify:           web.NewTimeNotifier(notifySvc),
 		})
 	}
 	// With EmberOPS holding the records, a person has to exist there before their first page works: their User, their

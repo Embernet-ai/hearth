@@ -75,6 +75,11 @@ func hrefOf(entityType, entityID string) string {
 		return "/departments/requests/" + entityID
 	case core.EntityTimeOff:
 		return "/time-off#r-" + entityID
+	case core.EntityTimeEntry:
+		// Every entry of theirs a manager sent back, whatever week it was in.
+		return "/time?sentback=1"
+	case core.EntityTimeApproval:
+		return "/time/approvals"
 	case core.EntityDeal:
 		return "/deals/" + entityID
 	case core.EntityCompany:
@@ -129,7 +134,8 @@ func (s *Service) SetPusher(p Pusher) { s.pusher = p }
 // pushKind files a notification under the kind a person chooses between. Requests that wait on a decision
 // (time off, departments) and the answers to them are approvals; the rest keep the reason the inbox gave.
 func pushKind(reason string, entityType core.EntityType) string {
-	if entityType == core.EntityTimeOff || entityType == core.EntityDepartmentRequest {
+	if entityType == core.EntityTimeOff || entityType == core.EntityDepartmentRequest ||
+		entityType == core.EntityTimeEntry || entityType == core.EntityTimeApproval {
 		return push.KindApprovals
 	}
 	switch reason {
@@ -613,6 +619,10 @@ func (n *Notification) Sentence() string {
 	title := n.Title
 	if title == "" {
 		title = "an item"
+	}
+	// Hours that were sent back, or fixed and waiting again, carry their own verb in the title.
+	if n.EntityType == string(core.EntityTimeEntry) || n.EntityType == string(core.EntityTimeApproval) {
+		return who + " " + title
 	}
 	switch n.Reason {
 	case ReasonAssigned:

@@ -56,6 +56,13 @@ func (s *Server) getMyTime(w http.ResponseWriter, r *http.Request) {
 		to = from.AddDate(0, 1, 0)
 	}
 	showRemoved := r.URL.Query().Get("removed") == "1"
+	// A notification that hours were sent back lands here: every entry of theirs a
+	// manager sent back in the last 90 days, whatever week it was in.
+	sentBack := r.URL.Query().Get("sentback") == "1"
+	if sentBack {
+		to = time.Now().AddDate(0, 0, 1)
+		from = to.AddDate(0, 0, -90)
+	}
 
 	// Whose hours. A colleague's are read-only here, behind the same permission
 	// as the workload page, and the forms on the page still record your own.
@@ -90,6 +97,15 @@ func (s *Server) getMyTime(w http.ResponseWriter, r *http.Request) {
 		s.log.ErrorContext(r.Context(), "my time", "error", err)
 		s.fail(w, r, http.StatusInternalServerError, "could not read your time")
 		return
+	}
+	if sentBack {
+		kept := entries[:0]
+		for _, e := range entries {
+			if e.SentBack() && !e.Deleted() {
+				kept = append(kept, e)
+			}
+		}
+		entries = kept
 	}
 	total, pending, err := s.time.MineTotal(r.Context(), id.OrgID, whose, from, to)
 	if err != nil {
