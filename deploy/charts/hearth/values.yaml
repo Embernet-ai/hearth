@@ -751,3 +751,17 @@ social:
 # The Tools section: a card for each app a company runs, each linking to the live service. A list of
 # {name, description, href, note}. Empty hides the section.
 tools: []
+
+# The auto-upgrade: a CronJob that rolls this release to the newest chart of the range, once that chart's image is on the
+# registry, and checks that Hearth serves afterwards. It ships with the chart, so every upgrade carries the current script.
+# It follows the chart repository below; an installation that wants to pick its own moments sets enabled false (or suspend true
+# to keep it and pause it).
+autoupgrade:
+  enabled: true
+  suspend: false
+  schedule: "*/15 * * * *"
+  repoURL: https://embernet-ai.github.io/hearth
+  range: "<3.0.0"
+  runnerImage: docker.io/dtzar/helm-kubectl:3.16.2
+  # A pull credential in the namespace, for a private image. Optional: the default image is public.
+  pullSecret: ghcr

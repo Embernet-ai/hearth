@@ -313,3 +313,11 @@ Google Cloud Storage have their own.
 {{ include "hearth.s3.credentialEnv" . }}
 {{- end }}
 {{- end }}
+
+{{/* Labels on the auto-upgrade's objects. No chart version in them, so an upgrade does not rewrite a cluster-scoped object for a label. */}}
+{{- define "hearth.autoupgrade.labels" -}}
+app.kubernetes.io/name: {{ .Chart.Name }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: autoupgrade
+{{- end }}
