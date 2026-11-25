@@ -12,13 +12,18 @@
   const cents = (a: any[]) => (a || []).reduce((t: number, x: any) => t + (x.Cents || 0), 0);
   const maxOf = (rows: any[], f: (x: any) => number) => Math.max(1, ...(rows || []).map(f));
   const pct = (v: number, m: number) => Math.round((v / m) * 100) + '%';
+  const csv = (section: string) => '/crm/reports.csv?section=' + section + '&from=' + d.From + '&to=' + d.To + (pg.OwnerSel ? '&owner=' + pg.OwnerSel : '');
   const range = (n: number) => '/crm/reports?from=' + days(n) + '&to=' + days(0) + (pg.OwnerSel ? '&owner=' + pg.OwnerSel : '');
 </script>
 
 <section>
   <div class="row spread">
     <h1>Sales reports</h1>
-    <div class="row"><a class="chip" href="/crm/forecast">Forecast</a></div>
+    <div class="row"><a class="chip" href="/crm/forecast">Forecast</a>
+      <details class="inline" data-report-csv><summary class="chip">Export CSV</summary>
+        {#each [['owners', 'By person'], ['summary', 'Totals'], ['stages', 'Pipeline by stage'], ['activity', 'Activity'], ['lost', 'Why deals were lost'], ['age', 'Time in stage'], ['created', 'Deals made by month']] as [k, label]}
+          <a class="chip" href={csv(k)} data-csv={k}>{label}</a>{/each}
+      </details></div>
   </div>
   <form class="row wrap" method="get" action="/crm/reports" data-report-filters>
     <input name="from" type="date" value={d.From} aria-label="From" />

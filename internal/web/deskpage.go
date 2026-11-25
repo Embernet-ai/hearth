@@ -79,6 +79,7 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /crm/forecast", s.forecastPage)
 	mux.HandleFunc("GET /crm/forecast.csv", s.forecastCSV)
 	mux.HandleFunc("GET /crm/reports", s.reportsPage)
+	mux.HandleFunc("GET /crm/reports.csv", s.reportsCSV)
 	mux.HandleFunc("POST /crm/bulk", s.bulkChange)
 	mux.HandleFunc("GET /crm/duplicates", s.duplicatesPage)
 	mux.HandleFunc("POST /crm/merge", s.mergeRecords)
