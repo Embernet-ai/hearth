@@ -101,3 +101,23 @@ describe('a contacts form responses', () => {
     expect(d.querySelector('[data-form-responses]')?.textContent).toContain('What do you need?: Rewinds');
   });
 });
+
+describe('the reports depth', () => {
+  test('draws the money by stage, how long deals have sat, and why they were lost', () => {
+    const d = draw('salesreports', page({ Owners: [], Desk: { From: '2026-11-01', To: '2026-11-30', Report: { OpenCount: 2, Open: [{ Text: '$3,000', Cents: 300000 }], Weighted: [], WonCount: 0, Won: [], LostCount: 3, Lost: [], WinRate: 0, AvgWon: [], AvgCycleDays: 0,
+      Pipeline: [{ Label: 'Meeting', Stage: 'meeting', Probability: 40, Count: 1, Value: [{ Text: '$1,000', Cents: 100000 }], Weighted: [] }, { Label: 'Proposal', Stage: 'proposal', Probability: 60, Count: 1, Value: [{ Text: '$2,000', Cents: 200000 }], Weighted: [] }],
+      StageAge: [{ Label: 'Meeting', Stage: 'meeting', Count: 1, AvgDays: 12, OldestDays: 12 }],
+      LostReasons: [{ Reason: 'Price', Count: 2, Value: [{ Text: '$500' }] }, { Reason: 'No reason given', Count: 1, Value: [{ Text: '$100' }] }], Owners: [], Activity: [], Created: [] } } }));
+    const bars = d.querySelectorAll('[data-chart-stages] .bar');
+    expect(bars.length).toBe(2);
+    expect(bars[1].getAttribute('style')).toContain('100%');
+    expect(bars[0].getAttribute('style')).toContain('50%');
+    expect(d.querySelector('[data-report-age]')?.textContent).toContain('12');
+    expect(d.querySelector('[data-chart-lost]')?.textContent).toContain('Price');
+    expect(d.querySelector('[data-chart-lost] .bar')?.getAttribute('style')).toContain('100%');
+  });
+  test('says so when nothing was lost', () => {
+    const d = draw('salesreports', page({ Owners: [], Desk: { From: '2026-11-01', To: '2026-11-30', Report: { OpenCount: 0, Open: [], Weighted: [], WonCount: 0, Won: [], LostCount: 0, Lost: [], WinRate: -1, AvgWon: [], AvgCycleDays: 0, Pipeline: [], StageAge: [], LostReasons: [], Owners: [], Activity: [], Created: [] } } }));
+    expect(text(d)).toContain('No deals lost in this period.');
+  });
+});

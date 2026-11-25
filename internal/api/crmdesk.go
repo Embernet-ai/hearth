@@ -288,6 +288,14 @@ func (s *Service) salesReport(w http.ResponseWriter, r *http.Request, d crm.Desk
 	for _, m := range rep.Created {
 		created = append(created, map[string]any{"month": m.Month, "count": m.Count, "value": amtsJSON(m.Value)})
 	}
+	reasons := make([]map[string]any, 0, len(rep.LostReasons))
+	for _, l := range rep.LostReasons {
+		reasons = append(reasons, map[string]any{"reason": l.Reason, "count": l.Count, "value": amtsJSON(l.Value)})
+	}
+	ages := make([]map[string]any, 0, len(rep.StageAge))
+	for _, a := range rep.StageAge {
+		ages = append(ages, map[string]any{"stage": a.Stage, "label": a.Label, "count": a.Count, "average_days": a.AvgDays, "oldest_days": a.OldestDays})
+	}
 	var winRate any
 	if rep.WinRate >= 0 {
 		winRate = rep.WinRate
@@ -297,7 +305,7 @@ func (s *Service) salesReport(w http.ResponseWriter, r *http.Request, d crm.Desk
 		"open": map[string]any{"count": rep.OpenCount, "value": amtsJSON(rep.Open), "weighted": amtsJSON(rep.Weighted)},
 		"won":  map[string]any{"count": rep.WonCount, "value": amtsJSON(rep.Won), "average": amtsJSON(rep.AvgWon), "average_days_to_win": rep.AvgCycleDays},
 		"lost": map[string]any{"count": rep.LostCount, "value": amtsJSON(rep.Lost)}, "win_rate_percent": winRate,
-		"pipeline": stages, "owners": owners, "activity": acts, "deals_made": created,
+		"pipeline": stages, "owners": owners, "activity": acts, "deals_made": created, "lost_reasons": reasons, "stage_age": ages,
 	})
 }
 

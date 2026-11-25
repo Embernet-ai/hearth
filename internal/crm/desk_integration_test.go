@@ -614,3 +614,54 @@ func TestAnEmberOpsLinkCarriesTheDocumentsOwnName(t *testing.T) {
 		t.Errorf("names = %v, want the document names from the addresses, not the Hearth id", got)
 	}
 }
+
+func TestSalesReportExplainsLossesAndStageAge(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	lose := func(name, why string, cents int64) {
+		d, err := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: name, AmountCents: cents})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.MoveDeal(ctx, f.org, alice, d.ID, crm.StageLost, nil); err != nil {
+			t.Fatal(err)
+		}
+		if why != "" {
+			if err := f.svc.SetLostReason(ctx, f.org, alice, d.ID, why); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	lose("L1", "Price", 1000)
+	lose("L2", " price ", 2000)
+	lose("L3", "Went with a competitor", 500)
+	lose("L4", "", 100)
+	// Two open deals, one of which has sat in its stage for ten days.
+	old, _ := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Stale", Stage: crm.StageMeeting})
+	f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Fresh", Stage: crm.StageMeeting})
+	if _, err := f.pools.Web.Exec(ctx, `UPDATE deals SET stage_changed_at = now() - interval '10 days' WHERE id=$1`, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	day := time.Now()
+	rep, err := f.svc.SalesReport(ctx, f.org, bob, day.AddDate(0, 0, -1), day, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.LostReasons) != 3 || rep.LostReasons[0].Count != 2 || rep.LostReasons[0].Reason != "Price" && rep.LostReasons[0].Reason != "price" || rep.LostReasons[0].Value[0].Cents != 3000 {
+		t.Fatalf("lost reasons = %+v, want Price twice ($30 together, case folded) first", rep.LostReasons)
+	}
+	last := rep.LostReasons[len(rep.LostReasons)-1]
+	if last.Reason != "No reason given" && rep.LostReasons[1].Reason != "No reason given" && rep.LostReasons[2].Reason != "No reason given" {
+		t.Errorf("a loss with no reason must say so: %+v", rep.LostReasons)
+	}
+	if len(rep.StageAge) != 1 || rep.StageAge[0].Stage != crm.StageMeeting || rep.StageAge[0].Count != 2 || rep.StageAge[0].OldestDays != 10 || rep.StageAge[0].AvgDays != 5 {
+		t.Errorf("stage age = %+v, want two in Meeting, oldest 10 days, average 5", rep.StageAge)
+	}
+	empty, _ := f.svc.SalesReport(ctx, f.org, out, day.AddDate(0, 0, -1), day, "")
+	if len(empty.LostReasons) != 0 || len(empty.StageAge) != 0 {
+		t.Errorf("a person outside sales saw reasons %v and ages %v", empty.LostReasons, empty.StageAge)
+	}
+}
