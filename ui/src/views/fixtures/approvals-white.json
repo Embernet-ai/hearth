@@ -339,6 +339,7 @@
  "Checklist": null,
  "ChecklistOpen": false,
  "Children": null,
+ "ClosedHidden": 0,
  "Cloud": null,
  "CloudLinks": null,
  "CloudOn": false,

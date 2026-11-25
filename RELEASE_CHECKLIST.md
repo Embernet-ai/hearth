@@ -29,7 +29,7 @@ It builds `linux/amd64` only and pushes `:X.Y.Z`, `:sha-<short>`, and `:stable` 
 gh api "/orgs/Embernet-ai/packages/container/hearth/versions?per_page=100" --jq '.[].metadata.container.tags[]' | grep -x X.Y.Z
 ```
 
-No line printed means no image yet. Do not run `helm upgrade` until it prints the version. The auto-upgrade CronJob (`deploy/autoupgrade/`) makes the same check for itself and waits.
+No line printed means no image yet. Do not run `helm upgrade` until it prints the version. The auto-upgrade CronJob (`deploy/charts/hearth/templates/autoupgrade.yaml`) makes the same check for itself and waits.
 
 ## 3. The GitHub release
 
@@ -47,4 +47,5 @@ Right after the tag, write the release on this repository, from the tag's own no
 2. `/healthz` reports the release revision and `profile: release`.
 3. The things the release changed, read on the live system: counts, the page, the job's report. Not a status word.
 4. The CronJobs (`hearth-backup`, `hearth-crm-sync` when `crmSync.enabled`, and `hearth-groups-sync` when `groupsSync.enabled`) are listed with the new image on their next run.
-5. Anything a one-off Job left behind is deleted, with its cause named if it failed.
+5. The auto-upgrade CronJob's ConfigMap matches the tag: `kubectl -n hearth get cm hearth-autoupgrade -o jsonpath='{.data.upgrade\.sh}' | diff - deploy/charts/hearth/files/autoupgrade.sh` prints nothing. It ships in the chart, so a `helm upgrade` carries it; nothing is applied by hand.
+Anything a one-off Job left behind is deleted, with its cause named if it failed.

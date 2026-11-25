@@ -1,0 +1,174 @@
+{{- if .Values.autoupgrade.enabled }}
+# Auto-upgrade for a Hearth that runs from this chart. Every 15 minutes it looks for a newer 2.x chart and, when the image for
+# that version is already on the registry, runs `helm upgrade` to it, then asks Hearth itself whether it serves (/healthz, then
+# the sign-in page) and says so loudly if it does not. Nothing newer means it touches nothing. It never installs, never rolls
+# back and never touches a release that is not `deployed`: a release a person has to look at stays a person's. A failed health
+# check ends the job as Failed and is the first thing seen on the CronJob; the next release fixes forward.
+#
+# It is part of the chart so that every upgrade carries the current script. It used to be a manifest applied by hand, and a
+# fix to its health check (2.23.8) never reached the clusters that had applied the old one.
+#
+# The ServiceAccount holds only what a `helm upgrade` of this chart touches, and no cluster-admin:
+#   - the built-in `admin` role in the release namespace (Deployments, StatefulSets, CronJobs, Jobs, Ingress, Services, PVCs,
+#     Secrets, ConfigMaps and the helm release Secrets),
+#   - a namespace Role to write the chart's own Role and RoleBinding for Garage (`escalate` and `bind`, because the Role grants
+#     the Garage CRD), the Garage resources themselves and the Traefik Middleware for the HTTPS redirect,
+#   - a ClusterRole for the cluster-scoped objects the chart renders: ClusterRole manage-crds-<namespace>-<release> and its
+#     ClusterRoleBinding allow-crds-for-<namespace>-<release> (from the Garage subchart), and this auto-upgrade's own ClusterRole
+#     and ClusterRoleBinding, limited to those names and to get, update, patch, plus `escalate` and `bind` on the ClusterRoles,
+#     because Kubernetes refuses to let an account change a role that grants more than it holds.
+# A future chart that renders another cluster-scoped kind makes the upgrade fail with a clear message and leaves the release
+# alone, which is the safe way to find out.
+{{- $name := printf "%s-autoupgrade" (include "hearth.fullname" .) }}
+{{- $ns := .Release.Namespace }}
+{{- $crd := printf "manage-crds-%s-%s" .Release.Namespace .Release.Name }}
+{{- $crdb := printf "allow-crds-for-%s-%s" .Release.Namespace .Release.Name }}
+{{- $labels := include "hearth.autoupgrade.labels" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- $labels | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- $labels | nindent 4 }}
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["escalate", "bind"]
+  - apiGroups: ["deuxfleurs.fr"]
+    resources: ["garagenodes"]
+    verbs: ["*"]
+  # The chart's HTTPS redirect is a Traefik Middleware, which the built-in admin role does not cover.
+  - apiGroups: ["traefik.io", "traefik.containo.us"]
+    resources: ["middlewares"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-extra
+  namespace: {{ $ns }}
+  labels:
+    {{- $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: [{{ $crd | quote }}, {{ $name | quote }}]
+    verbs: ["get", "update", "patch", "escalate", "bind"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterrolebindings"]
+    resourceNames: [{{ $crdb | quote }}, {{ $name | quote }}]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $ns }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- $labels | nindent 4 }}
+data:
+  upgrade.sh: |
+    {{- .Files.Get "files/autoupgrade.sh" | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- $labels | nindent 4 }}
+spec:
+  schedule: {{ .Values.autoupgrade.schedule | quote }}
+  suspend: {{ .Values.autoupgrade.suspend }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1500
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          serviceAccountName: {{ $name }}
+          restartPolicy: Never
+          containers:
+            - name: upgrade
+              image: {{ .Values.autoupgrade.runnerImage | quote }}
+              command: ["bash", "/script/upgrade.sh"]
+              env:
+                - { name: NS, value: {{ $ns | quote }} }
+                - { name: RELEASE, value: {{ .Release.Name | quote }} }
+                - { name: CHART, value: {{ .Chart.Name | quote }} }
+                - { name: SERVICE, value: {{ include "hearth.fullname" . | quote }} }
+                - { name: REPO_URL, value: {{ .Values.autoupgrade.repoURL | quote }} }
+                - { name: RANGE, value: {{ .Values.autoupgrade.range | quote }} }
+                - { name: IMAGE_REPO, value: {{ .Values.image.repository | quote }} }
+              resources:
+                requests: { cpu: 10m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              volumeMounts:
+                - { name: script, mountPath: /script, readOnly: true }
+                - { name: pull, mountPath: /pull, readOnly: true }
+          volumes:
+            - name: script
+              configMap: { name: {{ $name }}, defaultMode: 0555 }
+            - name: pull
+              secret: { secretName: {{ .Values.autoupgrade.pullSecret | quote }}, optional: true }
+{{- end }}

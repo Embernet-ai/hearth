@@ -515,11 +515,14 @@ type page struct {
 	CurrentURL string
 	Total      int
 	Shown      int
-	Tabs       []ViewTab
-	GroupBy    string
-	GroupOpts  []FieldOption
-	ColumnOpts []FieldOption
-	Columns    []docs.Field
+	// ClosedHidden is how many done and cancelled items the default view leaves out, so the count on the page and the side
+	// panel's count (every live document at that level) can be read together.
+	ClosedHidden int
+	Tabs         []ViewTab
+	GroupBy      string
+	GroupOpts    []FieldOption
+	ColumnOpts   []FieldOption
+	Columns      []docs.Field
 	// GroupedTable is Table's rows arranged the same way Board's Groups are --
 	// Table always groups now (defaulted to status, same as Board), so this
 	// replaced the old flat TableRows entirely rather than sitting alongside it.
@@ -1013,6 +1016,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 		}
 		if sp, err := s.plant.GetSpace(r.Context(), p.Identity.OrgID, p.Identity.Subjects, p.SpaceID); err == nil {
 			p.SpaceName = sp.Name
+			// A department's page is named for the department, in the top bar and the tab as well as over the directory:
+			// it said Everything above a list of one department.
+			if name == "documents" && p.Kind == "" && p.SavedView == nil && p.Path == "/documents" {
+				p.Title, p.Heading = sp.Name, sp.Name
+			}
 		}
 	}
 

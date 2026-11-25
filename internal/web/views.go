@@ -368,6 +368,15 @@ func (s *Server) renderList(w http.ResponseWriter, r *http.Request, req listRequ
 		total = len(rows)
 	}
 
+	// What the default view leaves out: done and cancelled items, which the side panel's count includes. Said on the page
+	// so the two agree ("0, 1 closed" beside a panel that says 1), with a link that shows them.
+	closedHidden := 0
+	if !req.query.Closed && !hasStatusFilter(req.query.Filters) {
+		if all, err := s.docs.Count(ctx, id.OrgID, id.Subjects, req.query); err == nil && all > total {
+			closedHidden = all - total
+		}
+	}
+
 	people, err := s.docs.Assignable(ctx, id.OrgID)
 	if err != nil {
 		s.log.ErrorContext(ctx, "load assignable", "error", err)
@@ -408,25 +417,26 @@ func (s *Server) renderList(w http.ResponseWriter, r *http.Request, req listRequ
 	}
 
 	p := page{
-		Title:      s.listTitle(req),
-		Heading:    s.listTitle(req),
-		Wide:       true,
-		Kind:       req.query.Kind,
-		Query:      req.query,
-		ViewKind:   req.viewKind,
-		SavedView:  req.saved,
-		Base:       req.base,
-		Total:      total,
-		Shown:      len(rows),
-		Statuses:   docs.Statuses,
-		People:     s.onlyReachable(r, people),
-		PropDefs:   defs,
-		Columns:    cols,
-		Tabs:       s.viewTabs(req),
-		GroupBy:    req.query.GroupBy.Key(),
-		GroupOpts:  groupOptions(req.query, defs),
-		ColumnOpts: columnOptions(cols, defs),
-		SaveTarget: listURL(listPath(req.query.Kind), req.query, req.viewKind),
+		Title:        s.listTitle(req),
+		Heading:      s.listTitle(req),
+		Wide:         true,
+		Kind:         req.query.Kind,
+		Query:        req.query,
+		ViewKind:     req.viewKind,
+		SavedView:    req.saved,
+		Base:         req.base,
+		Total:        total,
+		ClosedHidden: closedHidden,
+		Shown:        len(rows),
+		Statuses:     docs.Statuses,
+		People:       s.onlyReachable(r, people),
+		PropDefs:     defs,
+		Columns:      cols,
+		Tabs:         s.viewTabs(req),
+		GroupBy:      req.query.GroupBy.Key(),
+		GroupOpts:    groupOptions(req.query, defs),
+		ColumnOpts:   columnOptions(cols, defs),
+		SaveTarget:   listURL(listPath(req.query.Kind), req.query, req.viewKind),
 		// CurrentURL is exactly the view being looked at right now -- same
 		// base (plain kind or a saved view), same filters, same grouping --
 		// so an action that wants to return here (the grouped table's
