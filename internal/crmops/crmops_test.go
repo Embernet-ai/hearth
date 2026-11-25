@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Embernet-ai/hearth/internal/crm"
 	"github.com/Embernet-ai/hearth/internal/crmops"
@@ -79,5 +80,55 @@ func TestQuotedBetweenTotalsByCurrencyAndStatus(t *testing.T) {
 	}
 	if len(tot.ByStatus) != 2 {
 		t.Errorf("by status = %+v", tot.ByStatus)
+	}
+}
+
+func TestAQuotationIsMadeFromADealsOpportunityOnceAndOnlyOnce(t *testing.T) {
+	s, f := newOps(t)
+	f.Put("Opportunity", map[string]any{"name": "CRM-OPP-9", "opportunity_from": "Customer", "party_name": "CUST-1", "title": "Line 3 retrofit", "company": "Fireball Industries", "currency": "USD", "opportunity_amount": 48000})
+	f.Put("Opportunity", map[string]any{"name": "CRM-OPP-10", "title": "Nobody yet"})
+	day := time.Date(2026, 11, 25, 9, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+
+	name, link, err := s.QuoteFromDeal(ctx, "CRM-OPP-9", day)
+	if err != nil || name == "" || !strings.HasSuffix(link, "/app/quotation/"+name) {
+		t.Fatalf("name %q link %q err %v", name, link, err)
+	}
+	var made map[string]any
+	for _, q := range f.All("Quotation") {
+		if q["name"] == name {
+			made = q
+		}
+	}
+	items, _ := made["items"].([]any)
+	if made["opportunity"] != "CRM-OPP-9" || made["quotation_to"] != "Customer" || made["party_name"] != "CUST-1" || made["company"] != "Fireball Industries" ||
+		made["currency"] != "USD" || made["transaction_date"] != "2026-11-25" || made["valid_till"] != "2026-12-25" || len(items) != 1 {
+		t.Fatalf("quotation = %+v", made)
+	}
+	if it := items[0].(map[string]any); it["item_name"] != "Line 3 retrofit" || it["rate"] != float64(48000) || it["qty"] != float64(1) {
+		t.Errorf("line = %+v", it)
+	}
+	// Pressing it again returns the same draft.
+	again, _, err := s.QuoteFromDeal(ctx, "CRM-OPP-9", day)
+	if err != nil || again != name {
+		t.Errorf("second press made %q (%v), want %q", again, err, name)
+	}
+	n := 0
+	for _, q := range f.All("Quotation") {
+		if q["opportunity"] == "CRM-OPP-9" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d quotations on the opportunity, want 1", n)
+	}
+	// An opportunity with nobody to quote says so in words.
+	if _, _, err := s.QuoteFromDeal(ctx, "CRM-OPP-10", day); err == nil || !strings.Contains(err.Error(), "nobody to quote") {
+		t.Errorf("err = %v", err)
+	}
+	// The panel offers the button for an opportunity.
+	p, _ := s.For(ctx, []crm.EmberOpsLink{{Label: "Opportunity", Name: "CRM-OPP-9"}}, nil)
+	if p.Opportunity != "CRM-OPP-9" {
+		t.Errorf("panel opportunity = %q", p.Opportunity)
 	}
 }

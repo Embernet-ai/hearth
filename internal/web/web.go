@@ -1236,6 +1236,7 @@ func (s *Server) Routes() http.Handler {
 	// Contacts and companies. Ordinary entities, so they get grants,
 	// properties, links, and search from the substrate rather than from four
 	// new pieces of code written specially for them.
+	authed.HandleFunc("POST /crm/quote", s.postQuoteFromDeal)
 	authed.HandleFunc("GET /crm/favorites", s.getFavorites)
 	authed.HandleFunc("POST /crm/favorites", s.setFavorite)
 	authed.HandleFunc("POST /crm/views", s.saveCRMView)

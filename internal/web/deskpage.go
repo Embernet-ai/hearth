@@ -1063,3 +1063,32 @@ func (s *Server) setPropertyValues(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, recordPath(ref)+"#fields", http.StatusSeeOther)
 }
+
+// postQuoteFromDeal makes a draft quotation in EmberOps from the Opportunity a record is linked to, then goes back to
+// the record. It is the Sales team's and super admins' alone, like the rest of the sales pages.
+func (s *Server) postQuoteFromDeal(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.salesAccess(w, r); !ok {
+		return
+	}
+	if s.crmOps == nil {
+		s.fail(w, r, http.StatusNotFound, "EmberOps is not connected on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	back := localBack(r.FormValue("back"), "/crm")
+	_, _, err := s.crmOps.QuoteFromDeal(r.Context(), r.FormValue("opportunity"), time.Now())
+	if err != nil {
+		s.log.WarnContext(r.Context(), "quotation from a deal refused", "opportunity", r.FormValue("opportunity"), "error", err)
+		msg := "The quotation could not be made in EmberOps. Try again in a minute."
+		if strings.Contains(err.Error(), "nobody to quote") {
+			msg = "That deal has no customer or lead in EmberOps yet, so there is nobody to quote."
+		}
+		s.fail(w, r, http.StatusConflict, msg)
+		return
+	}
+	// The quotation shows in the record's EmberOps panel on the page it goes back to.
+	http.Redirect(w, r, back+"#emberops", http.StatusSeeOther)
+}

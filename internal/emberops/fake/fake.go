@@ -163,6 +163,9 @@ func (f *Frappe) resource(w http.ResponseWriter, r *http.Request, rest, user str
 		f.resolveRefs(body)
 		body["owner"] = user
 		body["modified"] = stamp()
+		if _, has := body["docstatus"]; !has {
+			body["docstatus"] = float64(0) // a document is born a draft
+		}
 		n := f.put(doctype, body)
 		reply(w, "data", f.docs[doctype][n])
 	case r.Method == http.MethodGet:
