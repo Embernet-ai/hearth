@@ -2,6 +2,7 @@
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
   import Embedded from '../../components/Embedded.svelte';
+  import Directory from '../../components/Directory.svelte';
   // The quick view of a task, and the new panel: each is another page of the interface drawn inside a popover when its button is
   // pressed. n makes a second press on the same task fetch again.
   let peek = $state(null);
@@ -18,19 +19,24 @@
   </form>
 
   <div  class="toolbar row">
-    <div  class="viewsbar"  data-dept-views>
-      <span  class="muted small">Views</span>
-      {#each F.rng(dot?.SavedViews) as [kv, dv]}
-        <span  class="viewchip">
-          <a  class={"chip " + S((F.t(F.and(dot?.SavedView, F.eq(dot?.SavedView?.ID, dv?.ID))) ? ("on") : ""))}  href={(S(dv?.Path))}>{dv?.Name}{#if F.t(dv?.Shared) && dv?.OwnerID !== dot?.Me}<span  class="muted"> &middot; shared</span>{/if}</a>
-          {#if dv?.OwnerID === dot?.Me}
-            <form  class="inline"  method="post"  action={("/views/" + S(dv?.ID) + "/delete")}>
-              <button  type="submit"  class="ghost small"  aria-label={("Remove the view " + S(dv?.Name))}  title="Remove this view">&times;</button>
-            </form>
-          {/if}
-        </span>
-      {/each}
-      <span  class="muted small">Status</span>
+    <button  type="button"  class="chip"  popovertarget="pop-filter">Filter</button>
+    <div  id="pop-filter"  popover class="popover">
+      {#if F.len(dot?.SavedViews)}
+        <p  class="muted small">Views</p>
+        <nav  class="filters"  data-dept-views>
+          {#each F.rng(dot?.SavedViews) as [kv, dv]}
+            <span  class="viewchip">
+              <a  class={"chip " + S((F.t(F.and(dot?.SavedView, F.eq(dot?.SavedView?.ID, dv?.ID))) ? ("on") : ""))}  href={(S(dv?.Path))}>{dv?.Name}{#if F.t(dv?.Shared) && dv?.OwnerID !== dot?.Me}<span  class="muted"> &middot; shared</span>{/if}</a>
+              {#if dv?.OwnerID === dot?.Me}
+                <form  class="inline"  method="post"  action={("/views/" + S(dv?.ID) + "/delete")}>
+                  <button  type="submit"  class="ghost small"  aria-label={("Remove the view " + S(dv?.Name))}  title="Remove this view">&times;</button>
+                </form>
+              {/if}
+            </span>
+          {/each}
+        </nav>
+      {/if}
+      <p  class="muted small">Status</p>
       <nav  class="filters">
         <a  class={"chip " + S((F.t(F.not(F.hasFilter(dot?.Query, F.col("status")))) ? ("on") : ""))}             href={(S(dot?.Base) + S(F.clearStatus(dot?.Query, dot?.ViewKind)))}>All</a>
         {#each F.rng(dot?.Statuses) as [k2, d2]}{@const v_s = d2}
@@ -235,7 +241,7 @@
   
   <div  class="row spread pageheader">
     <div  class="row">
-      <h1>{dot?.Heading}</h1>
+      <h1>{#if dot?.SpaceName && !dot?.Kind && !dot?.SavedView}{dot?.SpaceName}{:else}{dot?.Heading}{/if}</h1>
       
       <span  class="muted small">
         {#if F.t(F.lt(dot?.Shown, dot?.Total))}{dot?.Shown} of {dot?.Total}{:else}{dot?.Total}{/if}
@@ -248,17 +254,7 @@
   </div>
 
   
-  {#if F.t(dot?.SpaceChildren)}
-    <nav  class="spacerow">
-      {#each F.rng(dot?.SpaceChildren) as [k20, d20]}
-        <a  class="spacechip"  href={("/documents?space=" + S(d20?.ID))}>
-          <span  class="sckind">{#if F.t(F.eq(d20?.Kind, "folder"))}Sub-department{:else}{d20?.Kind}{/if}</span>
-          {d20?.Name}
-          <span  class="sccount">{d20?.Documents}</span>
-        </a>
-      {/each}
-    </nav>
-  {/if}
+  <Directory pg={dot} />
 
   
   {#if F.t(F.and(dot?.Query?.SpaceID, F.ne(dot?.Query?.Kind, "daily_report")))}

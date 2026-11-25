@@ -227,6 +227,43 @@ func fixtures() map[string]page {
 			Form:     &FormRow{Form: forms.Form{ID: "f1", Name: "Feedback"}, Label: "Live"},
 			Results:  &forms.Results{Total: 2, Finished: 1, Responses: []forms.Response{{ID: "r1", Created: "2026-11-20T10:00:00Z", Finished: true, Answers: map[string]any{"q1": "Great"}}}},
 			Headings: map[string]string{"q1": "Anything else?"}, Order: []string{"q1"}}},
+		"documents-dept": func() page {
+			eng, white, emb := "e-eng", "e-white", "e-emb"
+			sp := func(id, name, kind string, parent *string, n int) *plant.Space {
+				return &plant.Space{ID: id, Name: name, Kind: kind, ParentID: parent, Documents: n}
+			}
+			root := &orgNode{Space: sp(eng, "Engineering", "department", nil, 0), Open: true, Selected: true}
+			root.Children = []*orgNode{
+				{Space: sp(emb, "Embernet", "folder", &eng, 12), Children: []*orgNode{{Space: sp("e-plat", "Platform", "folder", &emb, 40)}, {Space: sp("e-rel", "Releases", "folder", &emb, 7)}}},
+				{Space: sp(white, "White Team", "folder", &eng, 88)},
+				{Space: sp("e-red", "Red Team", "folder", &eng, 3)},
+			}
+			q := docs.Query{SpaceID: &eng, Direct: true}
+			return page{Title: "Everything", Heading: "Everything", Wide: true, SpaceID: eng, SpaceName: "Engineering", Query: q, ViewKind: "table", Base: "/documents", Total: 0, Shown: 0,
+				Org:           []*orgNode{root, {Space: sp("s-sales", "Sales", "department", nil, 239)}},
+				Crumbs:        []crumb{{ID: eng, Name: "Engineering"}},
+				SpaceChildren: []*plant.Space{sp("p-click", "Line 3 backlog", "project", &eng, 14)},
+				Tabs:          []ViewTab{{Kind: "table", Label: "Table", Href: "/documents?space=e-eng&view=table", On: true}, {Kind: "board", Label: "Board", Href: "/documents?space=e-eng&view=board"}},
+				Statuses:      docs.Statuses}
+		}(),
+		"documents-sub": func() page {
+			eng, emb, plat := "e-eng", "e-emb", "e-plat"
+			sp := func(id, name, kind string, parent *string, n int) *plant.Space {
+				return &plant.Space{ID: id, Name: name, Kind: kind, ParentID: parent, Documents: n}
+			}
+			root := &orgNode{Space: sp(eng, "Engineering", "department", nil, 0), Open: true}
+			mid := &orgNode{Space: sp(emb, "Embernet", "folder", &eng, 12), Open: true}
+			leaf := &orgNode{Space: sp(plat, "Platform", "folder", &emb, 40), Selected: true, Open: true,
+				Children: []*orgNode{{Space: sp("e-api", "API", "folder", &plat, 5)}}}
+			mid.Children = []*orgNode{leaf}
+			root.Children = []*orgNode{mid}
+			q := docs.Query{SpaceID: &plat}
+			return page{Title: "Everything", Heading: "Everything", Wide: true, SpaceID: plat, Query: q, ViewKind: "table", Base: "/documents", Total: 45, Shown: 45,
+				Org:      []*orgNode{root},
+				Crumbs:   []crumb{{ID: eng, Name: "Engineering"}, {ID: emb, Name: "Embernet"}, {ID: plat, Name: "Platform"}},
+				Tabs:     []ViewTab{{Kind: "table", Label: "Table", Href: "/documents?space=e-plat&view=table&inside=1", On: true}},
+				Statuses: docs.Statuses}
+		}(),
 		"social-off":  {Title: "Social", SocialArea: &SocialView{}},
 		"social-none": {Title: "Social", SocialArea: &SocialView{Configured: true}},
 		"social-posts": {Title: "Social", SocialArea: &SocialView{Configured: true,

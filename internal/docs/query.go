@@ -139,6 +139,10 @@ type Query struct {
 	// Filter popover's status chips: picking "Done" there still means "only
 	// done", not "done as well as everything else".
 	Closed bool `json:"closed,omitempty"`
+	// Direct narrows SpaceID to the space itself, the level somebody is standing on, where the default is everything
+	// beneath it. A department page opens on its own level, with its folders drawn above, and "everything inside" asks for
+	// the subtree. Left false by every caller that builds a Query itself (the API, the agents), so they keep the subtree.
+	Direct bool `json:"direct,omitempty"`
 
 	Limit  int `json:"limit,omitempty"`
 	Offset int `json:"offset,omitempty"`
@@ -227,6 +231,9 @@ func ParseQuery(v url.Values) Query {
 	q := Query{Kind: v.Get("kind")}
 	if s := v.Get("space"); s != "" {
 		q.SpaceID = &s
+		// A department opens on its own level. inside=1 asks for everything beneath it, and is what Encode writes for a
+		// query that wants the subtree, so a saved view and a pasted link keep meaning what they meant.
+		q.Direct = v.Get("inside") != "1"
 	}
 
 	// status= is kept as a plain shorthand because it predates views and is
@@ -303,6 +310,9 @@ func (q Query) Encode() url.Values {
 	}
 	if q.SpaceID != nil {
 		v.Set("space", *q.SpaceID)
+		if !q.Direct {
+			v.Set("inside", "1")
+		}
 	}
 	if q.Closed {
 		v.Set("closed", "1")
@@ -683,7 +693,11 @@ func (b *builder) compile(orgID string, actor core.Subjects, q Query) string {
 	if q.Kind != "" {
 		sb.WriteString(" AND d.kind = " + b.arg(q.Kind))
 	}
-	if q.SpaceID != nil && looksLikeUUID(*q.SpaceID) {
+	if q.SpaceID != nil && q.Direct && looksLikeUUID(*q.SpaceID) {
+		// The level somebody is standing on: the department page draws its folders as a directory above the list, so the
+		// list is what sits at this level.
+		sb.WriteString(" AND d.space_id = " + b.arg(*q.SpaceID) + "::uuid")
+	} else if q.SpaceID != nil && looksLikeUUID(*q.SpaceID) {
 		// The subtree, not the one node.
 		//
 		// Spaces are a hierarchy -- department, sub-department, project -- and

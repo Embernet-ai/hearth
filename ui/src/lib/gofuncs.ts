@@ -85,7 +85,7 @@ function encodeQuery(q: Any): Map<string, string[]> {
   const set = (k: string, x: string) => v.set(k, [x]);
   const add = (k: string, x: string) => v.set(k, [...(v.get(k) ?? []), x]);
   if (q?.Kind) set('kind', q.Kind);
-  if (q?.SpaceID != null) set('space', q.SpaceID);
+  if (q?.SpaceID != null) { set('space', q.SpaceID); if (!q?.Direct) set('inside', '1'); }
   if (q?.Closed) set('closed', '1');
   for (const f of q?.Filters ?? []) {
     let s = fieldKey(f.Field) + ':' + f.Op;
