@@ -82,6 +82,8 @@ func main() {
 		err = runSpaceRemove(ctx, os.Args[2:])
 	case "space-create":
 		err = runSpaceCreate(ctx, os.Args[2:])
+	case "space-move":
+		err = runSpaceMove(ctx, os.Args[2:])
 	case "hubspot-import":
 		err = runHubSpotImport(ctx, os.Args[2:])
 	case "zoho-contacts-import":
@@ -136,6 +138,7 @@ func usage() {
   mautic-sync [-write]        send contacts to Mautic and bring its activity and opt-outs back (dry run by default)
   doc-delete -source S -ids A,B [-go]  remove documents that carry a reference from S (checks first, nothing deleted without -go)
   space-create -as ADMIN -name N [-kind project] [-parent ID] [-agent HANDLE] [-team NAME]  make a space (or find it) and share it with a service and a team
+  space-move -as ADMIN -space ID -parent ID [-agent HANDLE] [-team NAME]  move a space inside another and share it with a service and a team
   space-remove -space ID [-go]         cancel the open tasks in a space, take every item out of it, remove the space (nothing changes without -go)
   zoho-contacts-import -file X.xlsx -url U -owner ID [-dry-run]  add a Zoho Contacts export to the CRM through the API
   hubspot-import [-apply] [-since T]  bring what changed in HubSpot since the last import into the CRM (dry run by default)
