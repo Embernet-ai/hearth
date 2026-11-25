@@ -87,3 +87,8 @@
 </section>
 {/snippet}
 {@render content(dot)}
+
+<style>
+  .tablescroll { overflow-x: auto; max-width: 100%; }
+  .numgrid { display: grid; gap: var(--s-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); margin: var(--s-2) 0 var(--s-5); }
+</style>
