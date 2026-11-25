@@ -39,7 +39,7 @@
         <div class="stat"><dt>Issues</dt><dd>{n(v.Total.IssuesClosed)}</dd><small class="period">closed</small><small class="period detail">{n(v.Total.IssuesOpened)} opened</small></div>
         <div class="stat {v.Total.RunsFailed > 0 ? 'bad' : ''}"><dt>CI runs</dt><dd>{n(v.Total.Runs)}</dd><small class="period">{v.Total.RunsFailed} failed</small><small class="period detail">{v.Total.Runs ? Math.round((v.Total.RunsPassed * 100) / v.Total.Runs) + '% passed' : 'no runs'}</small></div>
       </div>
-      <table class="list" data-repos>
+      <div class="tablescroll"><table class="list" data-repos>
         <thead><tr><th>Repository</th><th>Commits</th><th>PRs merged</th><th>Issues closed</th><th>Releases</th><th>CI passed</th><th>Latest release</th></tr></thead>
         <tbody>
           {#each v.Repos ?? [] as m}
@@ -50,7 +50,7 @@
             </tr>
           {/each}
         </tbody>
-      </table>
+      </table></div>
     {:else}
       <p class="muted" data-none-chosen>Choose the repositories you want numbers for below.</p>
     {/if}
@@ -71,9 +71,11 @@
 </section>
 
 <style>
-  .repopick { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: var(--s-2) var(--s-4); }
+  .repopick { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: var(--s-2) var(--s-4); }
   .repopick label { margin: 0; overflow-wrap: anywhere; }
   .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); margin: var(--s-2) 0 var(--s-5); }
   @media (min-width: 40rem) { .stats[data-n='4'] { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .detail { display: block; }
+  /* seven columns do not fit a phone at larger type: the table scrolls inside its own box, the page never does */
+  .tablescroll { overflow-x: auto; max-width: 100%; }
 </style>
