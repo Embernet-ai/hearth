@@ -729,3 +729,55 @@ func TestCSVExportsCarryTheCustomFields(t *testing.T) {
 		t.Error("an outsider got the values")
 	}
 }
+
+func TestTheBoardWeighsEachColumnAndNamesItsNarrowing(t *testing.T) {
+	f := newDeskFx(t)
+	var env struct {
+		Page struct {
+			Filter   string
+			DealCols []struct {
+				Stage       string
+				Total       int64
+				Probability int
+				Weighted    int64
+			}
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/deals", nil).Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, c := range env.Page.DealCols {
+		if c.Stage == "proposal" {
+			found = true
+			// The fixture's deal is a $500 proposal; 60 percent of it.
+			if c.Total != 50000 || c.Probability != 60 || c.Weighted != 30000 {
+				t.Errorf("proposal column = %+v, want 50000 at 60 percent weighing 30000", c)
+			}
+		}
+	}
+	if !found || env.Page.Filter != "all" {
+		t.Errorf("board = %+v, want a proposal column and the view named all", env.Page)
+	}
+	for q, want := range map[string]string{"?overdue=1": "overdue", "?noclose=1": "noclose", "?closefrom=2026-12-01&closeto=2026-12-31": "month"} {
+		var e struct{ Page struct{ Filter string } }
+		if err := json.Unmarshal(f.do(f.other, "GET", "/deals"+q, nil).Body.Bytes(), &e); err != nil || e.Page.Filter != want {
+			t.Errorf("%s names the view %q, want %q (%v)", q, e.Page.Filter, want, err)
+		}
+	}
+	// The narrowing is real: the fixture deal has no close date, so a close window finds none and no-close finds it.
+	var none struct {
+		Page struct{ DealCols []struct{ Count int } }
+	}
+	_ = json.Unmarshal(f.do(f.other, "GET", "/deals?closefrom=2026-12-01&closeto=2026-12-31", nil).Body.Bytes(), &none)
+	total := 0
+	for _, c := range none.Page.DealCols {
+		total += c.Count
+	}
+	if total != 0 {
+		t.Errorf("a December window shows %d deals, want 0", total)
+	}
+	if w := f.do(f.out, "GET", "/deals?noclose=1", nil); w.Code != http.StatusOK || strings.Contains(w.Body.String(), `"Count":1`) {
+		t.Errorf("an outsider's board = %d %q", w.Code, w.Body.String()[:min(len(w.Body.String()), 120)])
+	}
+}

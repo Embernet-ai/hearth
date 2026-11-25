@@ -181,8 +181,13 @@ type ListQuery struct {
 	// one (case-blind) in any other, and "*" for any value at all.
 	PropKey   string
 	PropValue string
-	Sort      string
-	Desc      bool
+	// CloseFrom and CloseTo (both days included) keep the deals expected to close in that window, and NoCloseDate the ones with no
+	// expected date at all.
+	CloseFrom   *time.Time
+	CloseTo     *time.Time
+	NoCloseDate bool
+	Sort        string
+	Desc        bool
 	// Group puts the rows of a list under headings: one of GroupOptions for that list.
 	Group  string
 	Limit  int
@@ -1092,6 +1097,17 @@ func dealFilter(orgID string, actor core.Subjects, q ListQuery) (string, []any) 
 	if q.Overdue {
 		args = append(args, time.Now().Format("2006-01-02"))
 		where += fmt.Sprintf(" AND d.close_date IS NOT NULL AND d.close_date < $%d::date", len(args))
+	}
+	if q.NoCloseDate {
+		where += " AND d.close_date IS NULL"
+	}
+	if q.CloseFrom != nil {
+		args = append(args, q.CloseFrom.Format("2006-01-02"))
+		where += fmt.Sprintf(" AND d.close_date >= $%d::date", len(args))
+	}
+	if q.CloseTo != nil {
+		args = append(args, q.CloseTo.Format("2006-01-02"))
+		where += fmt.Sprintf(" AND d.close_date <= $%d::date", len(args))
 	}
 	if q.ClosedFrom != nil {
 		args = append(args, *q.ClosedFrom)

@@ -4,6 +4,20 @@
   import { fieldfilter, bulkbar, ownerselect, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
+  // The board's narrowing chips keep the search and the owner and change only what they are about.
+  const chip = (extra: Record<string, string>) => {
+    const u = new URLSearchParams();
+    if (dot?.ViewMode === 'table') u.set('view', 'table');
+    if (dot?.SearchText) u.set('q', dot.SearchText);
+    if (dot?.OwnerSel) u.set('owner', dot.OwnerSel);
+    for (const [k, v] of Object.entries(extra)) u.set(k, v);
+    return '/deals' + (u.toString() ? '?' + u : '');
+  };
+  const month = () => {
+    const n = new Date();
+    const f = (d: Date) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    return { closefrom: f(new Date(n.getFullYear(), n.getMonth(), 1)), closeto: f(new Date(n.getFullYear(), n.getMonth() + 1, 0)), open: '1' };
+  };
 </script>
 
 {#snippet content(dot: any)}
@@ -18,6 +32,12 @@
       <a  class="chip"  href={("/crm/favorites")}>Favorites</a>
     </div>
   </div>
+  <p  class="row wrap"  data-deal-chips>
+    <a  class={"chip" + (dot?.Filter === 'all' ? ' on' : '')}  href={chip({})}  data-chip="all">All deals</a>
+    <a  class={"chip" + (dot?.Filter === 'overdue' ? ' on' : '')}  href={chip({ overdue: '1' })}  data-chip="overdue">Past their close date</a>
+    <a  class={"chip" + (dot?.Filter === 'month' ? ' on' : '')}  href={chip(month())}  data-chip="month">Closing this month</a>
+    <a  class={"chip" + (dot?.Filter === 'noclose' ? ' on' : '')}  href={chip({ noclose: '1', open: '1' })}  data-chip="noclose">No close date</a>
+  </p>
   <form  class="row wrap"  method="get"  action="/deals"  data-deal-filters>
     {#if F.t(F.eq(dot?.ViewMode, "table"))}<input  type="hidden"  name="view"  value="table">{/if}
     <input  name="q"  value={S(dot?.SearchText)}  placeholder="Deal, company, or contact"  aria-label="Search">
@@ -78,6 +98,7 @@
       {#each F.rng(dot?.DealCols) as [k4, d4]}
         <div  class="boardcol"  data-value={S(d4?.Stage)}>
           <h3>{d4?.Label} <span  class="muted small">{d4?.Count}{#if F.t(d4?.Total)} · {F.usd(d4?.Total, "USD")}{/if}</span></h3>
+          {#if d4?.Total && d4?.Probability > 0 && d4?.Probability < 100}<p  class="muted small"  data-weighted>{d4.Probability}% chance, worth {F.usd(d4?.Weighted, "USD")}</p>{/if}
           <div  class="cards"  data-drop>
             {#each F.rng(d4?.Deals) as [k5, d5]}{@const v_stage = d5?.Stage}
               <article  class="card2"  draggable="true"  data-id={S(d5?.ID)}>
