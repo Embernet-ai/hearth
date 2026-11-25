@@ -179,3 +179,5 @@ With `HEARTH_BACKEND=emberops` a person has to exist in EmberOps before anything
 * It grants no role and removes none. The fields sent are the ones the addon's `USER_FIELDS` allow (no roles, no user type). The Employee role comes from Vord at the person's first token (`realm_role_grants` in `emberops.tf`), and it stays because the Employee exists by then.
 * The approver link is the named approver, else the one manager of the person's department. Two managers name nobody: a link to one of them would shut the other out of deciding in EmberOps. The approver is made first when they have no account yet.
 * A failure is logged and never stops a sign-in.
+
+An Employee that already carries the person's email under another Hearth id (made by hand, or for an earlier account) is taken over: it is given this person's id, so EmberOps' one-User-one-Employee rule does not refuse the sign-in step. When logging time finds no Employee at all, the same step runs once and the hours are tried again, so someone who has not signed in since being set up there is covered on their next entry too.
