@@ -62,6 +62,9 @@ type deskData struct {
 	PropKind   string
 	PropTypes  []string
 	CanManage  bool
+	// PropSel and PropVal are the custom field filter a list is under.
+	PropSel string
+	PropVal string
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {

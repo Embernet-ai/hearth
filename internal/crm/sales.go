@@ -177,8 +177,12 @@ type ListQuery struct {
 	Overdue    bool
 	ClosedFrom *time.Time
 	ClosedTo   *time.Time
-	Sort       string
-	Desc       bool
+	// PropKey and PropValue keep the records whose custom field PropKey holds PropValue: a match anywhere in a text field, an exact
+	// one (case-blind) in any other, and "*" for any value at all.
+	PropKey   string
+	PropValue string
+	Sort      string
+	Desc      bool
 	// Group puts the rows of a list under headings: one of GroupOptions for that list.
 	Group  string
 	Limit  int
@@ -397,6 +401,7 @@ func companyFilter(orgID string, actor core.Subjects, q ListQuery) (string, []an
 			len(args), len(args), len(args))
 	}
 	where += ownerFilter("c.owner_id", q.Owner, &args)
+	where += propFilter(core.EntityCompany, "c", q, &args)
 	switch q.Type {
 	case "":
 	case "none":
@@ -438,6 +443,7 @@ func contactFilter(orgID string, actor core.Subjects, q ListQuery) (string, []an
 		where += fmt.Sprintf(" AND phone_e164_all(ct.phone, ct.extra_phones) @> ARRAY[$%d]::text[]", len(args))
 	}
 	where += ownerFilter("ct.owner_id", q.Owner, &args)
+	where += propFilter(core.EntityContact, "ct", q, &args)
 	return where, args
 }
 
@@ -1079,6 +1085,7 @@ func dealFilter(orgID string, actor core.Subjects, q ListQuery) (string, []any) 
 			len(args), len(args), len(args))
 	}
 	where += ownerFilter("d.owner_id", q.Owner, &args)
+	where += propFilter(core.EntityDeal, "d", q, &args)
 	if q.Open || q.Overdue {
 		where += " AND d.stage NOT IN ('won', 'lost', 'no_response')"
 	}

@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { bulkbar, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
+  import { fieldfilter, bulkbar, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -40,6 +40,7 @@
     <datalist  id="company-tags">{#each F.rng(dot?.TagList) as [k4, d4]}<option  value={S(d4)}></option>{/each}</datalist>
     <input  type="hidden"  name="q"  value={S(dot?.SearchText)}>
     <input  type="hidden"  name="kind"  value={S(dot?.Filter)}>
+    {@render fieldfilter(dot)}
     {@render groupselect(dot)}
     <button  type="submit"  class="ghost small">Apply</button>
     {#if F.t(dot?.CanManageTypes)}<a  class="chip"  href={("/crm/types")}>Edit the types</a>{:else}<a  class="chip"  href={("/crm/types")}>Types</a>{/if}

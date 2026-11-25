@@ -202,3 +202,18 @@ describe('follow-up kinds, snooze and bulk', () => {
     expect(d.querySelector('[data-followup="f1"] [data-kind="meeting"]')).not.toBeNull();
   });
 });
+
+describe('filtering a list by a custom field', () => {
+  const desk = { PropKind: 'company', PropSel: 'industry', PropVal: 'Rewinds', PropDefs: [{ Key: 'industry', Label: 'Industry' }, { Key: 'speed', Label: 'Line speed' }] };
+  test('the companies list offers the fields and keeps the filter in use', () => {
+    const d = draw('companies', page({ SalesNav: true, SalesOn: true, CompanyRows: [], Companies: [], Owners: [], SortLinks: {}, CompanyKinds: [], Path: '/companies', Desk: desk }));
+    const sel = d.querySelector('select[data-field-filter]')!;
+    expect([...sel.querySelectorAll('option')].map((o) => o.getAttribute('value'))).toEqual(['', 'industry', 'speed']);
+    expect(sel.querySelector('option[selected]')?.getAttribute('value')).toBe('industry');
+    expect(d.querySelector('input[data-field-value]')?.getAttribute('value')).toBe('Rewinds');
+  });
+  test('a list with no custom fields shows no filter', () => {
+    const d = draw('companies', page({ SalesNav: true, SalesOn: true, CompanyRows: [], Companies: [], Owners: [], SortLinks: {}, CompanyKinds: [], Path: '/companies', Desk: null }));
+    expect(d.querySelector('select[data-field-filter]')).toBeNull();
+  });
+});

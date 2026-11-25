@@ -117,7 +117,7 @@ func listQuery(r *http.Request) crm.ListQuery {
 	}
 	return crm.ListQuery{
 		Search: q.Get("q"), PhoneE164: crm.PhoneE164(q.Get("phone")), Kind: q.Get("kind"), Stage: q.Get("stage"), Owner: q.Get("owner"),
-		CompanyID: q.Get("company_id"), ContactID: q.Get("contact_id"), Type: q.Get("type"), Tag: q.Get("tag"), Sort: q.Get("sort"), Desc: q.Get("desc") == "1",
+		CompanyID: q.Get("company_id"), ContactID: q.Get("contact_id"), Type: q.Get("type"), Tag: q.Get("tag"), PropKey: q.Get("prop_key"), PropValue: q.Get("prop_value"), Sort: q.Get("sort"), Desc: q.Get("desc") == "1",
 		Limit: lim, Offset: queryInt(r, "offset", 0, 0),
 	}
 }

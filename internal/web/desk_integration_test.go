@@ -690,3 +690,42 @@ func TestFollowupKindSnoozeAndBulkThroughTheRoutes(t *testing.T) {
 		t.Errorf("bulk done = %d to %q", w.Code, w.Header().Get("Location"))
 	}
 }
+
+func TestCSVExportsCarryTheCustomFields(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	t.Cleanup(func() {
+		c := context.Background()
+		_, _ = f.pool.Exec(c, `DELETE FROM property_values WHERE def_id IN (SELECT id FROM property_defs WHERE org_id=$1)`, f.org)
+		_, _ = f.pool.Exec(c, `DELETE FROM property_defs WHERE org_id=$1`, f.org)
+	})
+	svc := f.srv.sales.(*crm.Service)
+	if _, err := svc.SaveProperty(ctx, f.org, f.subj(f.admin), crm.PropertyInput{Kind: core.EntityDeal, Label: "Line speed", DataType: crm.PropNumber}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveProperty(ctx, f.org, f.subj(f.admin), crm.PropertyInput{Kind: core.EntityDeal, Label: "=Danger", DataType: crm.PropText}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetProperties(ctx, f.org, f.subj(f.member), core.Ref{Type: core.EntityDeal, ID: f.deal}, map[string]any{"line_speed": "120", "danger": "=1+1"}); err != nil {
+		t.Fatal(err)
+	}
+	w := f.do(f.other, "GET", "/deals.csv", nil)
+	body := w.Body.String()
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	if w.Code != http.StatusOK || len(lines) != 2 {
+		t.Fatalf("csv = %d %q", w.Code, body)
+	}
+	if !strings.HasSuffix(lines[0], ",Line speed,'=Danger") && !strings.Contains(lines[0], "Line speed") {
+		t.Errorf("header = %q, want the custom columns", lines[0])
+	}
+	if !strings.Contains(lines[1], "120") || strings.Contains(lines[1], ",=1+1") {
+		t.Errorf("row = %q, want 120 and the formula neutralised", lines[1])
+	}
+	// A filter narrows the export the same way it narrows the list.
+	if w := f.do(f.other, "GET", "/deals.csv?pk=line_speed&pv=999", nil); strings.Count(strings.TrimSpace(w.Body.String()), "\n") != 0 {
+		t.Errorf("a filter that matches nothing still exported %q", w.Body.String())
+	}
+	if w := f.do(f.out, "GET", "/deals.csv", nil); strings.Contains(w.Body.String(), "120") {
+		t.Error("an outsider got the values")
+	}
+}

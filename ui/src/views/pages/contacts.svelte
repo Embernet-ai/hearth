@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { bulkbar, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
+  import { fieldfilter, bulkbar, pager, groupselect, grouprow, crmviewsbar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -27,7 +27,8 @@
           <option  value="none"  {...(F.t(F.eq(dot?.OwnerSel, "none")) ? {"selected": true} : {})}>Nobody</option>
           {#each F.rng(dot?.Owners) as [k1, d1]}<option  value={S(d1?.PrincipalID)}  {...(F.t(F.eq(d1?.PrincipalID, dot?.OwnerSel)) ? {"selected": true} : {})}>{d1?.DisplayName}</option>{/each}
         </select></label>
-      {@render groupselect(dot)}
+      {@render fieldfilter(dot)}
+    {@render groupselect(dot)}
       <button  type="submit"  class="ghost small">Apply</button>
       <a  class="chip"  href={(S(dot?.ExportURL))}>Export CSV</a>
       <a  class="chip"  href={("/crm/import")}>Import CSV</a>

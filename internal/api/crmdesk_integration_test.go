@@ -311,3 +311,41 @@ func TestFollowupKindsSnoozeAndBulkOverTheAPI(t *testing.T) {
 		t.Errorf("bulk with none = %d, want 400", code)
 	}
 }
+
+func TestListingByACustomFieldOverTheAPI(t *testing.T) {
+	f := crmSetup(t)
+	ctx := context.Background()
+	admin := uuid.NewString()
+	for _, q := range []string{
+		`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1,$2,'user','Ada Admin')`,
+		`INSERT INTO capability_grants (org_id, principal_id, capability, granted_by) VALUES ($2,$1,'super_admin',$1)`,
+	} {
+		if _, err := f.pools.Web.Exec(ctx, q, admin, f.org); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		_, _ = f.pools.Web.Exec(c, `DELETE FROM property_values WHERE def_id IN (SELECT id FROM property_defs WHERE org_id=$1)`, f.org)
+		_, _ = f.pools.Web.Exec(c, `DELETE FROM property_defs WHERE org_id=$1`, f.org)
+		_, _ = f.pools.Web.Exec(c, `DELETE FROM capability_grants WHERE org_id=$1`, f.org)
+	})
+	adm, alice, carol := f.token(t, admin, "write"), f.token(t, f.alice, "write"), f.token(t, f.carol, "write")
+	f.call(t, adm, "POST", "/v1/crm/properties", map[string]any{"type": "deal", "label": "Region", "data_type": "select", "options": []string{"East", "West"}})
+	f.call(t, alice, "POST", "/v1/deals", map[string]any{"name": "East deal", "properties": map[string]any{"region": "east"}})
+	f.call(t, alice, "POST", "/v1/deals", map[string]any{"name": "West deal", "properties": map[string]any{"region": "West"}})
+	f.call(t, alice, "POST", "/v1/deals", map[string]any{"name": "No region"})
+	_, l, _ := f.call(t, alice, "GET", "/v1/deals?prop_key=region&prop_value=east", nil)
+	if l["total"].(float64) != 1 || l["deals"].([]any)[0].(map[string]any)["name"] != "East deal" {
+		t.Errorf("east deals = %v", l)
+	}
+	if _, l, _ := f.call(t, alice, "GET", "/v1/deals?prop_key=region&prop_value=*", nil); l["total"].(float64) != 2 {
+		t.Errorf("deals with a region = %v, want 2", l["total"])
+	}
+	if _, l, _ := f.call(t, alice, "GET", "/v1/deals?prop_key=region%27%20OR%201%3D1&prop_value=x", nil); l["total"].(float64) != 0 {
+		t.Errorf("a hostile key matched %v", l["total"])
+	}
+	if _, l, _ := f.call(t, carol, "GET", "/v1/deals?prop_key=region&prop_value=*", nil); l["total"].(float64) != 0 {
+		t.Errorf("a person outside sales listing by a field = %v, want 0", l["total"])
+	}
+}
