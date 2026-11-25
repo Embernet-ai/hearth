@@ -7,6 +7,8 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestTheSalesDeskOverTheAPI(t *testing.T) {
@@ -164,5 +166,110 @@ func TestEditingATimelineEntryOverTheAPI(t *testing.T) {
 	}
 	if code, _, _ := f.call(t, alice, "PATCH", path, map[string]any{"kind": "note"}); code != http.StatusBadRequest {
 		t.Errorf("changing the kind = %d, want 400 (unknown field)", code)
+	}
+}
+
+func TestCustomPropertiesOverTheAPI(t *testing.T) {
+	f := crmSetup(t)
+	ctx := context.Background()
+	admin := uuid.NewString()
+	for _, q := range []string{
+		`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1,$2,'user','Ada Admin')`,
+		`INSERT INTO capability_grants (org_id, principal_id, capability, granted_by) VALUES ($2,$1,'super_admin',$1)`,
+	} {
+		if _, err := f.pools.Web.Exec(ctx, q, admin, f.org); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		_, _ = f.pools.Web.Exec(c, `DELETE FROM property_values WHERE def_id IN (SELECT id FROM property_defs WHERE org_id=$1)`, f.org)
+		_, _ = f.pools.Web.Exec(c, `DELETE FROM property_defs WHERE org_id=$1`, f.org)
+		_, _ = f.pools.Web.Exec(c, `DELETE FROM capability_grants WHERE org_id=$1`, f.org)
+	})
+	adm, alice, bob, carol := f.token(t, admin, "write"), f.token(t, f.alice, "write"), f.token(t, f.bob, "write"), f.token(t, f.carol, "write")
+	aliceRead := f.token(t, f.alice, "read")
+
+	// Only an admin defines a field; sales lists them; others are told nothing is there.
+	body := map[string]any{"type": "company", "label": "Industry", "data_type": "select", "options": []string{"Plating", "Rewinds"}}
+	if code, _, _ := f.call(t, alice, "POST", "/v1/crm/properties", body); code != http.StatusForbidden {
+		t.Errorf("a salesperson defining a field = %d, want 403", code)
+	}
+	if code, _, _ := f.call(t, carol, "POST", "/v1/crm/properties", body); code != http.StatusNotFound {
+		t.Errorf("a person outside sales defining a field = %d, want 404", code)
+	}
+	code, def, _ := f.call(t, adm, "POST", "/v1/crm/properties", body)
+	if code != http.StatusCreated || def["key"] != "industry" || def["data_type"] != "select" {
+		t.Fatalf("define = %d %v", code, def)
+	}
+	_, _, _ = f.call(t, adm, "POST", "/v1/crm/properties", map[string]any{"type": "company", "label": "Employees", "data_type": "number"})
+	if code, _, _ := f.call(t, adm, "POST", "/v1/crm/properties", map[string]any{"type": "company", "label": "industry", "data_type": "text"}); code != http.StatusConflict {
+		t.Errorf("the same key twice = %d, want 409", code)
+	}
+	if code, _, _ := f.call(t, adm, "POST", "/v1/crm/properties", map[string]any{"type": "company", "label": "X", "data_type": "colour"}); code != http.StatusBadRequest {
+		t.Errorf("an unknown data type = %d, want 400", code)
+	}
+	code, list, _ := f.call(t, bob, "GET", "/v1/crm/properties?type=company", nil)
+	if code != http.StatusOK || len(list["properties"].([]any)) != 2 {
+		t.Errorf("list = %d %v, want the two company fields", code, list)
+	}
+	if code, _, _ := f.call(t, carol, "GET", "/v1/crm/properties?type=company", nil); code != http.StatusNotFound {
+		t.Errorf("list by a person outside sales = %d, want 404", code)
+	}
+
+	// Values ride on the record: set on create, change on patch, read back, bad ones refused before anything changes.
+	code, co, _ := f.call(t, alice, "POST", "/v1/companies", map[string]any{"name": "Props Co", "properties": map[string]any{"industry": "rewinds", "employees": "1,200"}})
+	if code != http.StatusCreated {
+		t.Fatalf("create = %d %v", code, co)
+	}
+	pr := co["properties"].(map[string]any)
+	if pr["industry"] != "Rewinds" || pr["employees"].(float64) != 1200 {
+		t.Errorf("properties on create = %v, want Rewinds and 1200", pr)
+	}
+	if code, _, _ := f.call(t, alice, "POST", "/v1/companies", map[string]any{"name": "Bad Co", "properties": map[string]any{"employees": "lots"}}); code != http.StatusBadRequest {
+		t.Errorf("a bad value on create = %d, want 400", code)
+	}
+	if _, l, _ := f.call(t, alice, "GET", "/v1/companies?q=Bad+Co", nil); l["total"].(float64) != 0 {
+		t.Error("a request with a bad custom value still made the company")
+	}
+	path := "/v1/companies/" + co["id"].(string)
+	code, got, _ := f.call(t, bob, "PATCH", path, map[string]any{"notes": "n", "properties": map[string]any{"employees": nil, "industry": "Plating"}})
+	gp := got["properties"].(map[string]any)
+	if code != http.StatusOK || gp["industry"] != "Plating" || gp["employees"] != nil {
+		t.Errorf("patch = %d %v, want Plating and employees cleared", code, gp)
+	}
+	if code, _, _ := f.call(t, bob, "PATCH", path, map[string]any{"properties": map[string]any{"nope": "x"}}); code != http.StatusBadRequest {
+		t.Errorf("a field that is not there = %d, want 400", code)
+	}
+	if code, _, _ := f.call(t, aliceRead, "PATCH", path, map[string]any{"properties": map[string]any{"industry": "Plating"}}); code != http.StatusForbidden {
+		t.Errorf("a read token setting a value = %d, want 403", code)
+	}
+	if _, g, _ := f.call(t, bob, "GET", path, nil); g["properties"].(map[string]any)["industry"] != "Plating" {
+		t.Errorf("read back = %v", g["properties"])
+	}
+
+	// Change a field, then delete it with its values; the delete is for an admin.
+	if code, ch, _ := f.call(t, adm, "PATCH", "/v1/crm/properties/"+def["id"].(string), map[string]any{"type": "company", "label": "Sector", "options": []string{"Plating", "Rewinds", "Foundry"}}); code != http.StatusOK || ch["label"] != "Sector" || ch["key"] != "industry" {
+		t.Errorf("change = %d %v", code, ch)
+	}
+	if code, _, _ := f.call(t, alice, "DELETE", "/v1/crm/properties/"+def["id"].(string)+"?type=company", nil); code != http.StatusForbidden {
+		t.Errorf("a salesperson deleting a field = %d, want 403", code)
+	}
+	if code, _, _ := f.call(t, adm, "DELETE", "/v1/crm/properties/"+def["id"].(string)+"?type=company", nil); code != http.StatusOK {
+		t.Errorf("delete = %d, want 200", code)
+	}
+	if _, g, _ := f.call(t, bob, "GET", path, nil); g["properties"].(map[string]any)["industry"] != nil {
+		if _, has := g["properties"].(map[string]any)["industry"]; has {
+			t.Errorf("a deleted field still shows: %v", g["properties"])
+		}
+	}
+	// Deals and contacts carry them too.
+	f.call(t, adm, "POST", "/v1/crm/properties", map[string]any{"type": "deal", "label": "Contract end", "data_type": "date"})
+	_, dl, _ := f.call(t, alice, "POST", "/v1/deals", map[string]any{"name": "Props Deal", "properties": map[string]any{"contract_end": "2027-03-01"}})
+	if dl["properties"].(map[string]any)["contract_end"] != "2027-03-01" {
+		t.Errorf("a deal's custom field = %v", dl["properties"])
+	}
+	if code, _, _ := f.call(t, alice, "PATCH", "/v1/deals/"+dl["id"].(string), map[string]any{"properties": map[string]any{"contract_end": "March"}}); code != http.StatusBadRequest {
+		t.Errorf("a bad date on a deal = %d, want 400", code)
 	}
 }

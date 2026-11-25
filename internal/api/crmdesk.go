@@ -24,6 +24,10 @@ func (s *Service) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /v1/activities/{id}", s.crmDesk(s.patchActivity))
 	mux.HandleFunc("GET /v1/crm/duplicates", s.crmDesk(s.duplicates))
 	mux.HandleFunc("POST /v1/crm/merge", s.crmDesk(s.merge))
+	mux.HandleFunc("GET /v1/crm/properties", s.crmDesk(s.listProperties))
+	mux.HandleFunc("POST /v1/crm/properties", s.crmDesk(s.saveProperty))
+	mux.HandleFunc("PATCH /v1/crm/properties/{id}", s.crmDesk(s.saveProperty))
+	mux.HandleFunc("DELETE /v1/crm/properties/{id}", s.crmDesk(s.deleteProperty))
 }
 
 // crmDesk hands a handler the desk, after checking the caller works sales.
@@ -404,4 +408,123 @@ func (s *Service) patchActivity(w http.ResponseWriter, r *http.Request, d crm.De
 		return
 	}
 	writeJSON(w, http.StatusOK, activityJSON(a))
+}
+
+// -----------------------------------------------------------------------------
+// Custom properties
+// -----------------------------------------------------------------------------
+
+func (s *Service) props() crm.Props { p, _ := s.sales.(crm.Props); return p }
+
+// addProps puts a record's custom fields on its answer, by key, with null for one that is not set. A failure leaves them out.
+func (s *Service) addProps(r *http.Request, c *Caller, kind core.EntityType, out map[string]any) {
+	p := s.props()
+	id, _ := out["id"].(string)
+	if p == nil || id == "" {
+		return
+	}
+	vals, err := p.PropertiesFor(r.Context(), c.OrgID, c.Subjects, core.Ref{Type: kind, ID: id})
+	if err != nil {
+		return
+	}
+	m := make(map[string]any, len(vals))
+	for _, v := range vals {
+		m[v.Key] = v.Value
+	}
+	out["properties"] = m
+}
+
+// checkProps refuses a request whose custom field values are wrong, before it changes anything.
+func (s *Service) checkProps(w http.ResponseWriter, r *http.Request, c *Caller, kind core.EntityType, values map[string]any) bool {
+	if len(values) == 0 {
+		return true
+	}
+	p := s.props()
+	if p == nil {
+		writeErr(w, http.StatusBadRequest, "custom fields are not available on this deployment")
+		return false
+	}
+	if err := p.ValidateProperties(r.Context(), c.OrgID, kind, values); err != nil {
+		crmErr(w, err, "you cannot set those")
+		return false
+	}
+	return true
+}
+
+func (s *Service) setProps(r *http.Request, c *Caller, ref core.Ref, values map[string]any) error {
+	if len(values) == 0 {
+		return nil
+	}
+	return s.props().SetProperties(r.Context(), c.OrgID, c.Subjects, ref, values)
+}
+
+func propertyJSON(d crm.PropertyDef) map[string]any {
+	return map[string]any{"id": d.ID, "type": string(d.Kind), "key": d.Key, "label": d.Label, "data_type": d.DataType, "options": d.Options}
+}
+
+func (s *Service) listProperties(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	p := s.props()
+	typ := core.EntityType(r.URL.Query().Get("type"))
+	if p == nil {
+		writeErr(w, http.StatusNotFound, "custom fields are not available on this deployment")
+		return
+	}
+	defs, err := p.PropertyDefs(r.Context(), c.OrgID, typ)
+	if err != nil {
+		crmErr(w, err, "you cannot list those")
+		return
+	}
+	out := make([]map[string]any, 0, len(defs))
+	for _, x := range defs {
+		out = append(out, propertyJSON(x))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"properties": out, "data_types": crm.PropertyTypes})
+}
+
+type propertyBody struct {
+	Type     string   `json:"type"`
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	DataType string   `json:"data_type"`
+	Options  []string `json:"options"`
+}
+
+func (s *Service) saveProperty(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	p := s.props()
+	var b propertyBody
+	if err := decode(r, &b); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if p == nil {
+		writeErr(w, http.StatusNotFound, "custom fields are not available on this deployment")
+		return
+	}
+	def, err := p.SaveProperty(r.Context(), c.OrgID, c.Subjects, crm.PropertyInput{ID: r.PathValue("id"), Kind: core.EntityType(b.Type), Key: b.Key,
+		Label: b.Label, DataType: b.DataType, Options: b.Options})
+	if err != nil {
+		crmErr(w, err, "only an admin defines custom fields")
+		return
+	}
+	status := http.StatusCreated
+	if r.PathValue("id") != "" {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, propertyJSON(*def))
+}
+
+func (s *Service) deleteProperty(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	p := s.props()
+	if p == nil {
+		writeErr(w, http.StatusNotFound, "custom fields are not available on this deployment")
+		return
+	}
+	if err := p.DeleteProperty(r.Context(), c.OrgID, c.Subjects, core.EntityType(r.URL.Query().Get("type")), r.PathValue("id")); err != nil {
+		crmErr(w, err, "only an admin removes custom fields")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
 }

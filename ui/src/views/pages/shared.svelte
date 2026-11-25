@@ -15,7 +15,7 @@
     const p = (n) => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  export { formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
+  export { fieldspanel, formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
 {#if F.t(dot?.Children)}
@@ -366,5 +366,34 @@
     </li>
   {/each}
 </ul>
+{/if}
+{/snippet}
+
+{#snippet fieldspanel(dot)}
+{#if dot?.Desk?.Properties?.length}
+<h3  id="fields">Custom fields</h3>
+<form  method="post"  action="/crm/properties/values"  class="fields"  data-custom-fields>
+  <input  type="hidden"  name="target_type"  value={dot.Deal ? "deal" : dot.Contact ? "contact" : "company"}>
+  <input  type="hidden"  name="target_id"  value={dot.Deal?.ID || dot.Contact?.ID || dot.Company?.ID}>
+  {#each dot.Desk.Properties as p (p.ID)}
+    <label  for={'p_' + p.Key}>{p.Label}</label>
+    {#if p.DataType === 'select'}
+      <select  id={'p_' + p.Key}  name={'p_' + p.Key}><option  value="">Not set</option>{#each p.Options || [] as o}<option  value={o}  selected={p.Text === o}>{o}</option>{/each}</select>
+    {:else if p.DataType === 'boolean'}
+      <select  id={'p_' + p.Key}  name={'p_' + p.Key}><option  value="">Not set</option><option  value="yes"  selected={p.Text === 'true'}>Yes</option><option  value="no"  selected={p.Text === 'false'}>No</option></select>
+    {:else if p.DataType === 'date'}
+      <input  id={'p_' + p.Key}  name={'p_' + p.Key}  type="date"  value={p.Text}>
+    {:else if p.DataType === 'number' || p.DataType === 'currency'}
+      <input  id={'p_' + p.Key}  name={'p_' + p.Key}  inputmode="decimal"  value={p.Text}>
+    {:else if p.DataType === 'url'}
+      <input  id={'p_' + p.Key}  name={'p_' + p.Key}  type="url"  value={p.Text}>
+    {:else if p.DataType === 'email'}
+      <input  id={'p_' + p.Key}  name={'p_' + p.Key}  type="email"  value={p.Text}>
+    {:else}
+      <input  id={'p_' + p.Key}  name={'p_' + p.Key}  value={p.Text}>
+    {/if}
+  {/each}
+  <div  class="row"><button  type="submit">Save fields</button></div>
+</form>
 {/if}
 {/snippet}

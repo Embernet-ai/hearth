@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
-  import { formspanel, mauticpanel, emberopspanel, followupspanel, mailpanel, timeline, addactivity, ownerselect, favstar } from './shared.svelte';
+  import { fieldspanel, formspanel, mauticpanel, emberopspanel, followupspanel, mailpanel, timeline, addactivity, ownerselect, favstar } from './shared.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -77,6 +77,7 @@
 
   {@render mauticpanel(dot)}
   {@render formspanel(dot)}
+  {@render fieldspanel(dot)}
   {@render emberopspanel(dot)}
   {@render followupspanel(dot)}
   {@render mailpanel(dot)}

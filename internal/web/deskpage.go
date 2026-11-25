@@ -54,6 +54,13 @@ type deskData struct {
 	Forms []crmforms.Entry
 	// MauticChoices are the segments and campaigns a salesperson may enrol people into from the contacts list.
 	MauticChoices []crmmarketing.Choice
+	// Properties are a record's custom fields with its values; PropDefs, PropKind, PropTypes and CanManage drive the page where an
+	// admin defines them.
+	Properties []crm.PropertyValue
+	PropDefs   []crm.PropertyDef
+	PropKind   string
+	PropTypes  []string
+	CanManage  bool
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -69,6 +76,10 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /crm/bulk", s.bulkChange)
 	mux.HandleFunc("GET /crm/duplicates", s.duplicatesPage)
 	mux.HandleFunc("POST /crm/merge", s.mergeRecords)
+	mux.HandleFunc("GET /crm/properties", s.propertiesPage)
+	mux.HandleFunc("POST /crm/properties", s.saveProperty)
+	mux.HandleFunc("POST /crm/properties/{id}/delete", s.deleteProperty)
+	mux.HandleFunc("POST /crm/properties/values", s.setPropertyValues)
 	mux.HandleFunc("POST /activities/{id}/edit", s.editActivity)
 	mux.HandleFunc("POST /crm/mautic/segment", s.mauticSegment)
 	mux.HandleFunc("POST /crm/mautic/campaign", s.mauticCampaign)
@@ -313,6 +324,11 @@ func (s *Server) deskFor(r *http.Request, ref core.Ref, p *page) {
 	}
 	d.Followups = rows
 	d.EmberOps = s.emberOpsPanel(r, ref, p)
+	if props, ok := s.sales.(crm.Props); ok {
+		if vals, err := props.PropertiesFor(r.Context(), id.OrgID, id.Subjects, ref); err == nil {
+			d.Properties = vals
+		}
+	}
 	if ref.Type == core.EntityContact {
 		d.Mautic, d.MauticNote = s.mauticPanel(r, ref, p)
 		d.Forms = s.formResponses(r, p)
@@ -884,4 +900,114 @@ func (s *Server) mauticEnrol(w http.ResponseWriter, r *http.Request) {
 		sep = "&"
 	}
 	http.Redirect(w, r, back+sep+"notice="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+// -----------------------------------------------------------------------------
+// Custom properties
+// -----------------------------------------------------------------------------
+
+func (s *Server) propsFor(w http.ResponseWriter, r *http.Request) (crm.Props, bool) {
+	if _, ok := s.salesAccess(w, r); !ok {
+		return nil, false
+	}
+	p, ok := s.sales.(crm.Props)
+	if !ok {
+		s.fail(w, r, http.StatusNotFound, "custom fields are not available on this deployment")
+		return nil, false
+	}
+	return p, true
+}
+
+func propKind(v string) core.EntityType {
+	switch v {
+	case "company":
+		return core.EntityCompany
+	case "deal":
+		return core.EntityDeal
+	}
+	return core.EntityContact
+}
+
+func (s *Server) propertiesPage(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.propsFor(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	kind := propKind(r.URL.Query().Get("type"))
+	defs, err := p.PropertyDefs(r.Context(), id.OrgID, kind)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, "could not load the custom fields")
+		return
+	}
+	s.render(w, r, "properties", page{Title: "Custom fields", SalesOn: true,
+		Desk: &deskData{PropDefs: defs, PropKind: string(kind), PropTypes: crm.PropertyTypes, CanManage: id.Subjects.Super()}})
+}
+
+func (s *Server) saveProperty(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.propsFor(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	var opts []string
+	for _, o := range strings.Split(r.FormValue("options"), "\n") {
+		opts = append(opts, o)
+	}
+	kind := propKind(r.FormValue("type"))
+	_, err := p.SaveProperty(r.Context(), id.OrgID, id.Subjects, crm.PropertyInput{ID: strings.TrimSpace(r.FormValue("id")), Kind: kind,
+		Key: r.FormValue("key"), Label: r.FormValue("label"), DataType: r.FormValue("data_type"), Options: opts})
+	if err != nil {
+		s.crmFail(w, r, err, "only an admin defines custom fields")
+		return
+	}
+	http.Redirect(w, r, "/crm/properties?type="+string(kind), http.StatusSeeOther)
+}
+
+func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.propsFor(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	_ = r.ParseForm()
+	kind := propKind(r.FormValue("type"))
+	if err := p.DeleteProperty(r.Context(), id.OrgID, id.Subjects, kind, r.PathValue("id")); err != nil {
+		s.crmFail(w, r, err, "only an admin removes custom fields")
+		return
+	}
+	http.Redirect(w, r, "/crm/properties?type="+string(kind), http.StatusSeeOther)
+}
+
+// setPropertyValues saves the custom fields form on a record: every field named p_<key> is set, and an empty one is cleared.
+func (s *Server) setPropertyValues(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.propsFor(w, r)
+	if !ok {
+		return
+	}
+	id := auth.From(r.Context())
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	ref := core.Ref{Type: core.EntityType(r.FormValue("target_type")), ID: strings.TrimSpace(r.FormValue("target_id"))}
+	if !(ref.Type == core.EntityCompany || ref.Type == core.EntityContact || ref.Type == core.EntityDeal) || ref.ID == "" {
+		s.fail(w, r, http.StatusBadRequest, "nothing to attach that to")
+		return
+	}
+	values := map[string]any{}
+	for k, v := range r.Form {
+		if strings.HasPrefix(k, "p_") && len(v) > 0 {
+			values[strings.TrimPrefix(k, "p_")] = v[0]
+		}
+	}
+	if err := p.SetProperties(r.Context(), id.OrgID, id.Subjects, ref, values); err != nil {
+		s.crmFail(w, r, err, "you cannot change that")
+		return
+	}
+	http.Redirect(w, r, recordPath(ref)+"#fields", http.StatusSeeOther)
 }

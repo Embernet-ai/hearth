@@ -206,10 +206,12 @@ type companyBody struct {
 	OwnerID      *string  `json:"owner_id"`
 	// Types are type keys from GET /v1/company-types, and Tags are free. Either
 	// replaces what is there when sent, and is left alone when not.
-	Types      *[]string `json:"types"`
-	Tags       *[]string `json:"tags"`
-	ExternalID string    `json:"external_id"`
-	Source     string    `json:"source"`
+	Types *[]string `json:"types"`
+	Tags  *[]string `json:"tags"`
+	// Properties are custom fields by key; a null or empty value clears one.
+	Properties map[string]any `json:"properties"`
+	ExternalID string         `json:"external_id"`
+	Source     string         `json:"source"`
 }
 
 func str(p *string, def string) string {
@@ -334,6 +336,7 @@ func (s *Service) getCompany(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "no such company")
 		return
 	}
+	s.addProps(r, c, core.EntityCompany, out)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -342,6 +345,9 @@ func (s *Service) createCompany(w http.ResponseWriter, r *http.Request) {
 	var b companyBody
 	if err := decode(r, &b); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.checkProps(w, r, c, core.EntityCompany, b.Properties) {
 		return
 	}
 	if err := s.checkTypes(r.Context(), c.OrgID, b.Types); err != nil {
@@ -376,6 +382,12 @@ func (s *Service) createCompany(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot add a company")
 		return
 	}
+	if !replay {
+		if err := s.setProps(r, c, core.Ref{Type: core.EntityCompany, ID: id}, b.Properties); err != nil {
+			crmErr(w, err, "you cannot set those")
+			return
+		}
+	}
 	co, err := s.crmStore.GetCompany(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such company")
@@ -386,6 +398,7 @@ func (s *Service) createCompany(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot read that company")
 		return
 	}
+	s.addProps(r, c, core.EntityCompany, out)
 	writeJSON(w, replayHeader(w, replay), out)
 }
 
@@ -395,6 +408,9 @@ func (s *Service) patchCompany(w http.ResponseWriter, r *http.Request) {
 	var b companyBody
 	if err := decode(r, &b); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.checkProps(w, r, c, core.EntityCompany, b.Properties) {
 		return
 	}
 	if b.ExternalID != "" || b.Source != "" {
@@ -435,6 +451,10 @@ func (s *Service) patchCompany(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := s.setProps(r, c, core.Ref{Type: core.EntityCompany, ID: id}, b.Properties); err != nil {
+		crmErr(w, err, "you cannot set those")
+		return
+	}
 	co, err := s.crmStore.GetCompany(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such company")
@@ -445,6 +465,7 @@ func (s *Service) patchCompany(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot read that company")
 		return
 	}
+	s.addProps(r, c, core.EntityCompany, out)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -464,9 +485,11 @@ type contactBody struct {
 	ExtraPhones *[]string `json:"extra_phones"`
 	OwnerID     *string   `json:"owner_id"`
 	// MarketingOptOut true stops marketing email to this person. There is no false: an opt-out is never taken back here.
-	MarketingOptOut *bool  `json:"marketing_opt_out"`
-	ExternalID      string `json:"external_id"`
-	Source          string `json:"source"`
+	MarketingOptOut *bool `json:"marketing_opt_out"`
+	// Properties are custom fields by key; a null or empty value clears one.
+	Properties map[string]any `json:"properties"`
+	ExternalID string         `json:"external_id"`
+	Source     string         `json:"source"`
 }
 
 func (b contactBody) hasDetails() bool {
@@ -568,6 +591,7 @@ func (s *Service) getContact(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "no such contact")
 		return
 	}
+	s.addProps(r, c, core.EntityContact, out)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -576,6 +600,9 @@ func (s *Service) createContact(w http.ResponseWriter, r *http.Request) {
 	var b contactBody
 	if err := decode(r, &b); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.checkProps(w, r, c, core.EntityContact, b.Properties) {
 		return
 	}
 	id, replay, err := s.once(r.Context(), c.OrgID, b.Source, b.ExternalID, "contact", func() (string, error) {
@@ -617,6 +644,12 @@ func (s *Service) createContact(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot add a contact")
 		return
 	}
+	if !replay {
+		if err := s.setProps(r, c, core.Ref{Type: core.EntityContact, ID: id}, b.Properties); err != nil {
+			crmErr(w, err, "you cannot set those")
+			return
+		}
+	}
 	ct, err := s.crmStore.GetContact(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such contact")
@@ -627,6 +660,7 @@ func (s *Service) createContact(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot read that contact")
 		return
 	}
+	s.addProps(r, c, core.EntityContact, out)
 	writeJSON(w, replayHeader(w, replay), out)
 }
 
@@ -636,6 +670,9 @@ func (s *Service) patchContact(w http.ResponseWriter, r *http.Request) {
 	var b contactBody
 	if err := decode(r, &b); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.checkProps(w, r, c, core.EntityContact, b.Properties) {
 		return
 	}
 	if b.ExternalID != "" || b.Source != "" {
@@ -678,6 +715,10 @@ func (s *Service) patchContact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := s.setProps(r, c, core.Ref{Type: core.EntityContact, ID: id}, b.Properties); err != nil {
+		crmErr(w, err, "you cannot set those")
+		return
+	}
 	ct, err := s.crmStore.GetContact(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such contact")
@@ -688,6 +729,7 @@ func (s *Service) patchContact(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot read that contact")
 		return
 	}
+	s.addProps(r, c, core.EntityContact, out)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -720,8 +762,10 @@ type dealBody struct {
 	OwnerID     *string `json:"owner_id"`
 	Notes       *string `json:"notes"`
 	LostReason  *string `json:"lost_reason"`
-	ExternalID  string  `json:"external_id"`
-	Source      string  `json:"source"`
+	// Properties are custom fields by key; a null or empty value clears one.
+	Properties map[string]any `json:"properties"`
+	ExternalID string         `json:"external_id"`
+	Source     string         `json:"source"`
 }
 
 func dealJSON(d *crm.Deal) map[string]any {
@@ -804,7 +848,9 @@ func (s *Service) getDeal(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "no such deal")
 		return
 	}
-	writeJSON(w, http.StatusOK, dealJSON(d))
+	out := dealJSON(d)
+	s.addProps(r, c, core.EntityDeal, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Service) createDeal(w http.ResponseWriter, r *http.Request) {
@@ -812,6 +858,9 @@ func (s *Service) createDeal(w http.ResponseWriter, r *http.Request) {
 	var b dealBody
 	if err := decode(r, &b); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.checkProps(w, r, c, core.EntityDeal, b.Properties) {
 		return
 	}
 	id, replay, err := s.once(r.Context(), c.OrgID, b.Source, b.ExternalID, "deal", func() (string, error) {
@@ -829,12 +878,20 @@ func (s *Service) createDeal(w http.ResponseWriter, r *http.Request) {
 		crmErr(w, err, "you cannot add a deal")
 		return
 	}
+	if !replay {
+		if err := s.setProps(r, c, core.Ref{Type: core.EntityDeal, ID: id}, b.Properties); err != nil {
+			crmErr(w, err, "you cannot set those")
+			return
+		}
+	}
 	d, err := s.sales.GetDeal(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such deal")
 		return
 	}
-	writeJSON(w, replayHeader(w, replay), dealJSON(d))
+	out := dealJSON(d)
+	s.addProps(r, c, core.EntityDeal, out)
+	writeJSON(w, replayHeader(w, replay), out)
 }
 
 func (s *Service) patchDeal(w http.ResponseWriter, r *http.Request) {
@@ -843,6 +900,9 @@ func (s *Service) patchDeal(w http.ResponseWriter, r *http.Request) {
 	var b dealBody
 	if err := decode(r, &b); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.checkProps(w, r, c, core.EntityDeal, b.Properties) {
 		return
 	}
 	if b.ExternalID != "" || b.Source != "" {
@@ -871,12 +931,18 @@ func (s *Service) patchDeal(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if err := s.setProps(r, c, core.Ref{Type: core.EntityDeal, ID: id}, b.Properties); err != nil {
+		crmErr(w, err, "you cannot set those")
+		return
+	}
 	d, err := s.sales.GetDeal(r.Context(), c.OrgID, c.Subjects, id)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such deal")
 		return
 	}
-	writeJSON(w, http.StatusOK, dealJSON(d))
+	out := dealJSON(d)
+	s.addProps(r, c, core.EntityDeal, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // -----------------------------------------------------------------------------
