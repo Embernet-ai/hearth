@@ -93,3 +93,19 @@ describe('calendar delete', () => {
     expect(d.querySelector('[data-event-delete]')).toBeNull();
   });
 });
+
+describe('social, the rest of what the publishing app does', () => {
+  test('a scheduled post can go back to a draft, a draft can be scheduled, a published one shows its numbers', () => {
+    const d = draw('social', fixture('social-posts'));
+    expect(d.querySelector('[data-post="p1"] form[action="/social/post/p1/status"] input[value="draft"]')).not.toBeNull();
+    expect(d.querySelector('[data-post="p2"] form[action="/social/post/p2/status"] input[value="schedule"]')).not.toBeNull();
+    expect(d.querySelector('[data-post="p3"] a[href="/social?post=p3"]')).not.toBeNull();
+    expect(d.querySelector('[data-post="p3"] form[action$="/status"]')).toBeNull();
+  });
+  test('the activity tab lists what the app said, and the media tab lists the files and adds one from an address', () => {
+    expect(text(draw('social', fixture('social-activity')))).toContain('published successfully');
+    const m = draw('social', fixture('social-media'));
+    expect(m.querySelector('[data-media] a[href="https://u.example/banner.png"]')).not.toBeNull();
+    expect(m.querySelector('form[action="/social/media"] input[name=url]')).not.toBeNull();
+  });
+});

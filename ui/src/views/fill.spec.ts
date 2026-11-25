@@ -63,7 +63,11 @@ describe('screens that fill the width keep everything', () => {
     const d = draw('dashboard', fixture('dashboard-full'));
     for (const h of ['My daily report', 'My numbers', 'Assigned to me', 'Things you follow']) expect(heads(d).join('|')).toContain(h);
     expect(d.querySelectorAll('.weekday').length).toBe(7);
-    expect(d.querySelectorAll('a.stat').length).toBe(14);
+    expect(d.querySelectorAll('.numbers:not(.recap) a.stat').length).toBe(14);
+    // the team's parts: email marketing and social with four numbers each, and forms that did not answer, saying so
+    expect(heads(d).join('|')).toContain('Marketing and social');
+    expect(d.querySelectorAll('.recap a.stat').length).toBe(12);
+    expect(d.querySelector('.recap .g-forms .groupnote')?.textContent).toContain('did not answer');
     expect(d.querySelector('form[action="/time"]')).not.toBeNull();
     expect(d.querySelector('form[action="/time/start"]')).not.toBeNull();
   });

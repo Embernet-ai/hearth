@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"github.com/Embernet-ai/hearth/internal/github"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -209,6 +210,12 @@ func fixtures() map[string]page {
 		"timereport-nobody-logged": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30",
 			ReportPeople: []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee"}, {PrincipalID: "p2", PersonName: "Bo Diaz"}},
 			ReportNotice: "Nothing to export: the people you chose have no finished time between 2026-11-01 and 2026-11-30. Widen the dates above, press Show, and try again."},
+		"marketing-contacts": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "contacts", Total: 2,
+			Contacts: []mautic.Contact{{ID: 7, First: "Ann", Last: "Lee", Email: "ann@example.com", Company: "Acme", Tags: []string{"vip"}, LastActive: "2026-11-20 10:00:00", DoNotEmail: true},
+				{ID: 5, Email: "bob@example.com"}}}},
+		"marketing-contact": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "contacts",
+			Contact:  &mautic.Contact{ID: 7, First: "Ann", Last: "Lee", Email: "ann@example.com", Company: "Acme", Tags: []string{"vip"}},
+			Segments: []mautic.Segment{{ID: 3, Name: "Customers"}}, Emails: []mautic.Email{{ID: 11, Name: "Spring"}}}},
 		"forms-off": {Title: "Forms", FormsArea: &FormsView{}},
 		"forms-list": {Title: "Forms", FormsArea: &FormsView{Configured: true, Forms: []FormRow{
 			{Form: forms.Form{ID: "f1", Name: "Feedback", Status: forms.InProgress, Questions: []forms.Question{{ID: "q1", Type: "openText", Headline: "Anything else?"}}}, Label: "Live"},
@@ -224,7 +231,12 @@ func fixtures() map[string]page {
 		"social-none": {Title: "Social", SocialArea: &SocialView{Configured: true}},
 		"social-posts": {Title: "Social", SocialArea: &SocialView{Configured: true,
 			Channels: []social.Channel{{ID: "c1", Name: "Fireball", Kind: "linkedin"}},
-			Posts:    []social.Post{{ID: "p1", Content: "Hello", PublishDate: "2026-11-22T10:00:00Z", State: "QUEUE"}}}},
+			Posts: []social.Post{{ID: "p1", Content: "Hello", PublishDate: "2026-11-22T10:00:00Z", State: "QUEUE"}, {ID: "p2", Content: "Draft", PublishDate: "2026-11-23T10:00:00Z", State: "DRAFT"},
+				{ID: "p3", Content: "Out", PublishDate: "2026-11-20T10:00:00Z", State: "PUBLISHED"}}}},
+		"social-activity": {Title: "Social", SocialArea: &SocialView{Configured: true, Tab: "activity",
+			Notifications: []social.Notification{{ID: "n1", Content: "Your post to X was published successfully", CreatedAt: "2026-11-20T10:00:00.000Z"}}}},
+		"social-media": {Title: "Social", SocialArea: &SocialView{Configured: true, Tab: "media",
+			Media: []social.Media{{ID: "m1", OriginalName: "banner.png", Path: "https://u.example/banner.png", CreatedAt: "2026-11-20T09:12:00.000Z"}}}},
 		"tools-list": {Title: "Tools", ToolsOn: true, ToolsList: &ToolsView{Tools: []tools.Tool{{Name: "Ops", Description: "Orders and invoices", Href: "https://ops.example"}, {Name: "Vord", Description: "Your account", Href: "https://vord.example", Note: "Sign in with Vord"}}}},
 		"tools-none": {Title: "Tools", ToolsList: &ToolsView{}},
 
@@ -277,7 +289,12 @@ func fixtures() map[string]page {
 				Photos:   []docs.Attachment{{FileID: "f1", Filename: "panel.jpg"}},
 				Comments: []*channels.Message{{AuthorName: "Yara", Body: "thanks", CreatedAt: end}},
 			}}},
-		"dailyreports-filed":  {RepMineToday: "abc", RepFrom: "a", RepTo: "b"},
+		"dailyreports-filed": {RepMineToday: "abc", RepFrom: "a", RepTo: "b"},
+		"github-none":        {GitHubArea: &GitHubView{Configured: true}},
+		"github-connected": {GitHubArea: &GitHubView{Configured: true, Connected: true, Login: "octo", Days: 30, Chosen: []string{"org/app"},
+			Choices: []GitHubChoice{{Name: "org/app", Private: true, Chosen: true}, {Name: "org/site"}},
+			Total:   &github.Metrics{Commits: 42, PRsOpened: 9, PRsMerged: 7, IssuesOpened: 4, IssuesClosed: 3, Releases: 2, Runs: 30, RunsPassed: 27, RunsFailed: 3},
+			Repos:   []github.Metrics{{Repo: "org/app", Commits: 42, PRsOpened: 9, PRsMerged: 7, IssuesOpened: 4, IssuesClosed: 3, Releases: 2, LatestRelease: "v2.0.0", Runs: 30, RunsPassed: 27, RunsFailed: 3}}}},
 		"dashboard-not-filed": {Dash: &dashboard{ReportDay: "2026-10-26"}},
 		"dashboard-filed":     {Dash: &dashboard{ReportDay: "2026-10-26", ReportID: "rid"}},
 		"servicehistory": {Title: "Service history", RepSpace: "sp1", RepFrom: "2025-01-01", RepTo: "2025-12-31",

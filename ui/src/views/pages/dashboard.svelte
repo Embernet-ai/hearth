@@ -3,6 +3,7 @@
   import { F, S, A } from '../../lib/gofuncs';
   import { hoursmins } from './shared.svelte';
   import Stats from '../../components/Stats.svelte';
+  import Recap from '../../components/Recap.svelte';
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 </script>
@@ -66,29 +67,6 @@
   </div>
 
   <div  class="dashcols">
-      <div  class="dashblock dashwork">
-      <h2>Assigned to me</h2>
-      {#if F.t(dot?.Dash?.Mine)}
-        <div  class="assignedscroll"><table  class="list">
-          <thead><tr><th>Title</th><th>Status</th><th>Due</th></tr></thead>
-          <tbody>
-            {#each F.rng(dot?.Dash?.Mine) as [k5, d5]}
-              <tr>
-                <td><a  href={("/documents/" + S(d5?.ID))}>{d5?.Title}</a></td>
-                <td>{#if F.t(d5?.Task)}<span  class={"status " + S(d5?.Task?.Status)}>{F.statusLabel(d5?.Task?.Status)}</span>{/if}</td>
-                <td  class="muted small">{#if F.t(F.and(d5?.Task, d5?.Task?.DueAt))}{F.date(d5?.Task?.DueAt)}{/if}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table></div>
-      {:else}
-        <div  class="empty">
-          <strong>Nothing is assigned to you</strong>
-          Work assigned to you appears here, soonest first.
-        </div>
-      {/if}
-      </div>
-    <Stats stats={dot?.Dash?.Stats} />
     <div  class="dashblock dashfollow">
       <h2>Things you follow</h2>
       {#if F.t(dot?.Dash?.Watching)}
@@ -107,6 +85,7 @@
         </div>
       {/if}
     </div>
+    <Stats stats={dot?.Dash?.Stats} />
       <div  class="dashblock monthcard">
         {#if dot?.Dash?.Month}
           <h2>{dot?.Dash?.Month?.Title}
@@ -132,6 +111,7 @@
         {/if}
       </div>
 
+    <Recap team={dot?.Dash?.Team} />
       <div  class="dashblock dashwhatson">
       <h2>What's on <a  class="chip"  href={("/calendar")}>Open the calendar</a></h2>
       {#if F.t(dot?.Dash?.Upcoming)}
@@ -162,6 +142,28 @@
           Nothing in the next fortnight.
           <a  href={("/calendar")}>Add something to the calendar</a>.
         </p>
+      {/if}
+      </div>
+      <div  class="dashblock dashwork">
+      <h2>Assigned to me</h2>
+      {#if F.t(dot?.Dash?.Mine)}
+        <div  class="assignedscroll"><table  class="list">
+          <thead><tr><th>Title</th><th>Status</th><th>Due</th></tr></thead>
+          <tbody>
+            {#each F.rng(dot?.Dash?.Mine) as [k5, d5]}
+              <tr>
+                <td><a  href={("/documents/" + S(d5?.ID))}>{d5?.Title}</a></td>
+                <td>{#if F.t(d5?.Task)}<span  class={"status " + S(d5?.Task?.Status)}>{F.statusLabel(d5?.Task?.Status)}</span>{/if}</td>
+                <td  class="muted small">{#if F.t(F.and(d5?.Task, d5?.Task?.DueAt))}{F.date(d5?.Task?.DueAt)}{/if}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table></div>
+      {:else}
+        <div  class="empty">
+          <strong>Nothing is assigned to you</strong>
+          Work assigned to you appears here, soonest first.
+        </div>
       {/if}
       </div>
       <div  class="dashblock dashtime">

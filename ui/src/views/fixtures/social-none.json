@@ -140,6 +140,7 @@
  "Flash": "",
  "FormsArea": null,
  "From": null,
+ "GitHubArea": null,
  "Google": null,
  "GoogleOn": false,
  "Grantable": null,
@@ -317,9 +318,14 @@
   "Channel": "",
   "Channels": null,
   "Configured": true,
+  "Media": null,
   "Metrics": null,
   "Notice": "",
-  "Posts": null
+  "Notifications": null,
+  "Post": "",
+  "PostMetrics": null,
+  "Posts": null,
+  "Tab": ""
  },
  "Sort": "",
  "SortLinks": null,

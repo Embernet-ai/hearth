@@ -152,6 +152,7 @@
    "Weeks": null,
    "WeeksTarget": ""
   },
+  "Team": null,
   "Today": "",
   "Upcoming": null,
   "Watching": null,
@@ -195,6 +196,7 @@
  "Flash": "",
  "FormsArea": null,
  "From": null,
+ "GitHubArea": null,
  "Google": null,
  "GoogleOn": false,
  "Grantable": null,

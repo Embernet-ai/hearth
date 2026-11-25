@@ -367,6 +367,27 @@ func (c *Client) Responses(ctx context.Context, formID string, limit, skip int) 
 	return rs, nil
 }
 
+// DeleteResponse removes one person's answers from a form.
+func (c *Client) DeleteResponse(ctx context.Context, responseID string) error {
+	return c.do(ctx, http.MethodDelete, "/responses/"+url.PathEscape(responseID), nil, nil, nil)
+}
+
+// AllResponses reads every answer to a form, a page at a time, up to five thousand.
+func (c *Client) AllResponses(ctx context.Context, formID string) ([]Response, error) {
+	var all []Response
+	for skip := 0; skip < 5000; skip += 200 {
+		page, err := c.Responses(ctx, formID, 200, skip)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) < 200 {
+			break
+		}
+	}
+	return all, nil
+}
+
 // Results is what a form has collected so far.
 type Results struct {
 	Total     int

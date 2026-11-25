@@ -77,7 +77,22 @@ func fillFixtures(end time.Time) map[string]page {
 	for i, h := range []string{"28 Sep", "5 Oct", "12 Oct", "19 Oct", "26 Oct", "2 Nov", "9 Nov", "16 Nov"} {
 		stats.Weeks = append(stats.Weeks, barRow{Label: h, Value: fmt.Sprintf("%dh", 30+i), Percent: 60 + i*5, Href: "/time", Current: i == 7})
 	}
-	dash := &dashboard{ReportDay: "2026-11-21", Mine: mine, Week: week, Stats: stats, WeekTitle: "15 to 21 Nov", PrevWeek: "/?day=2026-11-08", NextWeek: "/?day=2026-11-22", Today: "/?day=2026-11-17",
+	dash := &dashboard{ReportDay: "2026-11-21", Mine: mine, Week: week, Stats: stats, Team: &teamPanel{Sections: []teamSection{
+		{Key: "marketing", Title: "Email marketing", Href: "/marketing", Tiles: []statTile{
+			{Label: "Emails sent", Value: "12,408", Period: "all time", Href: "/marketing"}, {Label: "Opened", Value: "31%", Detail: "3,846 opens", Period: "of what was sent", Href: "/marketing"},
+			{Label: "Contacts", Value: "7,316", Period: "in 9 segments", Href: "/marketing?tab=segments"}, {Label: "Emails and campaigns", Value: "42", Detail: "6 live", Period: "5 campaigns", Href: "/marketing?tab=campaigns"}},
+			Rows: []teamRow{{Title: "November newsletter", Detail: "2,900 sent, 34% opened", Href: "/marketing?edit=4"}, {Title: "Smart farm webinar invite", Detail: "1,204 sent, 29% opened", Href: "/marketing?edit=7"}}},
+		{Key: "social", Title: "Social", Href: "/social", Tiles: []statTile{
+			{Label: "Scheduled", Value: "6", Period: "next 7 days", Href: "/social"}, {Label: "Published", Value: "11", Period: "last 7 days", Href: "/social"},
+			{Label: "Failed", Value: "1", Period: "last 7 days", Href: "/social", Tone: "bad"}, {Label: "Channels", Value: "5", Period: "5 connected", Href: "/social"}},
+			Rows: []teamRow{{Title: "Our new EmberCORE view is live", Detail: "LinkedIn, 2026-11-25T15:00:00Z", Href: "/social"}}},
+		{Key: "forms", Title: "Forms", Href: "/forms", Notice: "Forms did not answer: timed out"},
+		{Key: "github", Title: "GitHub, last 30 days", Href: "/github", Tiles: []statTile{
+			{Label: "Commits", Value: "42", Period: "in 3 repositories", Href: "/github"}, {Label: "Pull requests", Value: "7", Detail: "9 opened", Period: "merged", Href: "/github"},
+			{Label: "Issues", Value: "3", Detail: "4 opened", Period: "closed", Href: "/github"}, {Label: "CI runs", Value: "30", Detail: "90% passed", Period: "3 failed", Href: "/github", Tone: "bad"}},
+			Rows: []teamRow{{Title: "org/app", Detail: "42 commits, 7 PRs merged, v2.0.0", Href: "https://github.com/org/app"}}},
+	}},
+		WeekTitle: "15 to 21 Nov", PrevWeek: "/?day=2026-11-08", NextWeek: "/?day=2026-11-22", Today: "/?day=2026-11-17",
 		Month:    buildMonth(day(2), day(2), nil, mine),
 		Watching: []*docs.Row{task("w1", "Shutdown window plan", "in_progress"), task("w2", "Fire watch roster", "todo"), task("w3", "Paint booth filter change", "todo")},
 		Upcoming: []cal.Entry{{ID: "u1", Title: "Safety walk", StartsAt: end, Place: "Plant floor"}, {ID: "u2", Title: "Line 3 shutdown", StartsAt: end.AddDate(0, 0, 2), AllDay: true},

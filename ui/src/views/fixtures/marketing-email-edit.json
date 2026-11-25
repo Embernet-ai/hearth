@@ -140,6 +140,7 @@
  "Flash": "",
  "FormsArea": null,
  "From": null,
+ "GitHubArea": null,
  "Google": null,
  "GoogleOn": false,
  "Grantable": null,
@@ -193,6 +194,8 @@
   "Campaign": null,
   "Campaigns": null,
   "Configured": true,
+  "Contact": null,
+  "Contacts": null,
   "Email": {
    "HTML": "\u003cp\u003eHi\u003c/p\u003e",
    "ID": 1,

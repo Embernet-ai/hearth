@@ -427,3 +427,176 @@ func decodeCampaign(raw json.RawMessage) Campaign {
 	}
 	return out
 }
+
+// ContactTotal is how many contacts Mautic holds.
+func (c *Client) ContactTotal(ctx context.Context) (int, error) {
+	var out struct {
+		Total json.Number `json:"total"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/contacts", url.Values{"limit": {"1"}}, nil, &out); err != nil {
+		return 0, err
+	}
+	return int(int64of(out.Total)), nil
+}
+
+// SendEmailTo sends one email to one contact now, the way Mautic's own "send example" does, so a campaign can be tried on
+// a test address before it goes to a segment.
+func (c *Client) SendEmailTo(ctx context.Context, emailID, contactID int64) error {
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/emails/%d/contact/%d/send", emailID, contactID), nil, map[string]any{}, nil)
+}
+
+// -----------------------------------------------------------------------------
+// Contacts: the people the emails go to
+// -----------------------------------------------------------------------------
+
+// Contact is one person in the email marketing app.
+type Contact struct {
+	ID         int64
+	First      string
+	Last       string
+	Email      string
+	Company    string
+	Tags       []string
+	Points     int64
+	LastActive string
+	// DoNotEmail is true when the person has unsubscribed, bounced or been marked do not contact for email.
+	DoNotEmail bool
+}
+
+// Name is what a person reads for a contact.
+func (c Contact) Name() string {
+	if n := strings.TrimSpace(c.First + " " + c.Last); n != "" {
+		return n
+	}
+	return c.Email
+}
+
+// ContactInput is what a person fills in to make or change a contact.
+type ContactInput struct {
+	First, Last, Email, Company string
+	Tags                        []string
+}
+
+func (in ContactInput) body() map[string]any {
+	b := map[string]any{"firstname": in.First, "lastname": in.Last, "email": in.Email, "company": in.Company}
+	if in.Tags != nil {
+		b["tags"] = in.Tags
+	}
+	return b
+}
+
+func decodeContact(raw json.RawMessage) Contact {
+	var e struct {
+		ID         json.Number `json:"id"`
+		Points     json.Number `json:"points"`
+		LastActive *string     `json:"lastActive"`
+		Fields     struct {
+			All map[string]any `json:"all"`
+		} `json:"fields"`
+		Tags []struct {
+			Tag string `json:"tag"`
+		} `json:"tags"`
+		DNC []struct {
+			Channel string `json:"channel"`
+		} `json:"doNotContact"`
+	}
+	if json.Unmarshal(raw, &e) != nil {
+		return Contact{}
+	}
+	str := func(k string) string {
+		s, _ := e.Fields.All[k].(string)
+		return s
+	}
+	c := Contact{ID: int64of(e.ID), First: str("firstname"), Last: str("lastname"), Email: str("email"), Company: str("company"), Points: int64of(e.Points)}
+	if e.LastActive != nil {
+		c.LastActive = *e.LastActive
+	}
+	for _, t := range e.Tags {
+		c.Tags = append(c.Tags, t.Tag)
+	}
+	for _, d := range e.DNC {
+		if d.Channel == "email" {
+			c.DoNotEmail = true
+		}
+	}
+	return c
+}
+
+// Contacts lists contacts, newest first, narrowed by a search (a name, an address, "tag:vip", "email:a@b.c").
+func (c *Client) Contacts(ctx context.Context, search string, limit, start int) ([]Contact, int, error) {
+	q := url.Values{"limit": {strconv.Itoa(limit)}, "start": {strconv.Itoa(start)}, "orderBy": {"id"}, "orderByDir": {"DESC"}}
+	if search != "" {
+		q.Set("search", search)
+	}
+	var out struct {
+		Total    json.Number     `json:"total"`
+		Contacts json.RawMessage `json:"contacts"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/contacts", q, nil, &out); err != nil {
+		return nil, 0, err
+	}
+	var list []Contact
+	for _, r := range rows2(out.Contacts) {
+		list = append(list, decodeContact(r))
+	}
+	return list, int(int64of(out.Total)), nil
+}
+
+// FindContactByEmail returns the contact with that address, or nil.
+func (c *Client) FindContactByEmail(ctx context.Context, email string) (*Contact, error) {
+	list, _, err := c.Contacts(ctx, "email:"+strings.TrimSpace(email), 5, 0)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if strings.EqualFold(list[i].Email, strings.TrimSpace(email)) {
+			return &list[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// SaveContact makes a contact (id 0) or changes one, and returns its id.
+func (c *Client) SaveContact(ctx context.Context, id int64, in ContactInput) (int64, error) {
+	var out struct {
+		Contact json.RawMessage `json:"contact"`
+	}
+	var err error
+	if id == 0 {
+		err = c.do(ctx, http.MethodPost, "/contacts/new", nil, in.body(), &out)
+	} else {
+		err = c.do(ctx, http.MethodPatch, fmt.Sprintf("/contacts/%d/edit", id), nil, in.body(), &out)
+	}
+	if err != nil {
+		return 0, err
+	}
+	return idOf(out.Contact)
+}
+
+// DeleteContact removes a contact from Mautic.
+func (c *Client) DeleteContact(ctx context.Context, id int64) error {
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/contacts/%d/delete", id), nil, nil, nil)
+}
+
+// SetDoNotEmail marks a contact do not contact for email (reason 3, manual), or takes the mark off.
+func (c *Client) SetDoNotEmail(ctx context.Context, id int64, on bool, comment string) error {
+	if on {
+		return c.AddDoNotContact(ctx, id, 3, comment)
+	}
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/contacts/%d/dnc/email/remove", id), nil, map[string]any{}, nil)
+}
+
+// GetContact reads one contact.
+func (c *Client) GetContact(ctx context.Context, id int64) (*Contact, error) {
+	var out struct {
+		Contact json.RawMessage `json:"contact"`
+	}
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/contacts/%d", id), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	ct := decodeContact(out.Contact)
+	if ct.ID == 0 {
+		return nil, fmt.Errorf("mautic: no contact %d", id)
+	}
+	return &ct, nil
+}

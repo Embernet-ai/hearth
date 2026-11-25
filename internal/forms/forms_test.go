@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,5 +83,46 @@ func TestClientAgainstTheAppsShape(t *testing.T) {
 	}
 	if err := New(srv.URL, "wrong").SetStatus(context.Background(), "s1", Paused); err == nil {
 		t.Error("a refused key is an error")
+	}
+}
+
+// A response is deleted with the call Formbricks documents, and every page of answers is read.
+func TestDeleteResponseAndAllResponses(t *testing.T) {
+	var deleted string
+	pages := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/management/responses/"):
+			deleted = strings.TrimPrefix(r.URL.Path, "/api/v1/management/responses/")
+			_, _ = w.Write([]byte(`{"data":{}}`))
+		case r.URL.Path == "/api/v1/management/responses":
+			pages++
+			n := 200
+			if r.URL.Query().Get("skip") == "200" {
+				n = 3
+			}
+			var sb strings.Builder
+			sb.WriteString(`{"data":[`)
+			for i := 0; i < n; i++ {
+				if i > 0 {
+					sb.WriteString(",")
+				}
+				sb.WriteString(`{"id":"r","createdAt":"2026-11-20T10:00:00Z","finished":true,"data":{"q1":"yes"}}`)
+			}
+			sb.WriteString(`]}`)
+			_, _ = w.Write([]byte(sb.String()))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "k")
+	ctx := context.Background()
+	if err := c.DeleteResponse(ctx, "resp 1"); err != nil || deleted != "resp 1" {
+		t.Fatalf("DeleteResponse: %v, deleted %q", err, deleted)
+	}
+	all, err := c.AllResponses(ctx, "s1")
+	if err != nil || len(all) != 203 || pages != 2 {
+		t.Fatalf("AllResponses: %d answers over %d pages, %v; want 203 over 2", len(all), pages, err)
 	}
 }

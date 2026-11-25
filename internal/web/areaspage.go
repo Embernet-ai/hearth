@@ -8,7 +8,9 @@ package web
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -98,12 +100,15 @@ type MarketingView struct {
 	Segment  *mautic.Segment
 	New      bool
 	Total    int
+	// Contacts is the people tab: the list, or the one being changed with the segments it can join.
+	Contacts []mautic.Contact
+	Contact  *mautic.Contact
 }
 
 func (s *Server) getMarketing(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	v := &MarketingView{Configured: s.marketing != nil, Tab: q.Get("tab"), Notice: q.Get("notice"), Search: q.Get("q"), New: q.Get("new") != ""}
-	if v.Tab != "campaigns" && v.Tab != "segments" {
+	if v.Tab != "campaigns" && v.Tab != "segments" && v.Tab != "contacts" {
 		v.Tab = "emails"
 	}
 	if s.marketing != nil {
@@ -137,6 +142,15 @@ func (s *Server) getMarketing(w http.ResponseWriter, r *http.Request) {
 				for i := range v.Campaigns {
 					v.Campaigns[i].Contacts, _ = s.marketing.CampaignContacts(ctx, v.Campaigns[i].ID)
 				}
+			}
+			if v.Emails == nil {
+				v.Emails, _, _ = s.marketing.Emails(ctx, "", 100, 0)
+			}
+		case "contacts":
+			if id > 0 {
+				v.Contact, err = s.marketing.GetContact(ctx, id)
+			} else if !v.New {
+				v.Contacts, v.Total, err = s.marketing.Contacts(ctx, v.Search, 50, 0)
 			}
 			if v.Emails == nil {
 				v.Emails, _, _ = s.marketing.Emails(ctx, "", 100, 0)
@@ -401,11 +415,21 @@ type SocialView struct {
 	Posts      []social.Post
 	Metrics    []social.Metric
 	Channel    string // the channel whose numbers are shown
+	// Tab is posts, activity or media. The publishing app allows about thirty requests an hour, so activity and media are
+	// read only when asked for.
+	Tab           string
+	Post          string // the post whose numbers are shown
+	PostMetrics   []social.Metric
+	Notifications []social.Notification
+	Media         []social.Media
 }
 
 func (s *Server) getSocial(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v := &SocialView{Configured: s.social.Enabled(), Notice: q.Get("notice"), Channel: q.Get("channel")}
+	v := &SocialView{Configured: s.social.Enabled(), Notice: q.Get("notice"), Channel: q.Get("channel"), Tab: q.Get("tab"), Post: q.Get("post")}
+	if v.Tab != "activity" && v.Tab != "media" {
+		v.Tab = "posts"
+	}
 	if v.Configured {
 		ctx, cancel := s.areaCtx(r)
 		defer cancel()
@@ -417,6 +441,21 @@ func (s *Server) getSocial(w http.ResponseWriter, r *http.Request) {
 		}
 		if v.Channel != "" && err == nil {
 			if v.Metrics, err = s.social.Analytics(ctx, v.Channel, 30); err != nil {
+				v.Notice = areaErr(err)
+			}
+		}
+		if v.Post != "" && err == nil {
+			if v.PostMetrics, err = s.social.PostAnalytics(ctx, v.Post, 30); err != nil {
+				v.Notice = areaErr(err)
+			}
+		}
+		switch v.Tab {
+		case "activity":
+			if v.Notifications, err = s.social.Notifications(ctx, 0); err != nil {
+				v.Notice = areaErr(err)
+			}
+		case "media":
+			if v.Media, err = s.social.MediaLibrary(ctx, q.Get("q"), 1); err != nil {
 				v.Notice = areaErr(err)
 			}
 		}
@@ -471,4 +510,194 @@ func (s *Server) postSocialDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.areaCtx(r)
 	defer cancel()
 	areaBack(w, r, "/social", nil, "Deleted.", s.social.Delete(ctx, r.PathValue("id")))
+}
+
+// ---- contacts: the people the emails go to ----
+
+func (s *Server) postMarketingContact(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "contacts", "Saved.", func(ctx context.Context) error {
+		in := mautic.ContactInput{First: strings.TrimSpace(r.FormValue("first")), Last: strings.TrimSpace(r.FormValue("last")),
+			Email: strings.TrimSpace(r.FormValue("email")), Company: strings.TrimSpace(r.FormValue("company")), Tags: tagList(r.FormValue("tags"))}
+		if in.Email == "" {
+			return errors.New("a contact needs an email address")
+		}
+		_, err := s.marketing.SaveContact(ctx, intOf(r.FormValue("id")), in)
+		return err
+	})
+}
+
+func (s *Server) postMarketingContactDelete(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "contacts", "Deleted.", func(ctx context.Context) error {
+		return s.marketing.DeleteContact(ctx, intOf(r.PathValue("id")))
+	})
+}
+
+// postMarketingContactDNC marks a contact do not email, or takes the mark off.
+func (s *Server) postMarketingContactDNC(w http.ResponseWriter, r *http.Request) {
+	on := r.FormValue("on") == "1"
+	done := "Taken off the do not email list."
+	if on {
+		done = "Marked do not email."
+	}
+	s.marketingAct(w, r, "contacts", done, func(ctx context.Context) error {
+		return s.marketing.SetDoNotEmail(ctx, intOf(r.PathValue("id")), on, "marked in Hearth")
+	})
+}
+
+func (s *Server) postMarketingContactSegment(w http.ResponseWriter, r *http.Request) {
+	add := r.FormValue("do") != "remove"
+	done := "Removed from the segment."
+	if add {
+		done = "Added to the segment."
+	}
+	s.marketingAct(w, r, "contacts", done, func(ctx context.Context) error {
+		seg := intOf(r.FormValue("segment"))
+		if seg == 0 {
+			return errors.New("choose a segment")
+		}
+		if add {
+			return s.marketing.SegmentAdd(ctx, seg, intOf(r.PathValue("id")))
+		}
+		return s.marketing.SegmentRemove(ctx, seg, intOf(r.PathValue("id")))
+	})
+}
+
+// postMarketingContactSend sends one email to one contact now: the way to try an email on a test address.
+func (s *Server) postMarketingContactSend(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "contacts", "Sent to this contact.", func(ctx context.Context) error {
+		email := intOf(r.FormValue("email"))
+		if email == 0 {
+			return errors.New("choose the email to send")
+		}
+		return s.marketing.SendEmailTo(ctx, email, intOf(r.PathValue("id")))
+	})
+}
+
+// postMarketingEmailTest sends an email to an address as a test, finding the contact or making one for it first.
+func (s *Server) postMarketingEmailTest(w http.ResponseWriter, r *http.Request) {
+	s.marketingAct(w, r, "emails", "Test sent.", func(ctx context.Context) error {
+		addr := strings.TrimSpace(r.FormValue("to"))
+		if !strings.Contains(addr, "@") {
+			return errors.New("type the address to send the test to")
+		}
+		ct, err := s.marketing.FindContactByEmail(ctx, addr)
+		if err != nil {
+			return err
+		}
+		var id int64
+		if ct != nil {
+			id = ct.ID
+		} else if id, err = s.marketing.SaveContact(ctx, 0, mautic.ContactInput{Email: addr, Tags: []string{"hearth-test"}}); err != nil {
+			return err
+		}
+		return s.marketing.SendEmailTo(ctx, intOf(r.PathValue("id")), id)
+	})
+}
+
+// tagList splits "a, b" into tags, dropping blanks.
+func tagList(raw string) []string {
+	var out []string
+	for _, t := range strings.Split(raw, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// postSocialStatus moves a post between a draft and the schedule.
+func (s *Server) postSocialStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.social.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Social is not set up on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	ctx, cancel := s.areaCtx(r)
+	defer cancel()
+	to := r.FormValue("to")
+	done := "Back to a draft."
+	if to == "schedule" {
+		done = "Scheduled for the date it holds."
+	}
+	areaBack(w, r, "/social", nil, done, s.social.SetStatus(ctx, r.PathValue("id"), to))
+}
+
+// postSocialUpload puts a file from a web address into the media library.
+func (s *Server) postSocialUpload(w http.ResponseWriter, r *http.Request) {
+	if !s.social.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Social is not set up on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	ctx, cancel := s.areaCtx(r)
+	defer cancel()
+	_, err := s.social.UploadFromURL(ctx, r.FormValue("url"))
+	areaBack(w, r, "/social", url.Values{"tab": {"media"}}, "Added to the media library.", err)
+}
+
+// postFormsResponseDelete removes one person's answers.
+func (s *Server) postFormsResponseDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.forms.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Forms is not set up on this installation")
+		return
+	}
+	ctx, cancel := s.areaCtx(r)
+	defer cancel()
+	areaBack(w, r, "/forms", url.Values{"id": {r.PathValue("id")}, "results": {"1"}}, "Answers deleted.", s.forms.DeleteResponse(ctx, r.PathValue("rid")))
+}
+
+// getFormsCSV downloads every answer to a form as a spreadsheet, one column per question.
+func (s *Server) getFormsCSV(w http.ResponseWriter, r *http.Request) {
+	if !s.forms.Enabled() {
+		s.fail(w, r, http.StatusNotFound, "Forms is not set up on this installation")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	f, err := s.forms.Get(ctx, r.PathValue("id"))
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, areaErr(err))
+		return
+	}
+	rs, err := s.forms.AllResponses(ctx, f.ID)
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, areaErr(err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="answers.csv"`)
+	cw := csv.NewWriter(w)
+	head := []string{"When", "Finished"}
+	for _, q := range f.Questions {
+		head = append(head, safeCell(q.Headline))
+	}
+	_ = cw.Write(head)
+	for _, resp := range rs {
+		row := []string{resp.Created, fmt.Sprint(resp.Finished)}
+		for _, q := range f.Questions {
+			row = append(row, safeCell(answerText(resp.Answers[q.ID])))
+		}
+		_ = cw.Write(row)
+	}
+	cw.Flush()
+}
+
+func answerText(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case []any:
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = fmt.Sprint(e)
+		}
+		return strings.Join(parts, ", ")
+	}
+	return fmt.Sprint(v)
 }

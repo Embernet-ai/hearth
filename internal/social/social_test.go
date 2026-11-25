@@ -70,3 +70,65 @@ func TestARateLimitSaysSo(t *testing.T) {
 		t.Errorf("err = %v, want ErrRateLimited", err)
 	}
 }
+
+// The calls the Postiz public API documents: change a post's status, delete by group, a post's numbers, notifications, the media
+// library, and a file from a web address. Each is the method and path the docs give, with the body they ask for.
+func TestPostizStatusGroupAnalyticsNotificationsAndMedia(t *testing.T) {
+	var calls []string
+	var statusBody, uploadBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		calls = append(calls, r.Method+" "+r.URL.Path+"?"+r.URL.RawQuery)
+		switch {
+		case r.URL.Path == "/api/public/v1/posts/p1/status":
+			_ = json.Unmarshal(b, &statusBody)
+			_, _ = w.Write([]byte(`{}`))
+		case r.URL.Path == "/api/public/v1/analytics/post/p1":
+			_, _ = w.Write([]byte(`[{"label":"Likes","data":[{"total":"4","date":"2026-11-20"}],"percentageChange":10}]`))
+		case r.URL.Path == "/api/public/v1/notifications":
+			_, _ = w.Write([]byte(`{"notifications":[{"id":"n1","content":"Your post to X was published successfully","createdAt":"2026-11-20T10:00:00.000Z"}],"total":1}`))
+		case r.URL.Path == "/api/public/v1/media":
+			_, _ = w.Write([]byte(`{"pages":1,"results":[{"id":"m1","originalName":"banner.png","path":"https://u.example/banner.png"}]}`))
+		case r.URL.Path == "/api/public/v1/upload-from-url":
+			_ = json.Unmarshal(b, &uploadBody)
+			_, _ = w.Write([]byte(`{"id":"m2","path":"https://u.example/x.png"}`))
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "k")
+	ctx := context.Background()
+	if err := c.SetStatus(ctx, "p1", "draft"); err != nil || statusBody["status"] != "draft" {
+		t.Fatalf("SetStatus: %v %v", err, statusBody)
+	}
+	if err := c.SetStatus(ctx, "p1", "published"); err == nil {
+		t.Error("a status Postiz does not have was sent")
+	}
+	if err := c.DeleteGroup(ctx, "g1"); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := c.PostAnalytics(ctx, "p1", 7); err != nil || len(m) != 1 || m[0].Label != "Likes" {
+		t.Fatalf("PostAnalytics: %+v %v", m, err)
+	}
+	if n, err := c.Notifications(ctx, 0); err != nil || len(n) != 1 || n[0].ID != "n1" {
+		t.Fatalf("Notifications: %+v %v", n, err)
+	}
+	if m, err := c.MediaLibrary(ctx, "banner", 1); err != nil || len(m) != 1 || m[0].OriginalName != "banner.png" {
+		t.Fatalf("MediaLibrary: %+v %v", m, err)
+	}
+	if img, err := c.UploadFromURL(ctx, "https://example.com/x.png"); err != nil || img.ID != "m2" || uploadBody["url"] != "https://example.com/x.png" {
+		t.Fatalf("UploadFromURL: %+v %v %v", img, err, uploadBody)
+	}
+	if _, err := c.UploadFromURL(ctx, "ftp://nope"); err == nil {
+		t.Error("a non web address was accepted")
+	}
+	want := []string{"PUT /api/public/v1/posts/p1/status?", "DELETE /api/public/v1/posts/group/g1?", "GET /api/public/v1/analytics/post/p1?date=7", "GET /api/public/v1/notifications?page=0",
+		"GET /api/public/v1/media?page=1&search=banner", "POST /api/public/v1/upload-from-url?"}
+	for i, w := range want {
+		if i >= len(calls) || calls[i] != w {
+			t.Errorf("call %d = %v, want %q", i, calls, w)
+			break
+		}
+	}
+}

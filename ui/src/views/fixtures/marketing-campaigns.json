@@ -140,6 +140,7 @@
  "Flash": "",
  "FormsArea": null,
  "From": null,
+ "GitHubArea": null,
  "Google": null,
  "GoogleOn": false,
  "Grantable": null,
@@ -204,6 +205,8 @@
    }
   ],
   "Configured": true,
+  "Contact": null,
+  "Contacts": null,
   "Email": null,
   "Emails": null,
   "New": false,

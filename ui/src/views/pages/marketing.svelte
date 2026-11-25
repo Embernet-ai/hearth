@@ -24,6 +24,7 @@
       <a  class={'chip' + (m.Tab === 'emails' ? ' on' : '')}  href="/marketing?tab=emails">Emails</a>
       <a  class={'chip' + (m.Tab === 'campaigns' ? ' on' : '')}  href="/marketing?tab=campaigns">Campaigns</a>
       <a  class={'chip' + (m.Tab === 'segments' ? ' on' : '')}  href="/marketing?tab=segments">Segments</a>
+      <a  class={'chip' + (m.Tab === 'contacts' ? ' on' : '')}  href="/marketing?tab=contacts">Contacts</a>
     </nav>
 
     {#if m.Tab === 'emails'}
@@ -45,6 +46,12 @@
           <label  class="small"><input  type="checkbox"  name="published"  checked={e?.Published ?? false}> Published (an email with a date above goes live then)</label>
           <div  class="row"><button  type="submit"  class="primary">Save</button><a  class="ghost small"  href="/marketing?tab=emails">Cancel</a></div>
         </form>
+        {#if e}
+          <form  method="post"  action={"/marketing/email/" + e.ID + "/test"}  class="card row"  data-test-send>
+            <label  class="grow">Send a test of this email to <input  type="email"  name="to"  placeholder="you@example.com"  required></label>
+            <button  type="submit">Send test</button>
+          </form>
+        {/if}
       {:else}
         <p><a  class="primary small"  href="/marketing?tab=emails&new=1">New email</a></p>
         <form  method="get"  action="/marketing"  class="row"><input  type="hidden"  name="tab"  value="emails"><input  type="search"  name="q"  value={m.Search}  placeholder="Search emails"><button  class="ghost small">Search</button></form>
@@ -117,6 +124,59 @@
             </tbody>
           </table>
         {:else}<p  class="muted">No campaigns yet.</p>{/if}
+      {/if}
+    {/if}
+
+    {#if m.Tab === 'contacts'}
+      {#if m.New || m.Contact}
+        {@const c = m.Contact}
+        <form  method="post"  action="/marketing/contact"  class="card stack"  data-contact-form>
+          <h2>{c ? c.First + ' ' + c.Last : 'New contact'}</h2>
+          {#if c}<input  type="hidden"  name="id"  value={c.ID}>{/if}
+          <div  class="row"><label>First name <input  name="first"  value={c?.First ?? ''}></label><label>Last name <input  name="last"  value={c?.Last ?? ''}></label></div>
+          <label>Email <input  type="email"  name="email"  value={c?.Email ?? ''}  required></label>
+          <label>Company <input  name="company"  value={c?.Company ?? ''}></label>
+          <label>Tags, separated by commas <input  name="tags"  value={(c?.Tags ?? []).join(', ')}></label>
+          <div  class="row"><button  type="submit"  class="primary">Save</button><a  class="ghost small"  href="/marketing?tab=contacts">Cancel</a></div>
+        </form>
+        {#if c}
+          <div  class="card stack"  data-contact-actions>
+            <h3>Segments</h3>
+            <form  method="post"  action={"/marketing/contact/" + c.ID + "/segment"}  class="row">
+              <select  name="segment"  aria-label="Segment">{#each (m.Segments ?? []) as s}<option  value={s.ID}>{s.Name}</option>{/each}</select>
+              <button  name="do"  value="add"  class="small">Add to segment</button><button  name="do"  value="remove"  class="ghost small">Take out of segment</button>
+            </form>
+            <h3>Send an email to this person now</h3>
+            <form  method="post"  action={"/marketing/contact/" + c.ID + "/send"}  class="row"  data-confirm="Send this email to this person now?">
+              <select  name="email"  aria-label="Email">{#each (m.Emails ?? []) as e}<option  value={e.ID}>{e.Name}</option>{/each}</select>
+              <button  class="small">Send</button>
+            </form>
+            <h3>Email permission</h3>
+            <form  method="post"  action={"/marketing/contact/" + c.ID + "/dnc"}  class="row">
+              {#if c.DoNotEmail}<span  class="muted small">Do not email is on.</span><button  name="on"  value="0"  class="small">Allow email again</button>
+              {:else}<button  name="on"  value="1"  class="ghost small">Mark do not email</button>{/if}
+            </form>
+            <form  method="post"  action={"/marketing/contact/" + c.ID + "/delete"}  class="row"  data-confirm="Delete this contact from the email marketing app?"><button  class="ghost small">Delete contact</button></form>
+          </div>
+        {/if}
+      {:else}
+        <p><a  class="primary small"  href="/marketing?tab=contacts&new=1">New contact</a></p>
+        <form  method="get"  action="/marketing"  class="row"><input  type="hidden"  name="tab"  value="contacts"><input  type="search"  name="q"  value={m.Search}  placeholder="Search a name, an address or tag:vip"><button  class="ghost small">Search</button></form>
+        {#if m.Contacts && m.Contacts.length}
+          <table  class="list small"  data-contacts>
+            <thead><tr><th>Person</th><th>Company</th><th>Tags</th><th>Last active</th><th></th></tr></thead>
+            <tbody>
+              {#each m.Contacts as c}
+                <tr  data-contact={c.ID}>
+                  <td><a  href={"/marketing?tab=contacts&edit=" + c.ID}>{(c.First + ' ' + c.Last).trim() || c.Email}</a><div  class="muted">{c.Email}</div></td>
+                  <td>{c.Company}</td><td>{(c.Tags ?? []).join(', ')}</td><td>{c.LastActive ? c.LastActive.slice(0, 10) : ''}</td>
+                  <td>{#if c.DoNotEmail}<span  class="tag">do not email</span>{/if}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          <p  class="muted small">{m.Total} contacts</p>
+        {:else}<p  class="muted">No contacts match.</p>{/if}
       {/if}
     {/if}
 

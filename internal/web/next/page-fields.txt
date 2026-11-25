@@ -334,5 +334,6 @@ Mailbox
 Marketing
 FormsArea
 SocialArea
+GitHubArea
 ToolsList
 ToolsOn
