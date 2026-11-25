@@ -146,6 +146,7 @@ func newDeskFx(t *testing.T) *deskFx {
 	srv.salesRoutes(f.mux)
 	srv.deskRoutes(f.mux)
 	f.mux.HandleFunc("GET /contacts/{id}", srv.getContact)
+	f.mux.HandleFunc("GET /contacts", func(w http.ResponseWriter, r *http.Request) { srv.contactsPage(w, r) })
 	return f
 }
 
@@ -509,5 +510,66 @@ func TestEditingATimelineEntryThroughTheRoute(t *testing.T) {
 	}
 	if w := f.do(f.other, "POST", "/activities/"+a.ID+"/edit", url.Values{"title": {"x"}, "back": {"https://evil.example/"}}); w.Header().Get("Location") != "/deals#timeline" {
 		t.Errorf("an off-site back = %q, want a local one", w.Header().Get("Location"))
+	}
+}
+
+func TestEnrolingManyContactsInMauticThroughTheRoute(t *testing.T) {
+	f := newDeskFx(t)
+	ctx := context.Background()
+	svc := f.srv.sales.(*crm.Service)
+	mid := 100
+	mk := func(name, email string, linked bool) string {
+		c, err := svc.CreateContact(ctx, f.org, f.subj(f.member), crm.Contact{Name: name, Email: email})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Share(ctx, f.org, f.subj(f.member), c.Ref()); err != nil {
+			t.Fatal(err)
+		}
+		if linked {
+			if _, err := f.pool.Exec(ctx, `INSERT INTO mautic_links (contact_id, org_id, mautic_id, payload_hash, segments, tags) VALUES ($1,$2,$3,'h','{}','{}')`, c.ID, f.org, mid); err != nil {
+				t.Fatal(err)
+			}
+			mid++
+		}
+		return c.ID
+	}
+	a, b, loose := mk("En A", "ea@m.example", true), mk("En B", "eb@m.example", true), mk("En C", "ec@m.example", false)
+	form := func(target string, ids ...string) url.Values {
+		return url.Values{"ids": ids, "target": {target}, "back": {"/contacts"}}
+	}
+	if w := f.do(f.out, "POST", "/crm/mautic/enrol", form("segment:1", a)); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider enrolling = %d, want 404", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/enrol", url.Values{"target": {"segment:1"}}); w.Code != http.StatusBadRequest {
+		t.Errorf("enrolling nobody = %d, want 400", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/enrol", form("nonsense", a)); w.Code != http.StatusBadRequest {
+		t.Errorf("a target that is not a number = %d, want 400", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/enrol", form("segment:2", a)); w.Code != http.StatusConflict {
+		t.Errorf("a segment the sync keeps = %d, want 409", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/enrol", form("segment:99", a)); w.Code != http.StatusBadRequest {
+		t.Errorf("a segment that is not there = %d, want 400", w.Code)
+	}
+	w := f.do(f.other, "POST", "/crm/mautic/enrol", form("segment:1", a, b, loose))
+	loc := w.Header().Get("Location")
+	if w.Code != http.StatusSeeOther || !strings.Contains(loc, "notice=Enrolled+2.+1+are+not+in+Mautic+yet") {
+		t.Fatalf("enrol = %d to %q", w.Code, loc)
+	}
+	if w := f.do(f.other, "POST", "/crm/mautic/enrol", form("campaign:7", a)); w.Code != http.StatusSeeOther {
+		t.Errorf("campaign enrol = %d, want 303", w.Code)
+	}
+	if len(f.mkt.calls) != 3 || f.mkt.calls[0] != "seg+" || f.mkt.calls[2] != "camp+" {
+		t.Errorf("Mautic was asked %v, want seg+ seg+ camp+", f.mkt.calls)
+	}
+	var env struct {
+		Page struct {
+			Desk struct{ MauticChoices []struct{ Kind, Name string } }
+		}
+	}
+	if err := json.Unmarshal(f.do(f.member, "GET", "/contacts", nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.MauticChoices) != 2 {
+		t.Errorf("choices on the contacts list = %+v (%v), want Expo and Welcome", env, err)
 	}
 }

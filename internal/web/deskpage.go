@@ -52,6 +52,8 @@ type deskData struct {
 	MauticNote string
 	// Forms is the form responses this person gave on Formbricks.
 	Forms []crmforms.Entry
+	// MauticChoices are the segments and campaigns a salesperson may enrol people into from the contacts list.
+	MauticChoices []crmmarketing.Choice
 }
 
 func (s *Server) deskRoutes(mux *http.ServeMux) {
@@ -70,6 +72,7 @@ func (s *Server) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /activities/{id}/edit", s.editActivity)
 	mux.HandleFunc("POST /crm/mautic/segment", s.mauticSegment)
 	mux.HandleFunc("POST /crm/mautic/campaign", s.mauticCampaign)
+	mux.HandleFunc("POST /crm/mautic/enrol", s.mauticEnrol)
 	mux.HandleFunc("POST /crm/email", s.emailFromRecord)
 	mux.HandleFunc("POST /crm/meeting", s.meetingFromRecord)
 }
@@ -806,4 +809,79 @@ func (s *Server) editActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, localBack(r.FormValue("back"), "/deals")+"#timeline", http.StatusSeeOther)
+}
+
+// mauticChoices is what the contacts list offers for enrolling people, for the Sales team only and only when Mautic is connected.
+func (s *Server) mauticChoices(r *http.Request) *deskData {
+	if s.crmMkt == nil || !s.salesNav(r) {
+		return nil
+	}
+	ch, err := s.crmMkt.Choices(r.Context())
+	if err != nil {
+		s.log.WarnContext(r.Context(), "load the Mautic choices", "error", err)
+		return nil
+	}
+	return &deskData{MauticChoices: ch}
+}
+
+func (s *Server) mauticEnrol(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.salesAccess(w, r); !ok {
+		return
+	}
+	if s.crmMkt == nil {
+		s.fail(w, r, http.StatusNotFound, "Mautic is not connected on this installation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "malformed form")
+		return
+	}
+	id := auth.From(r.Context())
+	ids := r.Form["ids"]
+	if len(ids) == 0 || len(ids) > 200 {
+		s.fail(w, r, http.StatusBadRequest, "tick between 1 and 200 people")
+		return
+	}
+	kind, num, _ := strings.Cut(r.FormValue("target"), ":")
+	n, err := strconv.ParseInt(num, 10, 64)
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "choose a segment or a campaign")
+		return
+	}
+	var may []string
+	for _, c := range ids {
+		if s.az.Require(r.Context(), id.Subjects, core.Ref{Type: core.EntityContact, ID: strings.TrimSpace(c)}, core.AccessEdit) == nil {
+			may = append(may, strings.TrimSpace(c))
+		}
+	}
+	res, err := s.crmMkt.Enrol(r.Context(), id.OrgID, may, kind, n)
+	switch {
+	case err == nil:
+	case errors.Is(err, crmmarketing.ErrLocked):
+		s.fail(w, r, http.StatusConflict, strings.TrimPrefix(err.Error(), "crmmarketing: "))
+		return
+	case strings.Contains(err.Error(), "no such segment"), strings.Contains(err.Error(), "enrol into"):
+		s.fail(w, r, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "crmmarketing: "))
+		return
+	default:
+		s.log.WarnContext(r.Context(), "enrol in Mautic", "error", err)
+		s.fail(w, r, http.StatusBadGateway, "Mautic would not do that: "+err.Error())
+		return
+	}
+	back := localBack(r.FormValue("back"), "/contacts")
+	msg := fmt.Sprintf("Enrolled %d.", res.Done)
+	if res.NotInTool > 0 {
+		msg += fmt.Sprintf(" %d are not in Mautic yet; the marketing sync adds them.", res.NotInTool)
+	}
+	if skipped := len(ids) - len(may); skipped > 0 {
+		msg += fmt.Sprintf(" %d you cannot edit were left out.", skipped)
+	}
+	if len(res.Failed) > 0 {
+		msg += fmt.Sprintf(" Mautic would not take %d.", len(res.Failed))
+	}
+	sep := "?"
+	if strings.Contains(back, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, back+sep+"notice="+url.QueryEscape(msg), http.StatusSeeOther)
 }

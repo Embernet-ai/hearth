@@ -237,6 +237,7 @@ func (s *Server) contactsPage(w http.ResponseWriter, r *http.Request) bool {
 		SearchText: q.Search, Owners: s.owners(r), OwnerSel: q.Owner, Sort: q.Sort,
 		SortLinks: sortLinks(r, "name", "company", "title", "email", "owner", "updated"),
 		Pager:     pagerFor(r, q, len(rows), total), ExportURL: exportLink(r, "/contacts.csv"),
+		Desk: s.mauticChoices(r),
 	})
 	return true
 }

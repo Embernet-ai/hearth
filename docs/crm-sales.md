@@ -62,7 +62,7 @@ them where a salesperson needs to.
   admins see them whatever their EmberOps permissions are.
 - **Mautic.** What Mautic recorded for a person (sent, opened, clicked, forms, unsubscribed, bounced) is on their timeline. Their page
   now also lists their Mautic segments and campaigns, and a salesperson adds or removes them by hand. Segments the marketing sync keeps
-  ("Hearth: ...") are shown and cannot be changed there, because the next sync would undo it.
+  ("Hearth: ...") are shown and cannot be changed there, because the next sync would undo it. Tick people on the contacts list and enrol them in a segment or a live campaign in one go; anyone the marketing sync has not sent to Mautic yet is counted and left for the next sync, and anyone you cannot edit is left out.
 - **Formbricks.** A person's page lists the answers they gave on any form, matched on their email addresses.
 - **Cascade.** Companies, people and deals publish created, updated and deleted events to webhook receivers, and a follow-up added or
   finished is an update of the record it is about (`payload.followup` is `created`, `done` or `reopened`). A Cascade flow starts from

@@ -105,3 +105,61 @@ func TestAContactsPlaceInMauticIsShownAndMovable(t *testing.T) {
 		t.Errorf("calls = %v, want seg- then camp+ and nothing for the refused ones", mc.calls)
 	}
 }
+
+func TestManyContactsAreEnrolledAtOnce(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pools, err := pg.Open(ctx, pg.DefaultOptions(dsn))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pools.Close)
+	if err := pg.Migrate(ctx, pools, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))); err != nil {
+		t.Fatal(err)
+	}
+	org, who := uuid.NewString(), uuid.NewString()
+	a, b, c := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := pools.Web.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+	}
+	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1,$2,'Enrol Test')`, org, "en-"+org[:8])
+	exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1,$2,'user','Pat')`, who, org)
+	exec(`INSERT INTO contacts (id, org_id, name, email, created_by) VALUES ($1,$4,'A','a@x.example',$5), ($2,$4,'B','b@x.example',$5), ($3,$4,'C','c@x.example',$5)`, a, b, c, org, who)
+	exec(`INSERT INTO mautic_links (contact_id, org_id, mautic_id, payload_hash, segments, tags) VALUES ($1,$3,11,'h','{}','{}'), ($2,$3,12,'h','{}','{}')`, a, b, org)
+	t.Cleanup(func() {
+		for _, q := range []string{`DELETE FROM mautic_links WHERE org_id=$1`, `DELETE FROM contacts WHERE org_id=$1`} {
+			_, _ = pools.Web.Exec(context.Background(), q, org)
+		}
+	})
+	mc := &fakeMautic{}
+	s := crmmarketing.New(pools.Web, mc)
+	ch, err := s.Choices(ctx)
+	if err != nil || len(ch) != 2 || ch[0].Kind != "segment" || ch[0].Name != "Expo" || ch[1].Kind != "campaign" {
+		t.Fatalf("choices = %+v (%v), want Expo and Welcome only (the Hearth segment is the sync's and Old is unpublished)", ch, err)
+	}
+	res, err := s.Enrol(ctx, org, []string{a, b, c}, "segment", 1)
+	if err != nil || res.Done != 2 || res.NotInTool != 1 || len(res.Failed) != 0 {
+		t.Fatalf("enrol = %+v (%v), want two done and one not in Mautic yet", res, err)
+	}
+	if _, err := s.Enrol(ctx, org, []string{a}, "segment", 2); !errors.Is(err, crmmarketing.ErrLocked) {
+		t.Errorf("a segment the sync keeps: got %v, want ErrLocked", err)
+	}
+	if _, err := s.Enrol(ctx, org, []string{a}, "segment", 99); err == nil {
+		t.Error("a segment that does not exist was accepted")
+	}
+	if _, err := s.Enrol(ctx, org, []string{a}, "pile", 1); err == nil {
+		t.Error("an unknown kind was accepted")
+	}
+	if res, _ := s.Enrol(ctx, org, []string{a, b}, "campaign", 7); res.Done != 2 {
+		t.Errorf("campaign enrol = %+v, want 2", res)
+	}
+	if len(mc.calls) != 4 || mc.calls[0] != "seg+" || mc.calls[2] != "camp+" {
+		t.Errorf("Mautic was asked %v, want seg+ twice then camp+ twice and nothing for the refused ones", mc.calls)
+	}
+}

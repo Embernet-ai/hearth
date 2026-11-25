@@ -138,3 +138,18 @@ describe('the timeline', () => {
     expect(d.querySelector('[data-activity="a2"] select[name="direction"]')).toBeNull();
   });
 });
+
+describe('enrolling people in Mautic from the contacts list', () => {
+  const rows = [{ ID: 'c1', Name: 'Dana', Email: 'd@x.example' }];
+  test('offers the segments and campaigns beside the bulk bar, posting the ticked people to the enrol route', () => {
+    const d = draw('contacts', page({ SalesNav: true, SalesOn: true, ContactRows: rows, Companies: [], Owners: [], SortLinks: {}, Path: '/contacts', Desk: { MauticChoices: [{ Kind: 'segment', ID: 1, Name: 'Expo' }, { Kind: 'campaign', ID: 7, Name: 'Welcome' }] } }));
+    const opts = [...d.querySelectorAll('select[data-enrol-target] option')].map((o) => o.getAttribute('value'));
+    expect(opts).toEqual(['segment:1', 'campaign:7']);
+    expect(d.querySelector('button[data-enrol]')?.getAttribute('formaction')).toBe('/crm/mautic/enrol');
+    expect(d.querySelector('form#bulkform button[data-enrol]')).not.toBeNull();
+  });
+  test('offers nothing when Mautic is not connected', () => {
+    const d = draw('contacts', page({ SalesNav: true, SalesOn: true, ContactRows: rows, Companies: [], Owners: [], SortLinks: {}, Path: '/contacts', Desk: null }));
+    expect(d.querySelector('button[data-enrol]')).toBeNull();
+  });
+});

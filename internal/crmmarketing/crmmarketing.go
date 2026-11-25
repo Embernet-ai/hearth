@@ -152,3 +152,91 @@ func (s *Service) SetCampaign(ctx context.Context, orgID, contactID string, camp
 	}
 	return s.mc.CampaignRemove(ctx, campaignID, mid)
 }
+
+// Choice is a segment or a campaign a salesperson can put people into.
+type Choice struct {
+	Kind string // "segment" or "campaign"
+	ID   int64
+	Name string
+}
+
+// Choices are the segments the sync does not keep and the campaigns that are live, which is what may be enrolled by hand.
+func (s *Service) Choices(ctx context.Context) ([]Choice, error) {
+	segs, err := s.mc.SegmentsBrief(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("crmmarketing: segments: %w", err)
+	}
+	camps, err := s.mc.CampaignsBrief(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("crmmarketing: campaigns: %w", err)
+	}
+	var out []Choice
+	for _, sg := range segs {
+		if !locked(sg.Name) {
+			out = append(out, Choice{"segment", sg.ID, sg.Name})
+		}
+	}
+	for _, c := range camps {
+		if c.Published {
+			out = append(out, Choice{"campaign", c.ID, c.Name})
+		}
+	}
+	return out, nil
+}
+
+// EnrolResult says what an enrolment of many contacts did.
+type EnrolResult struct {
+	Done      int
+	NotInTool int // not in Mautic yet: the marketing sync adds them, then they can be enrolled
+	Failed    []string
+}
+
+// Enrol puts each contact in a segment or a campaign (kind is "segment" or "campaign"). A contact that is not in Mautic yet is
+// counted, not failed, and one Mautic would not move is named. A segment the sync keeps is refused before anything moves.
+func (s *Service) Enrol(ctx context.Context, orgID string, contactIDs []string, kind string, target int64) (*EnrolResult, error) {
+	switch kind {
+	case "segment":
+		segs, err := s.mc.SegmentsBrief(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("crmmarketing: segments: %w", err)
+		}
+		found := false
+		for _, sg := range segs {
+			if sg.ID == target {
+				found = true
+				if locked(sg.Name) {
+					return nil, ErrLocked
+				}
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("crmmarketing: no such segment")
+		}
+	case "campaign":
+	default:
+		return nil, fmt.Errorf("crmmarketing: enrol into a segment or a campaign")
+	}
+	res := &EnrolResult{}
+	for _, id := range contactIDs {
+		mid, err := s.mauticID(ctx, orgID, id)
+		if errors.Is(err, ErrNotLinked) {
+			res.NotInTool++
+			continue
+		}
+		if err != nil {
+			res.Failed = append(res.Failed, id)
+			continue
+		}
+		if kind == "segment" {
+			err = s.mc.SegmentAdd(ctx, target, mid)
+		} else {
+			err = s.mc.CampaignAdd(ctx, target, mid)
+		}
+		if err != nil {
+			res.Failed = append(res.Failed, id)
+			continue
+		}
+		res.Done++
+	}
+	return res, nil
+}
