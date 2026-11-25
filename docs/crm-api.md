@@ -37,6 +37,8 @@ not a quietly empty record.
 | `GET /v1/crm/forecast` | `owner` (a person id, `me`, or `none`). Open deals weighted by stage chance, in buckets: `overdue`, each month, `none`; per owner; won this month |
 | `GET /v1/crm/reports` | `from`, `to` (YYYY-MM-DD, the last 30 days by default), `owner`. Pipeline by stage, won, lost, win rate, average won deal, days to win, owners, activity by person, deals made by month |
 | `POST /v1/crm/bulk` | `type` (company, contact, deal), `ids` (at most 500), and any of `owner_id` (empty clears), `stage` (deals), `add_tag`, `add_type` (companies). Returns `{changed, failed}`; a record the caller may not edit is named in `failed` and the rest are changed |
+| `GET /v1/crm/properties` | `type` (`contact`, `company`, `deal`). The custom fields of that kind: `id`, `key`, `label`, `data_type`, `options` |
+| `POST /v1/crm/properties`, `PATCH`, `DELETE /v1/crm/properties/{id}` | `type`, `label`, `data_type` (text, number, currency, date, boolean, select, url, email, phone), `options` (for select), `key` (made from the label when empty). Only a super admin; a change keeps the key and the type; a delete removes every value (`?type=`) |
 | `GET /v1/crm/duplicates` | `type` (`contact`, or `company`). Groups of records that look like one, each with a reason |
 | `POST /v1/crm/merge` | `type`, `survivor_id`, `merge_ids` (at most 20). Folds them into the survivor; the caller needs edit on all of them. Answers `{merged, survivor_id}` |
 | `GET /v1/crm/stats` | companies, contacts, deals, open deals (not won, lost, or no response), open value in cents, and count and value by stage, over what the caller can see |
@@ -50,6 +52,12 @@ A webhook receiver is sent `{id, event, entity_type, entity_id, occurred_at}`, s
 `deal` (events `created`, `updated`, `deleted`). A follow-up added, finished or reopened is an `updated` of the record it is about.
 Fetch the record with the `entity_id`. An automation (a Cascade flow) that finds the record with a token for a Sales team member sees
 what the Sales team sees.
+
+## Custom fields on a record
+
+Companies, contacts and deals read, create and patch a `properties` object keyed by field key (`{"industry": "Rewinds", "contract_end": "2027-03-01"}`).
+A value is checked against its field's type and a bad one answers 400 before anything changes; `null` or an empty string clears a field; a key that
+is not a field is 400. A read answers every field of that kind, with `null` for one that is not set.
 
 ## Sending a create twice
 

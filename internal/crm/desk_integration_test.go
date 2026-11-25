@@ -729,3 +729,136 @@ func TestATimelineEntryCanBeEditedByItsAuthorAndByTheTeam(t *testing.T) {
 		t.Errorf("a removed entry: got %v, want ErrNotFound", err)
 	}
 }
+
+func TestCustomPropertiesOnCompaniesContactsAndDeals(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	t.Cleanup(func() {
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM property_values WHERE def_id IN (SELECT id FROM property_defs WHERE org_id=$1)`, f.org)
+		_, _ = f.pools.Web.Exec(context.Background(), `DELETE FROM property_defs WHERE org_id=$1`, f.org)
+	})
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	admin := f.subj(t, f.superAdmin(t))
+	d, err := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Props"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only a super admin defines fields.
+	if _, err := f.svc.SaveProperty(ctx, f.org, bob, crm.PropertyInput{Kind: core.EntityDeal, Label: "Line speed", DataType: crm.PropNumber}); !errors.Is(err, crm.ErrForbidden) {
+		t.Errorf("a salesperson defining a field: got %v, want ErrForbidden", err)
+	}
+	speed, err := f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{Kind: core.EntityDeal, Label: "Line speed", DataType: crm.PropNumber})
+	if err != nil || speed.Key != "line_speed" {
+		t.Fatalf("define = %+v (%v), want the key made from the label", speed, err)
+	}
+	stage, _ := f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{Kind: core.EntityDeal, Label: "Source", DataType: crm.PropSelect, Options: []string{"Expo", " Referral ", "Expo"}})
+	if len(stage.Options) != 2 {
+		t.Errorf("options = %v, want two with the duplicate and the spaces gone", stage.Options)
+	}
+	end, _ := f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{Kind: core.EntityDeal, Label: "Contract end", DataType: crm.PropDate})
+	f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{Kind: core.EntityDeal, Label: "Reorder", DataType: crm.PropBoolean})
+	// The same label on another kind is its own field.
+	if _, err := f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{Kind: core.EntityCompany, Label: "Line speed", DataType: crm.PropText}); err != nil {
+		t.Errorf("the same label on a company: %v", err)
+	}
+	if _, err := f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{Kind: core.EntityDeal, Label: "Line Speed", DataType: crm.PropText}); !errors.Is(err, crm.ErrDuplicate) {
+		t.Errorf("a second field with the same key: got %v, want ErrDuplicate", err)
+	}
+	for name, in := range map[string]crm.PropertyInput{
+		"no label":         {Kind: core.EntityDeal, DataType: crm.PropText},
+		"unknown type":     {Kind: core.EntityDeal, Label: "X", DataType: "colour"},
+		"choice with none": {Kind: core.EntityDeal, Label: "Y", DataType: crm.PropSelect},
+		"a document":       {Kind: core.EntityDocument, Label: "Z", DataType: crm.PropText},
+		"a bad key":        {Kind: core.EntityDeal, Label: "K", Key: "Bad Key", DataType: crm.PropText},
+	} {
+		if _, err := f.svc.SaveProperty(ctx, f.org, admin, in); !errors.Is(err, crm.ErrInvalid) {
+			t.Errorf("%s: got %v, want ErrInvalid", name, err)
+		}
+	}
+	// Set values: typed, validated, all or nothing.
+	ref := d.Ref()
+	if err := f.svc.SetProperties(ctx, f.org, bob, ref, map[string]any{"line_speed": "1,250.5", "source": "referral", "contract_end": "2027-03-01", "reorder": "yes"}); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	vals, err := f.svc.PropertiesFor(ctx, f.org, bob, ref)
+	if err != nil || len(vals) != 4 {
+		t.Fatalf("values = %+v (%v), want the four deal fields", vals, err)
+	}
+	got := map[string]crm.PropertyValue{}
+	for _, v := range vals {
+		got[v.Key] = v
+	}
+	if got["line_speed"].Value != 1250.5 || got["source"].Value != "Referral" || got["contract_end"].Text != "2027-03-01" || got["reorder"].Value != true {
+		t.Errorf("values = %+v", got)
+	}
+	for name, v := range map[string]map[string]any{
+		"text in a number":          {"line_speed": "fast"},
+		"a bad date":                {"contract_end": "March"},
+		"not a choice":              {"source": "Billboard"},
+		"not yes or no":             {"reorder": "maybe"},
+		"a field that is not there": {"nope": "x"},
+	} {
+		if err := f.svc.SetProperties(ctx, f.org, bob, ref, v); !errors.Is(err, crm.ErrInvalid) {
+			t.Errorf("%s: got %v, want ErrInvalid", name, err)
+		}
+	}
+	// One bad value in a request changes nothing in it.
+	if err := f.svc.SetProperties(ctx, f.org, bob, ref, map[string]any{"line_speed": "99", "contract_end": "soon"}); err == nil {
+		t.Fatal("a request with a bad value was accepted")
+	}
+	if v, _ := f.svc.PropertiesFor(ctx, f.org, bob, ref); func() bool {
+		for _, x := range v {
+			if x.Key == "line_speed" && x.Value != 1250.5 {
+				return true
+			}
+		}
+		return false
+	}() {
+		t.Error("a request with a bad value changed another field")
+	}
+	// Clear.
+	if err := f.svc.SetProperties(ctx, f.org, bob, ref, map[string]any{"line_speed": "", "source": nil}); err != nil {
+		t.Fatal(err)
+	}
+	vals, _ = f.svc.PropertiesFor(ctx, f.org, bob, ref)
+	for _, v := range vals {
+		if (v.Key == "line_speed" || v.Key == "source") && v.Value != nil {
+			t.Errorf("%s was not cleared: %v", v.Key, v.Value)
+		}
+	}
+	// An outsider sees none of it and sets none of it.
+	if _, err := f.svc.PropertiesFor(ctx, f.org, out, ref); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("an outsider reading values: got %v, want ErrNotFound", err)
+	}
+	if err := f.svc.SetProperties(ctx, f.org, out, ref, map[string]any{"line_speed": "1"}); err == nil {
+		t.Error("an outsider set a value")
+	}
+	// Change the label and the choices; the type and key stay.
+	chg, err := f.svc.SaveProperty(ctx, f.org, admin, crm.PropertyInput{ID: stage.ID, Kind: core.EntityDeal, Label: "Where from", DataType: crm.PropText, Options: []string{"Expo", "Referral", "Web"}})
+	if err != nil || chg.Label != "Where from" || chg.DataType != crm.PropSelect || chg.Key != "source" || len(chg.Options) != 3 {
+		t.Errorf("change = %+v (%v), want a new label and choices but the same type and key", chg, err)
+	}
+	// Delete takes the values with it.
+	if err := f.svc.SetProperties(ctx, f.org, bob, ref, map[string]any{"contract_end": "2027-03-01"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.DeleteProperty(ctx, f.org, bob, core.EntityDeal, end.ID); !errors.Is(err, crm.ErrForbidden) {
+		t.Errorf("a salesperson deleting a field: got %v, want ErrForbidden", err)
+	}
+	if err := f.svc.DeleteProperty(ctx, f.org, admin, core.EntityDeal, end.ID); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	f.pools.Web.QueryRow(ctx, `SELECT count(*) FROM property_values WHERE def_id=$1`, end.ID).Scan(&n)
+	if n != 0 {
+		t.Errorf("%d values left after the field was deleted", n)
+	}
+	if err := f.svc.DeleteProperty(ctx, f.org, admin, core.EntityDeal, end.ID); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("deleting twice: got %v, want ErrNotFound", err)
+	}
+	if defs, _ := f.svc.PropertyDefs(ctx, f.org, core.EntityCompany); len(defs) != 1 {
+		t.Errorf("company fields = %d, want the one made for companies", len(defs))
+	}
+}

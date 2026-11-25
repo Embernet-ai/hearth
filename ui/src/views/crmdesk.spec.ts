@@ -11,7 +11,7 @@ describe('the CRM group of the rail', () => {
     expect(labels('Chat', page())).toEqual(['Channels']);
   });
   test('offers the sales pages to a person who works sales', () => {
-    expect(labels('CRM', page({ SalesNav: true }))).toEqual(['Contacts', 'Companies', 'Deals', 'Follow-ups', 'Forecast', 'Sales reports', 'Unassigned', 'Duplicates']);
+    expect(labels('CRM', page({ SalesNav: true }))).toEqual(['Contacts', 'Companies', 'Deals', 'Follow-ups', 'Forecast', 'Sales reports', 'Unassigned', 'Duplicates', 'Custom fields']);
   });
   test('offers a person outside sales only the contacts and companies they always had', () => {
     expect(labels('CRM', page({ SalesNav: false }))).toEqual(['Contacts', 'Companies']);
@@ -151,5 +151,36 @@ describe('enrolling people in Mautic from the contacts list', () => {
   test('offers nothing when Mautic is not connected', () => {
     const d = draw('contacts', page({ SalesNav: true, SalesOn: true, ContactRows: rows, Companies: [], Owners: [], SortLinks: {}, Path: '/contacts', Desk: null }));
     expect(d.querySelector('button[data-enrol]')).toBeNull();
+  });
+});
+
+describe('custom fields', () => {
+  const props = [
+    { ID: 'p1', Key: 'industry', Label: 'Industry', DataType: 'select', Options: ['Plating', 'Rewinds'], Text: 'Rewinds' },
+    { ID: 'p2', Key: 'contract_end', Label: 'Contract end', DataType: 'date', Text: '2027-03-01' },
+    { ID: 'p3', Key: 'reorder', Label: 'Reorder', DataType: 'boolean', Text: 'true' },
+    { ID: 'p4', Key: 'speed', Label: 'Line speed', DataType: 'number', Text: '' },
+  ];
+  test('a record shows each field with the input its kind of value needs, filled in', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24', Properties: props } }));
+    const f = d.querySelector('[data-custom-fields]')!;
+    expect(f.querySelector('select[name="p_industry"] option[selected]')?.getAttribute('value')).toBe('Rewinds');
+    expect(f.querySelector('input[name="p_contract_end"]')?.getAttribute('type')).toBe('date');
+    expect(f.querySelector('select[name="p_reorder"] option[selected]')?.getAttribute('value')).toBe('yes');
+    expect(f.querySelector('input[name="p_speed"]')).not.toBeNull();
+    expect(f.querySelector('input[name="target_type"]')?.getAttribute('value')).toBe('deal');
+  });
+  test('a record with no custom fields shows no section', () => {
+    const d = draw('deal', page({ Deal: { ID: 'd1', Name: 'Big', Stage: 'new' }, DealStages: ['new'], Companies: [], Contacts: [], Owners: [], Activities: [], SalesOn: true, Desk: { Followups: [], Today: '2026-11-24', Properties: [] } }));
+    expect(text(d)).not.toContain('Custom fields');
+  });
+  test('an admin sees the add form and the remove buttons, somebody else only the list', () => {
+    const base = { PropKind: 'deal', PropTypes: ['text', 'select'], PropDefs: [{ ID: 'p1', Key: 'industry', Label: 'Industry', DataType: 'select', Options: ['A'] }] };
+    const admin = draw('properties', page({ Desk: { ...base, CanManage: true } }));
+    expect(admin.querySelector('[data-new-property]')).not.toBeNull();
+    expect(admin.querySelector('[data-property="industry"] button[data-confirm]')).not.toBeNull();
+    const other = draw('properties', page({ Desk: { ...base, CanManage: false } }));
+    expect(other.querySelector('[data-new-property]')).toBeNull();
+    expect(text(other)).toContain('Only an admin adds or removes fields.');
   });
 });

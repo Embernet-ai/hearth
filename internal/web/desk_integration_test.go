@@ -177,7 +177,7 @@ func (f *deskFx) do(as, method, path string, form url.Values) *httptest.Response
 
 func TestDeskRoutesAreForSalesAndSuperAdminsOnly(t *testing.T) {
 	f := newDeskFx(t)
-	gets := []string{"/crm/duplicates", "/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
+	gets := []string{"/crm/properties", "/crm/duplicates", "/crm/unassigned", "/crm/followups", "/crm/followups.csv", "/crm/forecast", "/crm/forecast.csv", "/crm/reports"}
 	for _, p := range gets {
 		if w := f.do(f.out, "GET", p, nil); w.Code != http.StatusNotFound {
 			t.Errorf("GET %s as an outsider = %d, want 404", p, w.Code)
@@ -571,5 +571,77 @@ func TestEnrolingManyContactsInMauticThroughTheRoute(t *testing.T) {
 	}
 	if err := json.Unmarshal(f.do(f.member, "GET", "/contacts", nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.MauticChoices) != 2 {
 		t.Errorf("choices on the contacts list = %+v (%v), want Expo and Welcome", env, err)
+	}
+}
+
+func TestCustomFieldsThroughTheRoutes(t *testing.T) {
+	f := newDeskFx(t)
+	t.Cleanup(func() {
+		c := context.Background()
+		_, _ = f.pool.Exec(c, `DELETE FROM property_values WHERE def_id IN (SELECT id FROM property_defs WHERE org_id=$1)`, f.org)
+		_, _ = f.pool.Exec(c, `DELETE FROM property_defs WHERE org_id=$1`, f.org)
+	})
+	add := url.Values{"type": {"deal"}, "label": {"Line speed"}, "data_type": {"number"}}
+	if w := f.do(f.out, "POST", "/crm/properties", add); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider defining a field = %d, want 404", w.Code)
+	}
+	if w := f.do(f.member, "POST", "/crm/properties", add); w.Code != http.StatusForbidden {
+		t.Errorf("a salesperson defining a field = %d, want 403", w.Code)
+	}
+	if w := f.do(f.admin, "POST", "/crm/properties", add); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/crm/properties?type=deal" {
+		t.Fatalf("define = %d to %q", w.Code, w.Header().Get("Location"))
+	}
+	if w := f.do(f.admin, "POST", "/crm/properties", url.Values{"type": {"deal"}, "label": {"Line Speed"}, "data_type": {"text"}}); w.Code != http.StatusConflict {
+		t.Errorf("the same key twice = %d, want 409", w.Code)
+	}
+	var env struct {
+		Page struct {
+			Desk struct {
+				PropDefs  []struct{ ID, Key string }
+				CanManage bool
+			}
+		}
+	}
+	if err := json.Unmarshal(f.do(f.other, "GET", "/crm/properties?type=deal", nil).Body.Bytes(), &env); err != nil || len(env.Page.Desk.PropDefs) != 1 || env.Page.Desk.CanManage {
+		t.Fatalf("page for a salesperson = %+v (%v), want the field and no management", env, err)
+	}
+	if err := json.Unmarshal(f.do(f.admin, "GET", "/crm/properties?type=deal", nil).Body.Bytes(), &env); err != nil || !env.Page.Desk.CanManage {
+		t.Errorf("page for an admin = %+v (%v), want management", env, err)
+	}
+	// Values on a record.
+	set := func(who string, v url.Values) *httptest.ResponseRecorder {
+		v.Set("target_type", "deal")
+		v.Set("target_id", f.deal)
+		return f.do(who, "POST", "/crm/properties/values", v)
+	}
+	if w := set(f.out, url.Values{"p_line_speed": {"10"}}); w.Code != http.StatusNotFound {
+		t.Errorf("an outsider setting a value = %d, want 404", w.Code)
+	}
+	if w := set(f.other, url.Values{"p_line_speed": {"fast"}}); w.Code != http.StatusBadRequest {
+		t.Errorf("a bad number = %d, want 400", w.Code)
+	}
+	if w := set(f.other, url.Values{"p_nope": {"x"}}); w.Code != http.StatusBadRequest {
+		t.Errorf("a field that is not there = %d, want 400", w.Code)
+	}
+	if w := f.do(f.other, "POST", "/crm/properties/values", url.Values{"target_type": {"document"}, "target_id": {f.deal}}); w.Code != http.StatusBadRequest {
+		t.Errorf("a target that is not CRM = %d, want 400", w.Code)
+	}
+	w := set(f.other, url.Values{"p_line_speed": {"1,250"}})
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/deals/"+f.deal+"#fields" {
+		t.Fatalf("set = %d to %q", w.Code, w.Header().Get("Location"))
+	}
+	var rec struct {
+		Page struct {
+			Desk struct{ Properties []struct{ Key, Text string } }
+		}
+	}
+	if err := json.Unmarshal(f.do(f.member, "GET", "/deals/"+f.deal, nil).Body.Bytes(), &rec); err != nil || len(rec.Page.Desk.Properties) != 1 || rec.Page.Desk.Properties[0].Text != "1250" {
+		t.Errorf("deal page fields = %+v (%v), want line speed 1250", rec, err)
+	}
+	if w := f.do(f.other, "POST", "/crm/properties/"+env.Page.Desk.PropDefs[0].ID+"/delete", url.Values{"type": {"deal"}}); w.Code != http.StatusForbidden {
+		t.Errorf("a salesperson deleting a field = %d, want 403", w.Code)
+	}
+	if w := f.do(f.admin, "POST", "/crm/properties/"+env.Page.Desk.PropDefs[0].ID+"/delete", url.Values{"type": {"deal"}}); w.Code != http.StatusSeeOther {
+		t.Errorf("delete = %d, want 303", w.Code)
 	}
 }
