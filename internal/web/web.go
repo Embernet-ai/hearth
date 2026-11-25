@@ -1016,6 +1016,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 		}
 		if sp, err := s.plant.GetSpace(r.Context(), p.Identity.OrgID, p.Identity.Subjects, p.SpaceID); err == nil {
 			p.SpaceName = sp.Name
+			// A department's page is named for the department, in the top bar and the tab as well as over the directory:
+			// it said Everything above a list of one department.
+			if name == "documents" && p.Kind == "" && p.SavedView == nil && p.Path == "/documents" {
+				p.Title, p.Heading = sp.Name, sp.Name
+			}
 		}
 	}
 
