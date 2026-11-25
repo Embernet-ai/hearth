@@ -108,4 +108,11 @@ describe('social, the rest of what the publishing app does', () => {
     expect(m.querySelector('[data-media] a[href="https://u.example/banner.png"]')).not.toBeNull();
     expect(m.querySelector('form[action="/social/media"] input[name=url]')).not.toBeNull();
   });
+  test('a publishing app with no media library gets a plain line and no upload form', () => {
+    const base = fixture('social-media') as any;
+    const off = draw('social', { ...base, SocialArea: { ...base.SocialArea, Media: null, MediaOff: true } });
+    expect(off.querySelector('[data-media-off]')).not.toBeNull();
+    expect(off.querySelector('form[action="/social/media"]')).toBeNull();
+    expect(text(off)).not.toContain('Cannot GET');
+  });
 });
