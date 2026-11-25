@@ -315,6 +315,7 @@
  "Query": {
   "Closed": false,
   "Columns": null,
+  "Direct": false,
   "Filters": null,
   "GroupBy": {
    "Column": "",

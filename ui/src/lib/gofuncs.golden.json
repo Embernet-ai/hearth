@@ -2169,7 +2169,7 @@
    "",
    "done"
   ],
-  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026space=d1"
+  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "withStatus",
@@ -2193,7 +2193,7 @@
    "",
    ""
   ],
-  "want": "?closed=1\u0026space=d1"
+  "want": "?closed=1\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "clearStatus",
@@ -2216,7 +2216,7 @@
    },
    ""
   ],
-  "want": "?closed=1\u0026space=d1"
+  "want": "?closed=1\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "toggleClosed",
@@ -2239,7 +2239,7 @@
    },
    ""
   ],
-  "want": "?space=d1"
+  "want": "?inside=1\u0026space=d1"
  },
  {
   "fn": "toggleProp",
@@ -2264,7 +2264,7 @@
    "criticality",
    "high priority \u0026 more"
   ],
-  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026space=d1"
+  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "toggleProp",
@@ -2289,7 +2289,7 @@
    "other",
    "v"
   ],
-  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026space=d1"
+  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "withStatus",
@@ -2313,7 +2313,7 @@
    "table",
    "done"
   ],
-  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026space=d1"
+  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "withStatus",
@@ -2337,7 +2337,7 @@
    "table",
    ""
   ],
-  "want": "?closed=1\u0026space=d1"
+  "want": "?closed=1\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "clearStatus",
@@ -2360,7 +2360,7 @@
    },
    "table"
   ],
-  "want": "?closed=1\u0026space=d1"
+  "want": "?closed=1\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "toggleClosed",
@@ -2383,7 +2383,7 @@
    },
    "table"
   ],
-  "want": "?space=d1"
+  "want": "?inside=1\u0026space=d1"
  },
  {
   "fn": "toggleProp",
@@ -2408,7 +2408,7 @@
    "criticality",
    "high priority \u0026 more"
   ],
-  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026space=d1"
+  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "toggleProp",
@@ -2433,7 +2433,7 @@
    "other",
    "v"
   ],
-  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026space=d1"
+  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026inside=1\u0026space=d1"
  },
  {
   "fn": "withStatus",
@@ -2457,7 +2457,7 @@
    "board",
    "done"
   ],
-  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026space=d1\u0026view=board"
+  "want": "?closed=1\u0026f=status%3Ais%3Adone\u0026inside=1\u0026space=d1\u0026view=board"
  },
  {
   "fn": "withStatus",
@@ -2481,7 +2481,7 @@
    "board",
    ""
   ],
-  "want": "?closed=1\u0026space=d1\u0026view=board"
+  "want": "?closed=1\u0026inside=1\u0026space=d1\u0026view=board"
  },
  {
   "fn": "clearStatus",
@@ -2504,7 +2504,7 @@
    },
    "board"
   ],
-  "want": "?closed=1\u0026space=d1\u0026view=board"
+  "want": "?closed=1\u0026inside=1\u0026space=d1\u0026view=board"
  },
  {
   "fn": "toggleClosed",
@@ -2527,7 +2527,7 @@
    },
    "board"
   ],
-  "want": "?space=d1\u0026view=board"
+  "want": "?inside=1\u0026space=d1\u0026view=board"
  },
  {
   "fn": "toggleProp",
@@ -2552,7 +2552,7 @@
    "criticality",
    "high priority \u0026 more"
   ],
-  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026space=d1\u0026view=board"
+  "want": "?closed=1\u0026f=prop.criticality%3Ais%3Ahigh+priority+%26+more\u0026inside=1\u0026space=d1\u0026view=board"
  },
  {
   "fn": "toggleProp",
@@ -2577,7 +2577,7 @@
    "other",
    "v"
   ],
-  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026space=d1\u0026view=board"
+  "want": "?closed=1\u0026f=prop.other%3Ais%3Av\u0026inside=1\u0026space=d1\u0026view=board"
  },
  {
   "fn": "sortedBy",
