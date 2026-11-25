@@ -241,7 +241,7 @@
   
   <div  class="row spread pageheader">
     <div  class="row">
-      <h1>{dot?.Heading}</h1>
+      <h1>{#if dot?.SpaceName && !dot?.Kind && !dot?.SavedView}{dot?.SpaceName}{:else}{dot?.Heading}{/if}</h1>
       
       <span  class="muted small">
         {#if F.t(F.lt(dot?.Shown, dot?.Total))}{dot?.Shown} of {dot?.Total}{:else}{dot?.Total}{/if}

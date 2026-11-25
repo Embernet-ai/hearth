@@ -16,6 +16,10 @@ describe('a department as a directory', () => {
     expect(d.querySelector('[data-dir-entries] [data-space="e-plat"] a')?.getAttribute('href')).toBe('/documents?space=e-plat');
   });
 
+  test('the page is headed by the department, not Everything', () => {
+    expect(d.querySelector('h1')?.textContent).toBe('Engineering');
+  });
+
   test('projects stay reachable under the folders', () => {
     expect(d.querySelector('[data-dir-projects] a[href="/documents?space=p-click"]')).not.toBeNull();
   });
