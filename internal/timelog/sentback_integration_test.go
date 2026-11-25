@@ -15,8 +15,12 @@ type seen struct {
 	back, again []timelog.Decision
 }
 
-func (s *seen) HoursSentBack(_ context.Context, _ string, d timelog.Decision)    { s.back = append(s.back, d) }
-func (s *seen) HoursResubmitted(_ context.Context, _ string, d timelog.Decision) { s.again = append(s.again, d) }
+func (s *seen) HoursSentBack(_ context.Context, _ string, d timelog.Decision) {
+	s.back = append(s.back, d)
+}
+func (s *seen) HoursResubmitted(_ context.Context, _ string, d timelog.Decision) {
+	s.again = append(s.again, d)
+}
 
 func TestSendBackTellsThePersonAndACorrectionResubmits(t *testing.T) {
 	f := setup(t)
