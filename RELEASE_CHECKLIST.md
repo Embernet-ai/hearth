@@ -47,4 +47,5 @@ Right after the tag, write the release on this repository, from the tag's own no
 2. `/healthz` reports the release revision and `profile: release`.
 3. The things the release changed, read on the live system: counts, the page, the job's report. Not a status word.
 4. The CronJobs (`hearth-backup`, `hearth-crm-sync` when `crmSync.enabled`, and `hearth-groups-sync` when `groupsSync.enabled`) are listed with the new image on their next run.
-5. Anything a one-off Job left behind is deleted, with its cause named if it failed.
+5. If `deploy/autoupgrade/` changed since the last release, apply it from the tag to every cluster that runs the auto-upgrade CronJob (the script is a ConfigMap, so a fixed script reaches a cluster only when the manifest is applied again): `kubectl -n hearth apply -f https://raw.githubusercontent.com/Embernet-ai/hearth/vX.Y.Z/deploy/autoupgrade/hearth-autoupgrade.yaml`, then read the ConfigMap back and compare it with the file. The 2.30.0 roll showed a repo fix from 2.23.8 never applied on the mothership or KnarrTek.
+6. Anything a one-off Job left behind is deleted, with its cause named if it failed.
