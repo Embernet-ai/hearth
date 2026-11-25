@@ -49,6 +49,101 @@ func amts(m map[string]int64) []Amt {
 	return out
 }
 
+// ActivityEdit is the parts of a timeline entry that can change. Nil leaves a part alone; its kind and what it is about
+// never change (a note about a deal stays a note about that deal).
+type ActivityEdit struct {
+	Title       *string
+	Body        *string
+	OccurredAt  *time.Time
+	Direction   *string
+	Disposition *string
+	DurationMs  *int64
+}
+
+// UpdateActivity changes a note, call, meeting or email already on a timeline. The author may, and so may anybody with
+// edit on every record it is about, the same as removing one. It must still say something afterwards.
+func (s *Service) UpdateActivity(ctx context.Context, orgID string, actor core.Subjects, id string, e ActivityEdit) (*Activity, error) {
+	var kind, title, body, direction, disposition, author string
+	var occurred time.Time
+	var dur *int64
+	err := s.db.QueryRow(ctx, `SELECT kind, title, body, coalesce(direction,''), disposition, occurred_at, duration_ms, created_by::text
+		FROM crm_activities WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL`, id, orgID).Scan(&kind, &title, &body, &direction, &disposition, &occurred, &dur, &author)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("crm: find activity: %w", err)
+	}
+	rows, err := s.db.Query(ctx, `SELECT target_type, target_id::text FROM crm_activity_targets WHERE activity_id=$1`, id)
+	if err != nil {
+		return nil, fmt.Errorf("crm: activity targets: %w", err)
+	}
+	var refs []core.Ref
+	for rows.Next() {
+		var t, tid string
+		if err := rows.Scan(&t, &tid); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		refs = append(refs, core.Ref{Type: core.EntityType(t), ID: tid})
+	}
+	rows.Close()
+	if author != actor.Principal() {
+		for _, r := range refs {
+			if err := s.authz.Require(ctx, actor, r, core.AccessEdit); err != nil {
+				return nil, ErrNotFound
+			}
+		}
+	} else {
+		// The author must still be able to see something it is about, so an entry never turns up on a record they cannot read.
+		seen := false
+		for _, r := range refs {
+			if s.authz.Require(ctx, actor, r, core.AccessView) == nil {
+				seen = true
+			}
+		}
+		if !seen {
+			return nil, ErrNotFound
+		}
+	}
+	if e.Title != nil {
+		title = strings.TrimSpace(*e.Title)
+	}
+	if e.Body != nil {
+		body = strings.TrimSpace(*e.Body)
+	}
+	if title == "" && body == "" {
+		return nil, fmt.Errorf("%w: write something first", ErrInvalid)
+	}
+	if e.OccurredAt != nil && !e.OccurredAt.IsZero() {
+		occurred = *e.OccurredAt
+	}
+	if e.Direction != nil {
+		d := strings.TrimSpace(*e.Direction)
+		if d != "" && d != Inbound && d != Outbound {
+			return nil, fmt.Errorf("%w: a %s goes in or out", ErrInvalid, kind)
+		}
+		if kind == ActNote || kind == ActMeeting {
+			d = ""
+		}
+		direction = d
+	}
+	if e.Disposition != nil && kind == ActCall {
+		disposition = strings.TrimSpace(*e.Disposition)
+	}
+	if e.DurationMs != nil && (kind == ActCall || kind == ActMeeting) {
+		if *e.DurationMs < 0 {
+			return nil, fmt.Errorf("%w: a duration cannot be negative", ErrInvalid)
+		}
+		dur = e.DurationMs
+	}
+	if _, err := s.db.Exec(ctx, `UPDATE crm_activities SET title=$3, body=$4, occurred_at=$5, direction=NULLIF($6,''), disposition=$7,
+		duration_ms=$8, updated_at=now() WHERE id=$1 AND org_id=$2`, id, orgID, title, body, occurred, direction, disposition, dur); err != nil {
+		return nil, fmt.Errorf("crm: update activity: %w", err)
+	}
+	return &Activity{ID: id, Kind: kind, Title: title, Body: body, OccurredAt: occurred, Direction: direction, Disposition: disposition, DurationMs: dur, CreatedBy: author, Targets: refs}, nil
+}
+
 // SetLostReason records why a deal was lost, in the seller's words. It is its own call because a lost reason is
 // read far more often than it is written, and because every writer of a deal (the forms, the importers, the sync)
 // would otherwise have to carry it to avoid wiping it.
@@ -495,6 +590,7 @@ type Desk interface {
 	SetFollowupDone(ctx context.Context, orgID string, actor core.Subjects, id string, done bool) error
 	RescheduleFollowup(ctx context.Context, orgID string, actor core.Subjects, id string, due *time.Time, assignee string) error
 	DeleteFollowup(ctx context.Context, orgID string, actor core.Subjects, id string) error
+	UpdateActivity(ctx context.Context, orgID string, actor core.Subjects, id string, e ActivityEdit) (*Activity, error)
 	Followups(ctx context.Context, orgID string, actor core.Subjects, q FollowupQuery) ([]*Followup, int, error)
 	Forecast(ctx context.Context, orgID string, actor core.Subjects, owner string, now time.Time) (*Forecast, error)
 	SalesReport(ctx context.Context, orgID string, actor core.Subjects, from, to time.Time, owner string) (*SalesReport, error)

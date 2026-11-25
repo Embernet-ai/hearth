@@ -21,6 +21,7 @@ func (s *Service) deskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/crm/forecast", s.crmDesk(s.forecast))
 	mux.HandleFunc("GET /v1/crm/reports", s.crmDesk(s.salesReport))
 	mux.HandleFunc("POST /v1/crm/bulk", s.crmDesk(s.bulk))
+	mux.HandleFunc("PATCH /v1/activities/{id}", s.crmDesk(s.patchActivity))
 	mux.HandleFunc("GET /v1/crm/duplicates", s.crmDesk(s.duplicates))
 	mux.HandleFunc("POST /v1/crm/merge", s.crmDesk(s.merge))
 }
@@ -378,4 +379,29 @@ func (s *Service) merge(w http.ResponseWriter, r *http.Request, d crm.Desk) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"merged": len(b.Merge), "survivor_id": b.Survivor})
+}
+
+type activityPatch struct {
+	Title       *string    `json:"title"`
+	Body        *string    `json:"body"`
+	OccurredAt  *time.Time `json:"occurred_at"`
+	Direction   *string    `json:"direction"`
+	Disposition *string    `json:"disposition"`
+	DurationMs  *int64     `json:"duration_ms"`
+}
+
+func (s *Service) patchActivity(w http.ResponseWriter, r *http.Request, d crm.Desk) {
+	c := from(r)
+	var b activityPatch
+	if err := decode(r, &b); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	a, err := d.UpdateActivity(r.Context(), c.OrgID, c.Subjects, r.PathValue("id"), crm.ActivityEdit{Title: b.Title, Body: b.Body,
+		OccurredAt: b.OccurredAt, Direction: b.Direction, Disposition: b.Disposition, DurationMs: b.DurationMs})
+	if err != nil {
+		crmErr(w, err, "you cannot change that")
+		return
+	}
+	writeJSON(w, http.StatusOK, activityJSON(a))
 }

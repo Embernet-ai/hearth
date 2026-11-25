@@ -1,6 +1,20 @@
 <script lang="ts" module>
   // @ts-nocheck
   import { F, S, A } from '../../lib/gofuncs';
+  // Show only one kind of timeline entry. The entries stay on the page, so the filter needs no round trip and is undone by "All".
+  function filterTimeline(btn, kind) {
+    const box = btn.closest('[data-timeline-box]');
+    if (!box) return;
+    for (const li of box.querySelectorAll('[data-activity]')) li.hidden = !!kind && li.getAttribute('data-kind') !== kind;
+    for (const b of box.querySelectorAll('[data-timeline-filter]')) b.classList.toggle('on', (b.getAttribute('data-timeline-filter') || '') === (kind || ''));
+  }
+  // An RFC 3339 time as the value a datetime-local field takes, in the reader's own zone.
+  function localInput(t) {
+    if (!t) return '';
+    const d = new Date(t);
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
   export { formspanel, mauticpanel, emberopspanel, bulkbar, followupspanel, mailpanel, orgnode, timeline, addactivity, ownerselect, pager, typechecked, groupselect, grouprow, crmviewsbar, favstar, hoursmins };
 </script>
 {#snippet orgnode(dot)}
@@ -24,16 +38,37 @@
 {/snippet}
 {#snippet timeline(dot)}
 <h3  id="timeline">Timeline</h3>
+<div  data-timeline-box>
+{#if dot?.Activities?.length > 1}
+  <p  class="row wrap"  data-timeline-filters>
+    <button  type="button"  class="chip on"  data-timeline-filter=""  onclick={(e) => filterTimeline(e.currentTarget, '')}>All</button>
+    {#each ['note', 'call', 'meeting', 'email'] as k}<button  type="button"  class="chip"  data-timeline-filter={k}  onclick={(e) => filterTimeline(e.currentTarget, k)}>{k[0].toUpperCase() + k.slice(1)}s</button>{/each}
+  </p>
+{/if}
 {#if F.t(dot?.Activities)}
   <ul  class="files"  data-timeline>
     {#each F.rng(dot?.Activities) as [k2, d2]}
-      <li  data-activity={S(d2?.ID)}>
+      <li  data-activity={S(d2?.ID)}  data-kind={d2?.Kind}>
         <span  class="tag">{#if F.t(F.eq(d2?.Kind, "call"))}{#if F.t(F.eq(d2?.Direction, "inbound"))}call in{:else if F.t(F.eq(d2?.Direction, "outbound"))}call out{:else}call{/if}{:else if d2?.Kind === "meeting"}meeting{:else if d2?.Kind === "email"}{#if d2?.Direction === "inbound"}email in{:else}email out{/if}{:else}note{/if}</span>
         <strong>{#if F.t(d2?.Title)}{d2?.Title}{/if}</strong>
         <span  class="muted small">{F.date(d2?.OccurredAt)}{#if F.t(d2?.ByName)} · {d2?.ByName}{/if}</span>
         {#if F.t(d2?.Disposition)}<span  class="status">{d2?.Disposition}</span>{/if}
         {#if F.t(F.dur(d2?.DurationMs))}{@const w3 = F.dur(d2?.DurationMs)}<span  class="muted small">{w3}</span>{/if}
         {#if F.t(d2?.Body)}<div  class="muted small"  style="white-space:pre-wrap">{d2?.Body}</div>{/if}
+        <details  class="inline"  data-edit-activity>
+          <summary  class="ghost small">Edit</summary>
+          <form  method="post"  action={"/activities/" + S(d2?.ID) + "/edit"}  class="fields">
+            <input  type="hidden"  name="back"  value={dot?.Path}>
+            <label>Title<input  name="title"  value={d2?.Title}></label>
+            <label>What happened<textarea  name="body"  rows="3">{d2?.Body}</textarea></label>
+            {#if d2?.Kind === "call" || d2?.Kind === "email"}
+              <label>Direction<select  name="direction"><option  value=""  selected={!d2?.Direction}>not said</option><option  value="outbound"  selected={d2?.Direction === "outbound"}>we reached out</option><option  value="inbound"  selected={d2?.Direction === "inbound"}>they reached out</option></select></label>
+            {/if}
+            {#if d2?.Kind === "call"}<label>Outcome<input  name="disposition"  value={d2?.Disposition}></label>{/if}
+            <label>When<input  name="when"  type="datetime-local"  value={localInput(d2?.OccurredAt)}></label>
+            <div  class="row"><button  type="submit">Save</button></div>
+          </form>
+        </details>
         <form  method="post"  action={"/activities/" + S(d2?.ID) + "/delete"}  class="inline">
           <button  type="submit"  class="ghost small"  data-confirm="Remove this from every timeline it is on?">Remove</button>
         </form>
@@ -43,6 +78,7 @@
 {:else}
   <p  class="muted small">Nothing written here yet.</p>
 {/if}
+</div>
 {/snippet}
 {#snippet addactivity(dot)}
 <form  method="post"  action="/activities"  class="row wrap"  data-add-activity>

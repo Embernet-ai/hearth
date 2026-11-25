@@ -665,3 +665,67 @@ func TestSalesReportExplainsLossesAndStageAge(t *testing.T) {
 		t.Errorf("a person outside sales saw reasons %v and ages %v", empty.LostReasons, empty.StageAge)
 	}
 }
+
+func TestATimelineEntryCanBeEditedByItsAuthorAndByTheTeam(t *testing.T) {
+	f := setup(t)
+	f.deskCleanup(t)
+	f.salesTeam(t)
+	ctx := context.Background()
+	alice, bob, out := f.subj(t, f.alice), f.subj(t, f.bob), f.subj(t, f.outsider(t))
+	d, err := f.svc.CreateDeal(ctx, f.org, alice, crm.Deal{Name: "Edits"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms := int64(60000)
+	call, err := f.svc.AddActivity(ctx, f.org, alice, crm.Activity{Kind: crm.ActCall, Title: "Rang", Body: "no answer", Direction: crm.Outbound, DurationMs: &ms, Targets: []core.Ref{d.Ref()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, _ := f.svc.AddActivity(ctx, f.org, alice, crm.Activity{Kind: crm.ActNote, Body: "first", Targets: []core.Ref{d.Ref()}})
+	s := func(v string) *string { return &v }
+	// The author edits.
+	when := time.Date(2026, 11, 20, 14, 30, 0, 0, time.UTC)
+	got, err := f.svc.UpdateActivity(ctx, f.org, alice, call.ID, crm.ActivityEdit{Body: s(" left a voicemail "), Disposition: s("voicemail"), Direction: s(crm.Inbound), OccurredAt: &when})
+	if err != nil || got.Body != "left a voicemail" || got.Disposition != "voicemail" || got.Direction != crm.Inbound || got.Kind != crm.ActCall {
+		t.Fatalf("edit = %+v (%v)", got, err)
+	}
+	// A colleague on the team edits one they did not write: sales sees and fixes everything.
+	if _, err := f.svc.UpdateActivity(ctx, f.org, bob, note.ID, crm.ActivityEdit{Body: s("corrected")}); err != nil {
+		t.Fatalf("a team member editing: %v", err)
+	}
+	acts, _ := f.svc.ActivitiesFor(ctx, f.org, bob, d.Ref())
+	byID := map[string]*crm.Activity{}
+	for _, a := range acts {
+		byID[a.ID] = a
+	}
+	if byID[note.ID].Body != "corrected" || byID[call.ID].Body != "left a voicemail" || !byID[call.ID].OccurredAt.Equal(when) || *byID[call.ID].DurationMs != 60000 {
+		t.Errorf("timeline after edits = %+v %+v", byID[note.ID], byID[call.ID])
+	}
+	// A note carries no direction or outcome, whatever is sent; the kind never changes.
+	if n, err := f.svc.UpdateActivity(ctx, f.org, alice, note.ID, crm.ActivityEdit{Direction: s(crm.Inbound), Disposition: s("x")}); err != nil || n.Direction != "" || n.Disposition != "" || n.Kind != crm.ActNote {
+		t.Errorf("a note given a direction: %+v (%v)", n, err)
+	}
+	// Refusals.
+	if _, err := f.svc.UpdateActivity(ctx, f.org, out, call.ID, crm.ActivityEdit{Body: s("x")}); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("an outsider editing: got %v, want ErrNotFound", err)
+	}
+	if _, err := f.svc.UpdateActivity(ctx, f.org, alice, note.ID, crm.ActivityEdit{Body: s(" "), Title: s("")}); !errors.Is(err, crm.ErrInvalid) {
+		t.Errorf("emptying an entry: got %v, want ErrInvalid", err)
+	}
+	if _, err := f.svc.UpdateActivity(ctx, f.org, alice, call.ID, crm.ActivityEdit{Direction: s("sideways")}); !errors.Is(err, crm.ErrInvalid) {
+		t.Errorf("a direction that is neither: got %v, want ErrInvalid", err)
+	}
+	neg := int64(-1)
+	if _, err := f.svc.UpdateActivity(ctx, f.org, alice, call.ID, crm.ActivityEdit{DurationMs: &neg}); !errors.Is(err, crm.ErrInvalid) {
+		t.Errorf("a negative duration: got %v, want ErrInvalid", err)
+	}
+	if _, err := f.svc.UpdateActivity(ctx, f.org, alice, uuid.NewString(), crm.ActivityEdit{Body: s("x")}); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("an entry that is not there: got %v, want ErrNotFound", err)
+	}
+	if err := f.svc.DeleteActivity(ctx, f.org, alice, note.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.UpdateActivity(ctx, f.org, alice, note.ID, crm.ActivityEdit{Body: s("x")}); !errors.Is(err, crm.ErrNotFound) {
+		t.Errorf("a removed entry: got %v, want ErrNotFound", err)
+	}
+}

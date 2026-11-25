@@ -138,3 +138,31 @@ func TestDuplicatesAndMergeOverTheAPI(t *testing.T) {
 		t.Errorf("survivor = %v, want the duplicate's phone", got)
 	}
 }
+
+func TestEditingATimelineEntryOverTheAPI(t *testing.T) {
+	f := crmSetup(t)
+	alice, bob, carol := f.token(t, f.alice, "write"), f.token(t, f.bob, "write"), f.token(t, f.carol, "write")
+	aliceRead := f.token(t, f.alice, "read")
+	_, deal, _ := f.call(t, alice, "POST", "/v1/deals", map[string]any{"name": "Edits API"})
+	_, act, _ := f.call(t, alice, "POST", "/v1/activities", map[string]any{"kind": "call", "title": "Rang", "direction": "outbound", "targets": []map[string]any{{"type": "deal", "id": deal["id"]}}})
+	path := "/v1/activities/" + act["id"].(string)
+	code, got, _ := f.call(t, bob, "PATCH", path, map[string]any{"body": "left a voicemail", "disposition": "voicemail", "occurred_at": "2026-11-20T14:30:00Z"})
+	if code != http.StatusOK || got["body"] != "left a voicemail" || got["disposition"] != "voicemail" || got["kind"] != "call" {
+		t.Fatalf("edit = %d %v", code, got)
+	}
+	if code, _, _ := f.call(t, carol, "PATCH", path, map[string]any{"body": "x"}); code != http.StatusNotFound {
+		t.Errorf("an edit by a person outside sales = %d, want 404", code)
+	}
+	if code, _, _ := f.call(t, aliceRead, "PATCH", path, map[string]any{"body": "x"}); code != http.StatusForbidden {
+		t.Errorf("an edit with a read token = %d, want 403", code)
+	}
+	if code, _, _ := f.call(t, alice, "PATCH", path, map[string]any{"title": "", "body": ""}); code != http.StatusBadRequest {
+		t.Errorf("emptying it = %d, want 400", code)
+	}
+	if code, _, _ := f.call(t, alice, "PATCH", "/v1/activities/00000000-0000-0000-0000-000000000001", map[string]any{"body": "x"}); code != http.StatusNotFound {
+		t.Errorf("an entry that is not there = %d, want 404", code)
+	}
+	if code, _, _ := f.call(t, alice, "PATCH", path, map[string]any{"kind": "note"}); code != http.StatusBadRequest {
+		t.Errorf("changing the kind = %d, want 400 (unknown field)", code)
+	}
+}

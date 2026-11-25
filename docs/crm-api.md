@@ -28,6 +28,7 @@ not a quietly empty record.
 | `POST /v1/deals` | `name`, `stage` (new, screening, meeting, proposal, customer, won, lost, no_response), `amount_cents`, `currency`, `close_date` (YYYY-MM-DD), `company_id`, `contact_id`, `owner_id`, `notes` |
 | `GET`, `PATCH /v1/deals/{id}` | moving a deal is a PATCH of `stage`; `lost_reason` says why a deal was lost. A deal reads back `stage_changed_at`, `closed_at`, `probability_percent` and `weighted_cents` |
 | `POST /v1/activities` | `kind` (note, call, meeting or email), `title`, `body`, `occurred_at`, `direction` (inbound or outbound, for calls and emails), `disposition`, `duration_ms`, `targets` (a list of `{type: company, contact or deal, id}`) |
+| `PATCH /v1/activities/{id}` | `title`, `body`, `occurred_at`, `direction`, `disposition`, `duration_ms`. The kind and the records it is about do not change. For people who work sales; refused 404 to anybody else |
 | `GET /v1/{companies,contacts,deals}/{id}/activities` | the timeline, newest first |
 | `GET /v1/followups` | `assignee` (a person id, `me`, or `none`), `status` (`open`, `done`, `all`; open by default), `due` (`overdue`, `today`, `week`), `target_type` and `target_id`, `limit`, `offset`. Everybody's unless `assignee` says otherwise. Returns `{followups, total}` |
 | `POST /v1/followups` | `title`, `target {type: company, contact or deal, id}`, `due` (YYYY-MM-DD), `assignee_id` (the caller by default), `body` |
