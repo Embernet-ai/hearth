@@ -25,6 +25,7 @@ import (
 	"github.com/Embernet-ai/hearth/internal/calendar"
 	"github.com/Embernet-ai/hearth/internal/calls"
 	"github.com/Embernet-ai/hearth/internal/canvas"
+	"github.com/Embernet-ai/hearth/internal/cascade"
 	"github.com/Embernet-ai/hearth/internal/channels"
 	"github.com/Embernet-ai/hearth/internal/connect"
 	"github.com/Embernet-ai/hearth/internal/crm"
@@ -178,6 +179,11 @@ func run() error {
 	if cfg.FormsURL != "" {
 		formsClient = forms.New(cfg.FormsURL, cfg.FormsAPIKey)
 		log.Info("forms area connected", "url", cfg.FormsURL)
+	}
+	var cascadeClient *cascade.Client
+	if cfg.CascadeURL != "" {
+		cascadeClient = cascade.New(cfg.CascadeURL, cfg.CascadeAPIKey)
+		log.Info("automation connected", "url", cfg.CascadeURL)
 	}
 	var socialClient *social.Client
 	if cfg.SocialURL != "" {
@@ -546,7 +552,7 @@ func run() error {
 		People:       peopleSync,
 		DeptRequests: set.DeptReqs,
 		Teams:        set.Teams, Audit: auditSvc, SCIM: scimSvc, Authz: azSvc,
-		CRMForms: crmFormsFor(formsClient), CRMMarketing: crmMarketingFor(pools, marketingClient), Marketing: marketingClient, Forms: formsClient, Social: socialClient, GitHub: github.NewService(pools.Web, githubSealer(box), nil), Tools: toolCards,
+		CRMForms: crmFormsFor(formsClient), CRMMarketing: crmMarketingFor(pools, marketingClient), Marketing: marketingClient, Forms: formsClient, Social: socialClient, Cascade: cascadeClient, GitHub: github.NewService(pools.Web, githubSealer(box), nil), Tools: toolCards,
 		Calendar: set.Calendar, Google: googleSvc, Microsoft: msSvc, Connect: connectSvc, Box: sealerOf(box),
 		Queue: queue, Relay: relay, Hub: hub, OIDC: oidcRP,
 		OIDCName: cfg.OIDCName, HideLocalLogin: !cfg.LocalLoginForm,

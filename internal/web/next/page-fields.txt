@@ -335,5 +335,7 @@ Marketing
 FormsArea
 SocialArea
 GitHubArea
+AutomationArea
+AutomationOn
 ToolsList
 ToolsOn

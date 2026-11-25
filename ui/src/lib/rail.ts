@@ -99,6 +99,7 @@ export const groups: RailGroup[] = [
       { label: 'Marketing', href: '/marketing' },
       { label: 'Forms', href: '/forms' },
       { label: 'Social', href: '/social' },
+      { label: 'Automation', href: '/automation', show: (pg) => !!pg.AutomationOn },
       { label: 'Tools', href: '/tools', show: (pg) => !!pg.ToolsOn },
     ],
   },

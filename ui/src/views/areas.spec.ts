@@ -109,3 +109,19 @@ describe('social, the rest of what the publishing app does', () => {
     expect(m.querySelector('form[action="/social/media"] input[name=url]')).not.toBeNull();
   });
 });
+
+describe('automation, Cascade inside Hearth', () => {
+  test('not connected says how to connect it', () => {
+    expect(text(draw('automation', fixture('automation-off')))).toContain('HEARTH_CASCADE_URL');
+  });
+  test('workflows with state and Run now, runs with Retry or Stop, and the waiting approvals', () => {
+    const d = draw('automation', fixture('automation'));
+    expect(d.querySelector('[data-workflow="w1"] form[action="/automation/workflows/w1/run"] input[name=input]')).not.toBeNull();
+    expect(d.querySelector('[data-workflow="w1"] form[action="/automation/workflows/w1/active"] input[value="0"]')).not.toBeNull();
+    expect(d.querySelector('[data-workflow="w2"] form[action="/automation/workflows/w2/active"] input[value="1"]')).not.toBeNull();
+    expect(d.querySelector('[data-run="e1"] form[action="/automation/executions/e1/retry"]')).not.toBeNull();
+    expect(d.querySelector('[data-run="e2"] form[action="/automation/executions/e2/stop"]')).not.toBeNull();
+    expect(d.querySelector('[data-approvals]')?.textContent).toContain('Send the quote?');
+    expect(d.querySelector('[data-automation-numbers]')?.textContent).toContain('29');
+  });
+});

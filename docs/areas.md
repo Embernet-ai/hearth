@@ -74,3 +74,7 @@ tools:
 
 A card needs a name and an `http` or `https` address, and the server refuses to start with a mistake in the list rather than show
 a dead card. With no list, the Tools entry is not in the rail.
+
+## Automation (Cascade)
+
+`HEARTH_CASCADE_URL` and `HEARTH_CASCADE_API_KEY` (an `hlc_` key) connect Cascade, the workflow engine. The Automation page is for the Sales team and super admins: workflows with their state and last run, Run now with an optional JSON input, switch on and off, the runs with Retry and Stop (`/automation?status=failed`, or `?record=<id>` for the runs that mention a company, person or deal), and the questions runs are waiting on a person to answer. Cascade's REST API has no route to answer an approval, so that card links to Cascade. The same people get an Automation part on the dashboard (runs, failures, approvals waiting, workflows on). In the chart: `cascade.url`, and the key under `CASCADE_API_KEY` in the existing secret.
