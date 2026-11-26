@@ -69,6 +69,8 @@ that already exists, and changes nothing, whatever the new body says. Two reques
 with the same pair at the same instant make one record. The pair is remembered per
 kind of record, so `contact:42` and `deal:42` do not collide.
 
+`POST /v1/documents` (tasks, notes and the rest) takes the same pair, so a sync that creates tasks can never double-create one. If the document a pair points at has been deleted, the pair is forgotten and the next create makes a new document.
+
 Use it for anything that can retry: a webhook delivery id, a conversation id, a
 survey response id.
 

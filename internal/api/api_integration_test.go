@@ -738,3 +738,77 @@ func TestPatchingATaskStatusMovesItsOpenSubtasks(t *testing.T) {
 		t.Fatalf("the parent changed with its subtask: %v %+v", err, got)
 	}
 }
+
+// A sync can send a create twice and never make two documents: the pair (source, external_id) is remembered on the first
+// create, and every repeat answers 200 with the same document and Idempotent-Replay. A different source or id is a
+// different document, none of it changes what a create without an external_id does, and a pair whose document was deleted
+// makes a new one instead of answering with a ghost.
+func TestDocumentCreateIsSafeToSendTwice(t *testing.T) {
+	f := setup(t)
+	tok := f.token(t, f.alice, api.ScopeWrite)
+	create := func(body map[string]any) (int, string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/v1/documents", bytes.NewReader(mustJSON(t, body)))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		var out map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		id, _ := out["id"].(string)
+		return rec.Code, id + "|" + rec.Header().Get("Idempotent-Replay")
+	}
+	count := func() int {
+		var n int
+		if err := f.pools.Web.QueryRow(context.Background(), `SELECT count(*) FROM documents WHERE org_id=$1 AND title='Sync me'`, f.org).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	task := map[string]any{"kind": "task", "title": "Sync me", "external_id": "T-1", "source": "thoth"}
+	code, first := create(task)
+	if code != http.StatusCreated || strings.HasSuffix(first, "|true") {
+		t.Fatalf("first create: %d %s", code, first)
+	}
+	code, again := create(task)
+	if code != http.StatusOK || again != first+"true" {
+		t.Fatalf("repeat: %d %s, want 200 and the same document with the replay header (first %s)", code, again, first)
+	}
+	if count() != 1 {
+		t.Fatalf("%d documents after a repeat, want 1", count())
+	}
+	// Another source with the same id, and another id, are other documents; no source means "api".
+	for _, other := range []map[string]any{
+		{"kind": "task", "title": "Sync me", "external_id": "T-1", "source": "github"},
+		{"kind": "task", "title": "Sync me", "external_id": "T-2", "source": "thoth"},
+		{"kind": "task", "title": "Sync me", "external_id": "T-1"},
+	} {
+		if code, _ := create(other); code != http.StatusCreated {
+			t.Fatalf("%v: %d", other, code)
+		}
+	}
+	// Without an external_id every create makes a document, as before.
+	create(map[string]any{"kind": "task", "title": "Sync me"})
+	create(map[string]any{"kind": "task", "title": "Sync me"})
+	if count() != 6 {
+		t.Fatalf("%d documents, want 6", count())
+	}
+	// The document was deleted: the pair is forgotten and the next create makes it again.
+	firstID := strings.SplitN(first, "|", 2)[0]
+	if err := f.docs.Delete(context.Background(), f.org, f.subj(t, f.alice), firstID); err != nil {
+		t.Fatal(err)
+	}
+	code, remade := create(task)
+	if code != http.StatusCreated || strings.SplitN(remade, "|", 2)[0] == firstID {
+		t.Fatalf("a deleted document's pair answered %d %s, want a new document", code, remade)
+	}
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

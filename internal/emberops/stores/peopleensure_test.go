@@ -45,7 +45,7 @@ func TestAPersonWhoSignsInGetsAUserAndAnEmployeeWithTheirApprover(t *testing.T) 
 	if user == nil || emp == nil {
 		t.Fatalf("user %v employee %v", user, emp)
 	}
-	if user["email"] != "nia@fireballz.ai" || user["first_name"] != "Nia New" || user["enabled"] != float64(1) && user["enabled"] != 1 {
+	if user["email"] != "nia@fireballz.ai" || user["first_name"] != "Nia" || user["last_name"] != "New" || user["enabled"] != float64(1) && user["enabled"] != 1 {
 		t.Fatalf("user = %v", user)
 	}
 	if emp["user_id"] != "nia@fireballz.ai" || emp["hearth_approver"] != "EMP-bob" {

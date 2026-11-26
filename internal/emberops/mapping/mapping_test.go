@@ -97,3 +97,18 @@ func TestASuspendedPersonIsAnInactiveEmployee(t *testing.T) {
 		t.Fatal("employee status does not follow the person's")
 	}
 }
+
+// A User carries the person's name as a first and a last name, so ERPNext's copy of the Employee name onto a User with no
+// last name never runs and the full name reads once ("Yessid Vargas", not "Yessid Vargas Vargas").
+func TestUserNameIsSplitSoTheFullNameReadsOnce(t *testing.T) {
+	for name, want := range map[string][2]any{
+		"Yessid Vargas":                {"Yessid", "Vargas"},
+		"Domingo Antonio Méndez Gómez": {"Domingo", "Antonio Méndez Gómez"},
+		"  Ann  ":                      {"Ann", nil},
+	} {
+		d := UserDoc(Rec{"id": "p", "display_name": name, "email": "a@example.com"})
+		if d["first_name"] != want[0] || d["last_name"] != want[1] {
+			t.Errorf("%q -> first %v last %v, want %v", name, d["first_name"], d["last_name"], want)
+		}
+	}
+}
