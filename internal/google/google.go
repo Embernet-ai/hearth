@@ -33,6 +33,13 @@ import (
 // needs it is wanted, so somebody who only wants their calendar is never asked
 // for their mail.
 const (
+	// The full calendar and the full mailbox: read, write, send, organise. The
+	// connect form asks for these by default.
+	ScopeCalendar = "https://www.googleapis.com/auth/calendar"
+	ScopeMail     = "https://mail.google.com/"
+
+	// The narrower scopes stay recognised so a connection made earlier with
+	// them keeps working.
 	ScopeCalendarRead  = "https://www.googleapis.com/auth/calendar.readonly"
 	ScopeCalendarWrite = "https://www.googleapis.com/auth/calendar.events"
 	ScopeGmailRead     = "https://www.googleapis.com/auth/gmail.readonly"

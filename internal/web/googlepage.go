@@ -46,7 +46,8 @@ func (s *Server) startGoogle(w http.ResponseWriter, r *http.Request) {
 	var scopes []string
 	for _, v := range r.Form["scope"] {
 		switch v {
-		case google.ScopeCalendarRead, google.ScopeCalendarWrite,
+		case google.ScopeCalendar, google.ScopeMail,
+			google.ScopeCalendarRead, google.ScopeCalendarWrite,
 			google.ScopeGmailRead, google.ScopeGmailSend:
 			scopes = append(scopes, v)
 		}
