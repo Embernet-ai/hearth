@@ -62,6 +62,14 @@ type ClientCredentials struct {
 
 const tokenSkew = 30 * time.Second
 
+// tokenRetryDelays is how long a token fetch waits between attempts when Vord does not answer (a connection error, 502, 503 or 504):
+// about 90 seconds in all, longer than a Vord pod takes to restart. A variable so tests do not sleep.
+var tokenRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second}
+
+func tokenRetryable(code int) bool {
+	return code == http.StatusBadGateway || code == http.StatusServiceUnavailable || code == http.StatusGatewayTimeout
+}
+
 func (c *ClientCredentials) clock() time.Time {
 	if c.now != nil {
 		return c.now()
@@ -80,24 +88,42 @@ func (c *ClientCredentials) Token(ctx context.Context) (string, error) {
 	if c.Scope != "" {
 		form.Set("scope", c.Scope)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.TokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.SetBasicAuth(url.QueryEscape(c.ClientID), url.QueryEscape(c.ClientSecret))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	hc := c.HTTP
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("emberops: service token: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("emberops: service token: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	var body []byte
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.TokenURL, strings.NewReader(form.Encode()))
+		if err != nil {
+			return "", err
+		}
+		req.SetBasicAuth(url.QueryEscape(c.ClientID), url.QueryEscape(c.ClientSecret))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		var failure error
+		resp, err := hc.Do(req)
+		if err != nil {
+			failure = fmt.Errorf("emberops: service token: %w", err)
+		} else {
+			body, _ = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+			failure = fmt.Errorf("emberops: service token: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+			if !tokenRetryable(resp.StatusCode) {
+				return "", failure
+			}
+		}
+		// Vord is one pod: while it restarts, the hourly sync jobs got 503 and gave up (2026-11-26, bead a9e566). Wait it out.
+		if attempt >= len(tokenRetryDelays) {
+			return "", failure
+		}
+		select {
+		case <-ctx.Done():
+			return "", failure
+		case <-time.After(tokenRetryDelays[attempt]):
+		}
 	}
 	var tr struct {
 		AccessToken string `json:"access_token"`

@@ -34,6 +34,9 @@ type Federated struct {
 	IAMBase        string // default https://iamcredentials.googleapis.com/v1
 }
 
+// vordTokenRetryDelays is the wait between attempts at the Vord token. A variable so tests do not sleep.
+var vordTokenRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second}
+
 func (f *Federated) client() *http.Client {
 	if f.HTTP != nil {
 		return f.HTTP
@@ -75,9 +78,26 @@ func (f *Federated) Signer() func(ctx context.Context, claims []byte) (string, e
 			AccessToken string `json:"access_token"`
 			Error       string `json:"error"`
 		}
-		code, err := f.post(ctx, f.VordTokenURL, url.Values{
-			"grant_type": {"client_credentials"}, "client_id": {f.ClientID}, "client_secret": {f.ClientSecret},
-		}, "", nil, &vt)
+		// Vord is one pod: while it restarts the token endpoint answers 503 or refuses the connection, and the hourly job gave up
+		// (2026-11-26, bead a9e566). Wait it out, about 90 seconds in all.
+		var code int
+		var err error
+		for attempt := 0; ; attempt++ {
+			code, err = f.post(ctx, f.VordTokenURL, url.Values{
+				"grant_type": {"client_credentials"}, "client_id": {f.ClientID}, "client_secret": {f.ClientSecret},
+			}, "", nil, &vt)
+			if err == nil && code != http.StatusBadGateway && code != http.StatusServiceUnavailable && code != http.StatusGatewayTimeout {
+				break
+			}
+			if attempt >= len(vordTokenRetryDelays) {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				attempt = len(vordTokenRetryDelays)
+			case <-time.After(vordTokenRetryDelays[attempt]):
+			}
+		}
 		if err != nil {
 			return "", err
 		}
