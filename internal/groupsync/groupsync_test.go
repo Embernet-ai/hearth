@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestPlanAddsMissingAndRemovesStrays(t *testing.T) {
@@ -255,5 +256,44 @@ func TestConfigRemoveDefaultsOff(t *testing.T) {
 	var c Config
 	if err := json.Unmarshal([]byte(`{"mappings":[]}`), &c); err != nil || c.Remove {
 		t.Fatalf("%v %v", c, err)
+	}
+}
+
+// The hourly groups job read "vord token: 503" while Vord, one pod, restarted, and gave up (2026-11-26, bead a9e566).
+func TestFederatedWaitsOutAVordRestart(t *testing.T) {
+	old := vordTokenRetryDelays
+	vordTokenRetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	defer func() { vordTokenRetryDelays = old }()
+	var vord int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/vord", func(w http.ResponseWriter, r *http.Request) {
+		vord++
+		if vord <= 2 {
+			w.WriteHeader(503)
+			return
+		}
+		_, _ = w.Write([]byte(`{"access_token":"vt"}`))
+	})
+	mux.HandleFunc("/sts", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(401) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	f := &Federated{VordTokenURL: srv.URL + "/vord", ClientID: "c", ClientSecret: "s", Audience: "a", ServiceAccount: "sa@example.com", STSURL: srv.URL + "/sts"}
+	_, err := f.Signer()(context.Background(), []byte("{}"))
+	// The chain got past Vord (third answer) and stopped at the stubbed STS refusal.
+	if vord != 3 || err == nil || !strings.Contains(err.Error(), "google sts") {
+		t.Fatalf("vord hits %d, err %v", vord, err)
+	}
+}
+
+func TestFederatedGivesUpAfterTheLastWait(t *testing.T) {
+	old := vordTokenRetryDelays
+	vordTokenRetryDelays = []time.Duration{time.Millisecond}
+	defer func() { vordTokenRetryDelays = old }()
+	var vord int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { vord++; w.WriteHeader(503) }))
+	defer srv.Close()
+	f := &Federated{VordTokenURL: srv.URL, ClientID: "c", ClientSecret: "s", Audience: "a", ServiceAccount: "sa@example.com"}
+	if _, err := f.Signer()(context.Background(), []byte("{}")); err == nil || !strings.Contains(err.Error(), "vord token: 503") || vord != 2 {
+		t.Fatalf("vord hits %d, err %v", vord, err)
 	}
 }

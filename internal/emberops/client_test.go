@@ -277,3 +277,43 @@ func TestAReadTooLongForAURLGoesByPost(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Vord is one pod. While it restarts the token endpoint answers 503 and the hourly crm-sync job used to give up with 204 failed records
+// (2026-11-26, bead a9e566). A token fetch now waits it out, but a refusal that is not a restart (401) is final at once.
+func TestServiceTokenWaitsOutAVordRestart(t *testing.T) {
+	defer emberops.SetTokenRetryDelays(emberops.SetTokenRetryDelays([]time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}))
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) <= 2 {
+			http.Error(w, "no available server", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(`{"access_token":"svc-tok","expires_in":300}`))
+	}))
+	defer srv.Close()
+	cc := &emberops.ClientCredentials{TokenURL: srv.URL, ClientID: "c", ClientSecret: "s"}
+	tok, err := cc.Token(context.Background())
+	if err != nil || tok != "svc-tok" || hits.Load() != 3 {
+		t.Fatalf("%q %v after %d hits", tok, err, hits.Load())
+	}
+}
+
+func TestServiceTokenGivesUpAfterTheLastWaitAndNeverRetriesARefusal(t *testing.T) {
+	defer emberops.SetTokenRetryDelays(emberops.SetTokenRetryDelays([]time.Duration{time.Millisecond, time.Millisecond}))
+	var hits atomic.Int32
+	code := http.StatusServiceUnavailable
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		http.Error(w, "down", code)
+	}))
+	defer srv.Close()
+	cc := &emberops.ClientCredentials{TokenURL: srv.URL, ClientID: "c", ClientSecret: "s"}
+	if _, err := cc.Token(context.Background()); err == nil || !strings.Contains(err.Error(), "503") || hits.Load() != 3 {
+		t.Fatalf("err %v after %d hits", err, hits.Load())
+	}
+	hits.Store(0)
+	code = http.StatusUnauthorized
+	if _, err := cc.Token(context.Background()); err == nil || hits.Load() != 1 {
+		t.Fatalf("a 401 must not be retried: err %v, %d hits", err, hits.Load())
+	}
+}
