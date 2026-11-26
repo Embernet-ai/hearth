@@ -310,3 +310,113 @@ func TestApproversAndAdminsChangeAndCancelTimeOff(t *testing.T) {
 		t.Fatalf("a colleague read the request: %v", err)
 	}
 }
+
+type countedNotes struct{ asked, decided int }
+
+func (c *countedNotes) TimeOffRequested(context.Context, string, *timeoff.Request, []string) {
+	c.asked++
+}
+func (c *countedNotes) TimeOffDecided(context.Context, string, string, *timeoff.Request) { c.decided++ }
+func (c *countedNotes) TimeOffChanged(context.Context, string, string, *timeoff.Request, string) {
+}
+
+// A salaried person's vacation approves itself on submit, up to five working days a calendar month, with the Out on the
+// calendar, the notices and an audit row a manual approval would give. Over the week it waits for a person.
+func TestSalariedVacationApprovesItselfUpToAWeekAMonth(t *testing.T) {
+	dsn := pgtest.Database(t, "hearth_timeoff_auto_test")
+	ctx := context.Background()
+	pools, err := pg.Open(ctx, pg.DefaultOptions(dsn))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pools.Close)
+	if err := pg.Migrate(ctx, pools, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))); err != nil {
+		t.Fatal(err)
+	}
+	db := pools.Web
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	org, sal, other, boss := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	exec(`INSERT INTO orgs (id, slug, name) VALUES ($1, $2, 'Auto Co')`, org, "au-"+org[:8])
+	for id, name := range map[string]string{sal: "Sal", other: "Otto", boss: "Boss"} {
+		exec(`INSERT INTO principals (id, org_id, kind, display_name) VALUES ($1, $2, 'user', $3)`, id, org, name)
+	}
+	exec(`UPDATE principals SET approver_id = $2 WHERE id IN ($1, $3)`, sal, boss, other)
+	exec(`UPDATE principals SET time_auto_approve_since = '2026-01-01' WHERE id = $1`, sal)
+
+	notes := &countedNotes{}
+	svc := timeoff.New(db, notes)
+	day := func(s string) time.Time {
+		d, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	ask := func(who, kind, from, to string) *timeoff.Request {
+		t.Helper()
+		r, err := svc.Ask(ctx, org, who, timeoff.Params{StartsOn: day(from), EndsOn: day(to), Kind: kind, Acknowledged: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	count := func(q string, args ...any) int {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// Mon 4 to Wed 6 March 2030: three days, approved on the way in by the setting.
+	r := ask(sal, "vacation", "2030-03-04", "2030-03-06")
+	if r.Status != "approved" || r.DecisionNote != timeoff.AutoApprovedNote || r.DecidedAt == nil {
+		t.Fatalf("a fitting vacation was not approved on submit: %+v", r)
+	}
+	if n := count(`SELECT count(*) FROM calendar_events WHERE org_id=$1 AND title='Out: Sal'`, org); n != 1 {
+		t.Fatalf("%d Out events, want 1", n)
+	}
+	if n := count(`SELECT count(*) FROM time_off_requests WHERE id=$1 AND status='approved' AND decided_by=$2 AND calendar_event_id IS NOT NULL`, r.ID, sal); n != 1 {
+		t.Fatal("the stored request is not approved with its Out linked")
+	}
+	if n := count(`SELECT count(*) FROM audit_log WHERE org_id=$1 AND action='time_off.auto_approve' AND entity_id=$2 AND actor_id IS NULL`, org, r.ID); n != 1 {
+		t.Fatalf("%d audit rows, want 1", n)
+	}
+	if notes.asked != 1 || notes.decided != 1 {
+		t.Fatalf("notices: asked %d, decided %d", notes.asked, notes.decided)
+	}
+
+	// Two more days make five and fit; a sixth waits for a person, who can still decide it.
+	if r2 := ask(sal, "vacation", "2030-03-18", "2030-03-19"); r2.Status != "approved" {
+		t.Fatalf("five days: %+v", r2)
+	}
+	over := ask(sal, "vacation", "2030-03-25", "2030-03-25")
+	if over.Status != "pending" {
+		t.Fatalf("a sixth day approved itself: %+v", over)
+	}
+	if n := count(`SELECT count(*) FROM calendar_events WHERE org_id=$1`, org); n != 2 {
+		t.Fatalf("%d Out events, want 2", n)
+	}
+	if err := svc.Decide(ctx, org, boss, over.ID, true, "ok"); err != nil {
+		t.Fatalf("a person deciding the over-cap request: %v", err)
+	}
+	// A cancelled one frees its days; other kinds and people without the setting always wait.
+	if err := svc.Cancel(ctx, org, sal, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r3 := ask(sal, "vacation", "2030-03-11", "2030-03-12"); r3.Status != "approved" {
+		t.Fatalf("days freed by cancelling: %+v", r3)
+	}
+	if s := ask(sal, "sick", "2030-04-01", "2030-04-01"); s.Status != "pending" {
+		t.Fatalf("sick leave approved itself: %+v", s)
+	}
+	if o := ask(other, "vacation", "2030-04-01", "2030-04-02"); o.Status != "pending" {
+		t.Fatalf("somebody without the setting was auto approved: %+v", o)
+	}
+}

@@ -48,7 +48,7 @@ func (s *Server) postTimeOff(w http.ResponseWriter, r *http.Request) {
 		d, _ := time.Parse("2006-01-02", strings.TrimSpace(r.FormValue(k)))
 		return d
 	}
-	_, err := s.timeoff.Ask(r.Context(), id.OrgID, id.PrincipalID, timeoff.Params{
+	req, err := s.timeoff.Ask(r.Context(), id.OrgID, id.PrincipalID, timeoff.Params{
 		StartsOn: date("starts_on"), EndsOn: date("ends_on"), Kind: r.FormValue("kind"),
 		Reason: r.FormValue("reason"), Comments: r.FormValue("comments"), HalfDay: r.FormValue("half_day") != "",
 		Acknowledged: r.FormValue("acknowledged") != "",
@@ -60,6 +60,10 @@ func (s *Server) postTimeOff(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "ask time off", "error", err)
 		s.fail(w, r, http.StatusInternalServerError, "could not send your request")
+		return
+	}
+	if req != nil && req.Status == "approved" {
+		http.Redirect(w, r, "/time-off?done=Approved.+It+is+on+the+calendar.", http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/time-off?done=Request+sent.+Your+approver+has+been+told.", http.StatusSeeOther)

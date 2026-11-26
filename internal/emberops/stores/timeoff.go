@@ -34,6 +34,8 @@ type TimeOffStructure interface {
 	Decidable(ctx context.Context, orgID, actorID string, requesterIDs []string) (map[string]bool, error)
 	Deciders(ctx context.Context, orgID, requesterID string) ([]string, error)
 	DepartmentSpace(ctx context.Context, orgID, principalID string) (string, error)
+	// AutoApproveSince is when the person's time began approving itself, nil while it does not.
+	AutoApproveSince(ctx context.Context, orgID, principalID string) (*time.Time, error)
 	// Record writes an audit row in Hearth's own database.
 	Record(ctx context.Context, e audit.Entry) error
 }
@@ -68,12 +70,35 @@ func (s *TimeOff) Ask(ctx context.Context, orgID, actorID string, p timeoff.Para
 		return nil, err
 	}
 	id := uuid.NewString()
+	auto, err := s.autoApproves(ctx, orgID, actorID, p)
+	if err != nil {
+		return nil, err
+	}
 	vals := map[string]any{
 		"employee": emberops.Ref(actorID), "leave_kind": p.Kind, "status": "pending",
 		"starts_on": p.StartsOn.Format("2006-01-02"), "ends_on": p.EndsOn.Format("2006-01-02"), "days": days,
 		"reason": strings.TrimSpace(p.Reason), "comments": strings.TrimSpace(p.Comments), "half_day": boolInt(p.HalfDay),
 	}
+	event := ""
+	if auto {
+		// Approved by the setting on the way in: the same "Out" and the same decision fields a person's approval writes,
+		// with the requester as the decider.
+		names, err := s.Dir.Names(ctx)
+		if err != nil {
+			return nil, err
+		}
+		pre := &timeoff.Request{ID: id, RequesterID: actorID, RequesterName: names[actorID], StartsOn: p.StartsOn, EndsOn: p.EndsOn}
+		if event, err = s.putOutEvent(ctx, orgID, pre); err != nil {
+			return nil, err
+		}
+		now := time.Now().UTC()
+		vals["status"], vals["decided_by"], vals["decided_at"] = "approved", emberops.Ref(actorID), s.ts(&now)
+		vals["decision_note"], vals["calendar_event"] = timeoff.AutoApprovedNote, emberops.Ref(event)
+	}
 	if _, err := s.C.Upsert(ctx, timeOffDoctype, id, vals); err != nil {
+		if event != "" {
+			_ = s.C.Delete(emberops.WithUser(ctx, nil), "Event", event)
+		}
 		if isForbidden(err) {
 			return nil, timeoff.ErrDenied
 		}
@@ -83,12 +108,44 @@ func (s *TimeOff) Ask(ctx context.Context, orgID, actorID string, p timeoff.Para
 	if err != nil {
 		return nil, err
 	}
+	if auto {
+		if err := s.PG.Record(ctx, timeoff.AutoApproveAudit(orgID, r)); err != nil {
+			return nil, err
+		}
+	}
 	if s.Notify != nil {
 		if ids, err := s.PG.Deciders(ctx, orgID, actorID); err == nil {
 			s.Notify.TimeOffRequested(ctx, orgID, r, ids)
 		}
+		if auto {
+			s.Notify.TimeOffDecided(ctx, orgID, actorID, r)
+		}
 	}
 	return r, nil
+}
+
+// autoApproves is whether a request approves itself on the way in: vacation, from a person whose auto-approve is
+// on (the setting stays on the person in Postgres), that keeps every calendar month it touches within the week
+// together with the vacation already approved in EmberOPS.
+func (s *TimeOff) autoApproves(ctx context.Context, orgID, actorID string, p timeoff.Params) (bool, error) {
+	if p.Kind != timeoff.AutoKind {
+		return false, nil
+	}
+	since, err := s.PG.AutoApproveSince(ctx, orgID, actorID)
+	if err != nil || since == nil {
+		return false, err
+	}
+	first := time.Date(p.StartsOn.Year(), p.StartsOn.Month(), 1, 0, 0, 0, 0, time.UTC)
+	last := time.Date(p.EndsOn.Year(), p.EndsOn.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+	taken, err := s.list(ctx, []emberops.Filter{
+		emberops.F("employee", s.employeeName(ctx, actorID)), emberops.F("status", "approved"), emberops.F("leave_kind", timeoff.AutoKind),
+		{Field: "ends_on", Op: ">=", Value: first.Format("2006-01-02")},
+		{Field: "starts_on", Op: "<=", Value: last.Format("2006-01-02")},
+	}, 200)
+	if err != nil {
+		return false, err
+	}
+	return timeoff.WithinMonthlyCap(taken, p.StartsOn, p.EndsOn, p.HalfDay), nil
 }
 
 // Mine is the actor's own requests, newest first.
