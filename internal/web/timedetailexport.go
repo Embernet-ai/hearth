@@ -34,7 +34,7 @@ import (
 // detailHeaders are the columns of the details file. date, hours, space, work,
 // tags and note are the per-person export's own columns, in its order and under
 // its names; the person and the entry's identity are added around them.
-var detailHeaders = []string{"employee", "employee_id", "date", "start", "hours", "minutes", "space", "work", "tags", "note", "entry_id"}
+var detailHeaders = []string{"employee", "employee_id", "date", "start", "hours", "minutes", "space", "work", "tags", "note", "entry_id", "approval_status", "decided_by", "decided_on"}
 
 func detailRow(row timelog.ReportRow) []string {
 	return []string{
@@ -42,6 +42,7 @@ func detailRow(row timelog.ReportRow) []string {
 		row.StartedAt.Format("2006-01-02"), row.StartedAt.Format("15:04"),
 		hoursAndMinutes(row.Minutes), strconv.Itoa(row.Minutes),
 		row.SpaceName, row.DocTitle, strings.Join(row.Tags, "; "), row.Note, row.ID,
+		row.Approval, row.DeciderName, decidedOn(row.DecidedAt),
 	}
 }
 
@@ -64,7 +65,7 @@ func detailPeople(r *http.Request) (ids []string, ok bool) {
 	return ids, len(ids) > 0
 }
 
-func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format string, from, to time.Time) {
+func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format string, from, to time.Time, filter reportFilter) {
 	id := auth.From(r.Context())
 	people, ok := detailPeople(r)
 	if !ok {
@@ -112,6 +113,9 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 		}
 		n := 1
 		err = s.time.TimeReportRows(r.Context(), id.OrgID, id.PrincipalID, people, from, to, func(row timelog.ReportRow) error {
+			if !filter.keep(row) {
+				return nil
+			}
 			n++
 			cells := detailRow(row)
 			out := make([]any, len(cells))
@@ -125,10 +129,10 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 			refuse(err)
 			return
 		}
-		s.log.InfoContext(r.Context(), "time details export", "principal", id.PrincipalID, "format", "xlsx", "rows", n-1, "people", len(people), "from", from.Format("2006-01-02"), "to", to.AddDate(0, 0, -1).Format("2006-01-02"))
+		s.log.InfoContext(r.Context(), "time details export", "principal", id.PrincipalID, "format", "xlsx", "rows", n-1, "filters", filter.query(), "people", len(people), "from", from.Format("2006-01-02"), "to", to.AddDate(0, 0, -1).Format("2006-01-02"))
 		if n == 1 {
 			// Only the header row: say so on the page instead of handing over a file that looks empty.
-			s.detailNothing(w, r, from, to)
+			s.detailNothing(w, r, from, to, filter)
 			return
 		}
 		if err := sw.Flush(); err != nil {
@@ -159,6 +163,9 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 	}
 	n := 0
 	err := s.time.TimeReportRows(r.Context(), id.OrgID, id.PrincipalID, people, from, to, func(row timelog.ReportRow) error {
+		if !filter.keep(row) {
+			return nil
+		}
 		begin()
 		if err := cw.Write(detailRow(row)); err != nil {
 			return err
@@ -182,10 +189,10 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 		s.log.ErrorContext(r.Context(), "time details export", "error", err, "rows", n)
 		return
 	}
-	s.log.InfoContext(r.Context(), "time details export", "principal", id.PrincipalID, "format", "csv", "rows", n, "people", len(people), "from", from.Format("2006-01-02"), "to", to.AddDate(0, 0, -1).Format("2006-01-02"))
+	s.log.InfoContext(r.Context(), "time details export", "principal", id.PrincipalID, "format", "csv", "rows", n, "filters", filter.query(), "people", len(people), "from", from.Format("2006-01-02"), "to", to.AddDate(0, 0, -1).Format("2006-01-02"))
 	if cw == nil {
 		// No row at all: the page says so, with the range, instead of a file that is only a header.
-		s.detailNothing(w, r, from, to)
+		s.detailNothing(w, r, from, to, filter)
 		return
 	}
 	cw.Flush()
@@ -193,9 +200,12 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 
 // detailNothing sends the person back to the report with a note that the export would have been empty and why it may be:
 // nobody they chose logged finished time inside these dates.
-func (s *Server) detailNothing(w http.ResponseWriter, r *http.Request, from, to time.Time) {
+func (s *Server) detailNothing(w http.ResponseWriter, r *http.Request, from, to time.Time, filter reportFilter) {
 	last := to.AddDate(0, 0, -1).Format("2006-01-02")
 	msg := "Nothing to export: the people you chose have no finished time between " + from.Format("2006-01-02") + " and " + last + ". Widen the dates above, press Show, and try again."
+	if filter.active() {
+		msg = "Nothing to export: no finished time between " + from.Format("2006-01-02") + " and " + last + " matches the people and filters you chose. Loosen a filter or widen the dates, press Show, and try again."
+	}
 	q := url.Values{"from": {from.Format("2006-01-02")}, "to": {last}, "notice": {msg}}
-	http.Redirect(w, r, "/reports/time?"+q.Encode(), http.StatusSeeOther)
+	http.Redirect(w, r, "/reports/time?"+q.Encode()+filter.query(), http.StatusSeeOther)
 }

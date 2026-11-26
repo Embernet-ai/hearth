@@ -214,6 +214,14 @@ ReportPeople
 ReportNotice
 ReportPerson
 ReportPersonName
+ReportApproval
+ReportTeam
+ReportSpaceID
+ReportTag
+ReportFilterQS
+ReportTeams
+ReportSpaceOptions
+ReportTagOptions
 Tags
 CanManageTags
 Schedules

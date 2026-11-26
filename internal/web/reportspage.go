@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -183,15 +182,36 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 	s.log.InfoContext(r.Context(), "time report", "principal", id.PrincipalID, "from", reportFrom, "to", reportTo,
 		"detail", r.URL.Query().Get("detail") == "1", "format", format, "person", person, "people", picked, "all", all)
 
+	filter, bad := s.parseReportFilter(r.Context(), r)
+	if bad != "" {
+		s.fail(w, r, http.StatusBadRequest, bad)
+		return
+	}
+
 	// Details for a set of people, in one file. A separate choice from the totals
-	// and the per-person export below, which are untouched.
+	// and the per-person export below.
 	if r.URL.Query().Get("detail") == "1" && (format == "csv" || format == "xlsx") {
-		s.timeDetailExport(w, r, format, from, to)
+		s.timeDetailExport(w, r, format, from, to, filter)
 		return
 	}
 
 	if person == "" {
-		totals, err := s.time.TimeReportSummary(r.Context(), id.OrgID, id.PrincipalID, from, to)
+		var totals []timelog.ReportTotal
+		var err error
+		if filter.active() {
+			// A narrowed report is rebuilt from the entries that survive, because the roll-up knows nothing of
+			// approval, teams, spaces or tags.
+			var kept []timelog.ReportRow
+			err = s.time.TimeReportRows(r.Context(), id.OrgID, id.PrincipalID, nil, from, to, func(row timelog.ReportRow) error {
+				if filter.keep(row) {
+					kept = append(kept, row)
+				}
+				return nil
+			})
+			totals = totalsFromRows(kept)
+		} else {
+			totals, err = s.time.TimeReportSummary(r.Context(), id.OrgID, id.PrincipalID, from, to)
+		}
 		if fail(err) {
 			return
 		}
@@ -226,18 +246,26 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.render(w, r, "timereport", page{
+		pg := page{
 			Title: "Time report", Totals: totals, ReportTotal: grand,
 			ReportPeople: s.reportPeople(r.Context(), id.OrgID, totals),
 			ReportNotice: r.URL.Query().Get("notice"),
 			ReportFrom:   reportFrom, ReportTo: reportTo,
-		})
+		}
+		s.reportFilterPage(r.Context(), &pg, filter)
+		s.render(w, r, "timereport", pg)
 		return
 	}
 
-	rows, err := s.time.TimeReport(r.Context(), id.OrgID, id.PrincipalID, person, from, to)
+	entries, err := s.time.TimeReport(r.Context(), id.OrgID, id.PrincipalID, person, from, to)
 	if fail(err) {
 		return
+	}
+	rows := entries[:0:0]
+	for _, row := range entries {
+		if filter.keep(row) {
+			rows = append(rows, row)
+		}
 	}
 	total := 0
 	name := ""
@@ -257,10 +285,11 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 			out = append(out, []string{
 				row.StartedAt.Format("2006-01-02"), hoursAndMinutes(row.Minutes),
 				row.SpaceName, row.DocTitle, strings.Join(row.Tags, "; "), row.Note,
+				approvalLabel(row.Approval), row.DeciderName, decidedOn(row.DecidedAt),
 			})
 		}
 		if err := writeXLSX(w, who+" time "+stamp,
-			[]string{"Date", "Hours", "Space", "Work", "Tags", "Note"},
+			[]string{"Date", "Hours", "Space", "Work", "Tags", "Note", "Approval", "Decided by", "Decided on"},
 			out, "Total", hoursAndMinutes(total)); err != nil {
 			s.log.ErrorContext(r.Context(), "write xlsx", "error", err)
 		}
@@ -270,11 +299,12 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+
 			safeFilename(who+" time "+stamp)+`.csv"`)
 		cw := csv.NewWriter(w)
-		_ = cw.Write([]string{"date", "hours", "space", "work", "tags", "note"})
+		_ = cw.Write([]string{"date", "hours", "space", "work", "tags", "note", "approval_status", "decided_by", "decided_on"})
 		for _, row := range rows {
 			_ = cw.Write([]string{
 				row.StartedAt.Format("2006-01-02"), hoursAndMinutes(row.Minutes),
 				row.SpaceName, row.DocTitle, strings.Join(row.Tags, "; "), row.Note,
+				row.Approval, row.DeciderName, decidedOn(row.DecidedAt),
 			})
 		}
 		_ = cw.Write([]string{})
@@ -283,11 +313,13 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "timereport", page{
+	pg := page{
 		Title: "Time report", Report: rows, ReportTotal: total,
 		ReportFrom: reportFrom, ReportTo: reportTo,
 		ReportPerson: person, ReportPersonName: name,
-	})
+	}
+	s.reportFilterPage(r.Context(), &pg, filter)
+	s.render(w, r, "timereport", pg)
 }
 
 // reportPeople is who the details export can be made for: every active person, in the order of their time in the range and
@@ -312,11 +344,55 @@ func (s *Server) reportPeople(ctx context.Context, orgID string, totals []timelo
 			s.log.WarnContext(ctx, "time report: list people", "error", err)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Minutes != out[j].Minutes {
-			return out[i].Minutes > out[j].Minutes
-		}
-		return strings.ToLower(out[i].PersonName) < strings.ToLower(out[j].PersonName)
-	})
+	sortTotals(out)
 	return out
+}
+
+// decidedOn is the day a decision was made, empty while there is none.
+func decidedOn(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format("2006-01-02")
+}
+
+// reportFilterPage fills in what the page's filter bar needs: the choices for each filter, what is chosen now, and
+// the filters spelled as parameters so every link and form on the page carries them.
+func (s *Server) reportFilterPage(ctx context.Context, pg *page, f reportFilter) {
+	pg.ReportFilterQS = f.query()
+	if len(f.approvalQ) == 1 {
+		pg.ReportApproval = f.approvalQ[0]
+	}
+	if len(f.teamQ) == 1 {
+		pg.ReportTeam = f.teamQ[0]
+	}
+	if len(f.spaceQ) == 1 {
+		pg.ReportSpaceID = f.spaceQ[0]
+	}
+	if len(f.tagQ) == 1 {
+		pg.ReportTag = f.tagQ[0]
+	}
+	id := auth.From(ctx)
+	if id == nil {
+		return
+	}
+	if s.teams != nil {
+		if list, err := s.teams.List(ctx, id.OrgID); err == nil {
+			pg.ReportTeams = list
+		} else {
+			s.log.WarnContext(ctx, "time report: list teams", "error", err)
+		}
+	}
+	if s.plant != nil {
+		if tree, err := s.plant.SpaceTree(ctx, id.OrgID, id.Subjects); err == nil {
+			pg.ReportSpaceOptions = tree
+		} else {
+			s.log.WarnContext(ctx, "time report: list spaces", "error", err)
+		}
+	}
+	if tags, err := s.time.ListTags(ctx, id.OrgID); err == nil {
+		pg.ReportTagOptions = tags
+	} else {
+		s.log.WarnContext(ctx, "time report: list tags", "error", err)
+	}
 }

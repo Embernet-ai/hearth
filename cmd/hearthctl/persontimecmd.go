@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -47,6 +48,7 @@ func runPersonTime(ctx context.Context, args []string) error {
 	person := fs.String("person", "", "email of the person whose time routing changes (required)")
 	approver := fs.String("approver", "", "email of who signs off their time, or none to clear")
 	auto := fs.String("auto-approve", "", "on or off: their time is approved as they log it")
+	since := fs.String("since", "", "with -auto-approve on: count the setting from this day (YYYY-MM-DD), so time dated before the switch is covered too")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -90,7 +92,15 @@ func runPersonTime(ctx context.Context, args []string) error {
 		fmt.Printf("%s: time is signed off by %s\n", *person, map[bool]string{true: "their department", false: *approver}[who == ""])
 	}
 	if *auto != "" {
-		if err := az.SetTimeAutoApprove(ctx, orgID, actor, target, *auto == "on"); err != nil {
+		var from *time.Time
+		if *since != "" {
+			d, err := time.Parse("2006-01-02", *since)
+			if err != nil {
+				return errors.New("-since is a day as YYYY-MM-DD")
+			}
+			from = &d
+		}
+		if err := az.SetTimeAutoApproveFrom(ctx, orgID, actor, target, *auto == "on", from); err != nil {
 			return err
 		}
 		fmt.Printf("%s: time is approved automatically: %s\n", *person, *auto)

@@ -764,6 +764,36 @@ type ReportRow struct {
 	Minutes     int
 	Note        string
 	Tags        []string
+	// SpaceID is the space the entry's document sits in, empty when it is not
+	// attached to one. The time report filters on it.
+	SpaceID string
+	// Approval is where the entry stands: ApprovalApproved, ApprovalPending or
+	// ApprovalRejected. DecidedAt and DeciderName say who settled it and when, and
+	// are empty while it is pending.
+	Approval    string
+	DecidedAt   *time.Time
+	DeciderName string
+}
+
+// The three states an exported row's approval can read, and the words the
+// report's filter and its files use for them.
+const (
+	ApprovalApproved = "approved"
+	ApprovalPending  = "pending"
+	ApprovalRejected = "rejected"
+)
+
+// ApprovalOf names an entry's approval from its decision: nil is pending, true
+// approved, false sent back.
+func ApprovalOf(approved *bool) string {
+	switch {
+	case approved == nil:
+		return ApprovalPending
+	case *approved:
+		return ApprovalApproved
+	default:
+		return ApprovalRejected
+	}
 }
 
 // ReportTotal is one person's total for a range -- the roll-up billing
@@ -846,9 +876,11 @@ func (s *Service) TimeReport(ctx context.Context, orgID, actorID, principalID st
 		       COALESCE((SELECT array_agg(tg.name ORDER BY tg.name)
 		                   FROM time_entry_tag_links l
 		                   JOIN time_entry_tags tg ON tg.id = l.tag_id
-		                  WHERE l.entry_id = t.id), '{}')
+		                  WHERE l.entry_id = t.id), '{}'),
+		       COALESCE(sp.id::text, ''), t.approved, t.decided_at, COALESCE(dp.display_name, '')
 		  FROM time_entries t
 		  JOIN principals p ON p.id = t.principal_id
+		  LEFT JOIN principals dp ON dp.id = t.decided_by
 		  LEFT JOIN documents d ON d.id = t.document_id
 		  LEFT JOIN spaces sp ON sp.id = d.space_id
 		 WHERE t.org_id = $1 AND t.minutes IS NOT NULL AND t.deleted_at IS NULL
@@ -863,10 +895,12 @@ func (s *Service) TimeReport(ctx context.Context, orgID, actorID, principalID st
 	var out []ReportRow
 	for rows.Next() {
 		var r ReportRow
+		var approved *bool
 		if err := rows.Scan(&r.ID, &r.PrincipalID, &r.PersonName, &r.DocTitle, &r.SpaceName,
-			&r.StartedAt, &r.Minutes, &r.Note, &r.Tags); err != nil {
+			&r.StartedAt, &r.Minutes, &r.Note, &r.Tags, &r.SpaceID, &approved, &r.DecidedAt, &r.DeciderName); err != nil {
 			return nil, fmt.Errorf("timelog: scan report row: %w", err)
 		}
+		r.Approval = ApprovalOf(approved)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -896,9 +930,11 @@ func (s *Service) TimeReportRows(ctx context.Context, orgID, actorID string, pri
 		       COALESCE((SELECT array_agg(tg.name ORDER BY tg.name)
 		                   FROM time_entry_tag_links l
 		                   JOIN time_entry_tags tg ON tg.id = l.tag_id
-		                  WHERE l.entry_id = t.id), '{}')
+		                  WHERE l.entry_id = t.id), '{}'),
+		       COALESCE(sp.id::text, ''), t.approved, t.decided_at, COALESCE(dp.display_name, '')
 		  FROM time_entries t
 		  JOIN principals p ON p.id = t.principal_id
+		  LEFT JOIN principals dp ON dp.id = t.decided_by
 		  LEFT JOIN documents d ON d.id = t.document_id
 		  LEFT JOIN spaces sp ON sp.id = d.space_id
 		 WHERE t.org_id = $1 AND t.minutes IS NOT NULL AND t.deleted_at IS NULL
@@ -911,10 +947,12 @@ func (s *Service) TimeReportRows(ctx context.Context, orgID, actorID string, pri
 	defer rows.Close()
 	for rows.Next() {
 		var r ReportRow
+		var approved *bool
 		if err := rows.Scan(&r.ID, &r.PrincipalID, &r.PersonName, &r.DocTitle, &r.SpaceName,
-			&r.StartedAt, &r.Minutes, &r.Note, &r.Tags); err != nil {
+			&r.StartedAt, &r.Minutes, &r.Note, &r.Tags, &r.SpaceID, &approved, &r.DecidedAt, &r.DeciderName); err != nil {
 			return fmt.Errorf("timelog: scan report row: %w", err)
 		}
+		r.Approval = ApprovalOf(approved)
 		if err := fn(r); err != nil {
 			return err
 		}
