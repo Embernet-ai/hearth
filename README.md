@@ -339,6 +339,6 @@ feelings. Come self-host with us. It's warm by the fire. Say sorry to your mom.*
 
 ---
 
-Built by [Fireball Industries](https://fireballz.ai). Operated on [EmberNet](https://embernet.ai).
+Built by [Fireball Industries](https://fireballindustries.com). Operated on [EmberNet](https://embernet.ai).
 
 &copy; 2026 Fireball Industries
