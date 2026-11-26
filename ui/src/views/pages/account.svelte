@@ -87,14 +87,10 @@
         your calendar through it.
       </p>
       <form  method="post"  action="/integrations/google/connect"  class="stack">
-        <label><input  type="checkbox"  name="scope"            value="https://www.googleapis.com/auth/calendar.readonly"  checked>
-          Read my calendar into Hearth</label>
-        <label><input  type="checkbox"  name="scope"            value="https://www.googleapis.com/auth/calendar.events">
-          Let Hearth put its events into my Google calendar</label>
-        <label><input  type="checkbox"  name="scope"            value="https://www.googleapis.com/auth/gmail.readonly">
-          Read my mail</label>
-        <label><input  type="checkbox"  name="scope"            value="https://www.googleapis.com/auth/gmail.send">
-          Send mail as me</label>
+        <label><input  type="checkbox"  name="scope"            value="https://www.googleapis.com/auth/calendar"  checked>
+          My calendar, read and write</label>
+        <label><input  type="checkbox"  name="scope"            value="https://mail.google.com/"  checked>
+          My mail, read, send and organise</label>
         <div  class="row"><button  type="submit"  class="primary">Connect Google</button></div>
       </form>
     {/if}

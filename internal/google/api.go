@@ -2,9 +2,8 @@ package google
 
 // Reading the calendar and the mailbox.
 //
-// Both are read-only here. Writing an event back into Google and sending mail
-// as somebody are separate scopes and separate decisions, and neither is worth
-// building until the reading half has been used for a week.
+// Both go through the full calendar and mail scopes, so reading, writing and sending are all
+// available to the person who connected.
 
 import (
 	"context"
