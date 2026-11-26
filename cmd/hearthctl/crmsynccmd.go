@@ -42,7 +42,7 @@ func runCRMSync(ctx context.Context, args []string) error {
 	deals := fs.Bool("deals", false, "also send deals as Opportunities, with a Lead first for a prospect that has one (needs EmberOps to accept both)")
 	show := fs.Bool("show", false, "read the EmberOps records of the -only companies back and print what is stored")
 	remove := fs.Bool("remove", false, "delete the EmberOps records of the -only companies (for a proof company)")
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

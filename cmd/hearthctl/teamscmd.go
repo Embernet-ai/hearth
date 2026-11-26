@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -30,7 +29,7 @@ import (
 
 func runSyncTeams(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("sync-teams", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	dry := fs.Bool("dry-run", false, "say what would change, write nothing")
 	min := fs.Int("min", 1,
 		"how many assigned documents in a department before somebody counts as a member")

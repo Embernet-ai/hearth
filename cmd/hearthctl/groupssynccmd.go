@@ -24,7 +24,7 @@ import (
 
 func runGroupsSync(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("groups-sync", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	cfgPath := fs.String("config", "", "the mapping file (JSON)")
 	apply := fs.Bool("apply", false, "change the groups; without it nothing is written")
 	if err := fs.Parse(args); err != nil {

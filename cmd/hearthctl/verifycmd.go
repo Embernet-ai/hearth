@@ -24,7 +24,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -34,8 +33,8 @@ import (
 
 func runVerifyClickUp(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("verify-clickup", flag.ExitOnError)
-	token := fs.String("token", os.Getenv("CLICKUP_TOKEN"), "ClickUp API token, or CLICKUP_TOKEN")
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	token := envFlag(fs, "token", "CLICKUP_TOKEN", "ClickUp API token, or CLICKUP_TOKEN")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	archived := fs.Bool("archived", true, "count archived lists too")
 	if err := fs.Parse(args); err != nil {
 		return err

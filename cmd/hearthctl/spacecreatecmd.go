@@ -13,7 +13,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Embernet-ai/hearth/internal/authz"
@@ -24,7 +23,7 @@ import (
 
 func runSpaceCreate(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("space-create", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin making the space (required)")
 	name := fs.String("name", "", "the space's name (required)")
 	kind := fs.String("kind", "project", "folder, project or area")

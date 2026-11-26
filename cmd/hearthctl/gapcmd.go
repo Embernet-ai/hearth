@@ -56,7 +56,7 @@ func runClickUpGap(ctx context.Context, args []string) error {
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("clickup-gap "+sub, flag.ExitOnError)
-	token := fs.String("token", os.Getenv("CLICKUP_TOKEN"), "ClickUp token, or CLICKUP_TOKEN")
+	token := envFlag(fs, "token", "CLICKUP_TOKEN", "ClickUp token, or CLICKUP_TOKEN")
 	key := fs.String("snapshot-key", "", "object store key of a saved read (apply), or where to save one (snapshot)")
 	dry := fs.Bool("dry-run", false, "apply: compare and report, write nothing")
 	fallbackEmail := fs.String("fallback", "yara@example.com", "who gets work and time with no active person to go to")

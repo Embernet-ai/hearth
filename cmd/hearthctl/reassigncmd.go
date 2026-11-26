@@ -32,7 +32,7 @@ import (
 
 func runReassign(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("reassign", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	planPath := fs.String("csv", "", "the plan: a CSV with id and proposed_ids")
 	apply := fs.Bool("apply", false, "write it. Without this the run is rolled back")
 	reverseOut := fs.String("reverse-out", "", "where to write the plan that undoes this one (required with -apply)")

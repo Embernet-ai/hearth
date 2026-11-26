@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -51,7 +50,7 @@ var orgChart = []struct {
 
 func runRemapOrg(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("remap-org", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	dry := fs.Bool("dry-run", false, "say what would move, change nothing")
 	if err := fs.Parse(args); err != nil {
 		return err

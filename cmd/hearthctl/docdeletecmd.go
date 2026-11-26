@@ -49,7 +49,7 @@ func splitIDs(s string) []string {
 
 func runDocDelete(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("doc-delete", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	idList := fs.String("ids", "", "comma separated document ids to remove")
 	source := fs.String("source", "", "the external reference source every document must carry (twenty, clickup, ...)")
 	kind := fs.String("kind", "", "the document kind every id must be (task, doc, ...); empty accepts any")

@@ -35,7 +35,7 @@ import (
 
 func runSpaceRemove(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("space-remove", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	space := fs.String("space", "", "the id of the space to close out and remove")
 	do := fs.Bool("go", false, "do it; without it nothing is changed")
 	if err := fs.Parse(args); err != nil {

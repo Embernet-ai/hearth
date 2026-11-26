@@ -34,7 +34,7 @@ import (
 
 func runPersonSuspend(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("person-suspend", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin suspending them (required)")
 	emails := fs.String("email", "", "the accounts to suspend, emails separated by commas")
 	ids := fs.String("id", "", "the accounts to suspend by principal id, separated by commas: for an account whose sign-in identity is gone")
@@ -162,7 +162,7 @@ func suspendPeople(ctx context.Context, pools *pg.Pools, orgID, actor string, em
 
 func runChannelRemove(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("channel-remove", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin removing the channel (required)")
 	channel := fs.String("channel", "", "the channel id, or its first eight characters (required)")
 	reason := fs.String("reason", "", "why: it goes on the audit row (required)")
