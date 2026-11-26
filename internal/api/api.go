@@ -396,6 +396,11 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		Status   string  `json:"status"`
 		Priority int16   `json:"priority"`
 		SpaceID  *string `json:"space_id"`
+		// ExternalID and Source make the create safe to send twice, as on the CRM creates: the first time a pair is seen
+		// the document is made and the pair remembered, every time after the same document comes back with 200 and
+		// Idempotent-Replay: true. Source defaults to "api".
+		ExternalID string `json:"external_id"`
+		Source     string `json:"source"`
 	}
 	if err := decode(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -415,12 +420,46 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		}
 		p.Task = &docs.TaskFields{Status: status, Priority: body.Priority}
 	}
-	d, err := s.docs.Create(r.Context(), c.OrgID, c.Subjects, p)
+	var made *docs.Document
+	run := func() (id string, replay bool, err error) {
+		return s.once(r.Context(), c.OrgID, body.Source, body.ExternalID, "document", func() (string, error) {
+			d, err := s.docs.Create(r.Context(), c.OrgID, c.Subjects, p)
+			if err != nil {
+				return "", err
+			}
+			made = d
+			return d.ID, nil
+		})
+	}
+	id, replay, err := run()
+	if err == nil && replay {
+		// The pair points at a document that is still there and that the caller may read, or it is stale (the document
+		// was deleted) and is forgotten so the sync can make it again instead of being answered with a ghost.
+		if d, gerr := s.docs.Get(r.Context(), c.OrgID, c.Subjects, id); gerr == nil {
+			w.Header().Set("Idempotent-Replay", "true")
+			writeJSON(w, http.StatusOK, render(d))
+			return
+		}
+		if ferr := s.forget(r.Context(), c.OrgID, body.Source, "document", body.ExternalID, id); ferr != nil {
+			writeErr(w, http.StatusInternalServerError, "could not create")
+			return
+		}
+		made = nil
+		id, _, err = run()
+	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "docs: "))
 		return
 	}
-	writeJSON(w, http.StatusCreated, render(d))
+	if made == nil {
+		d, gerr := s.docs.Get(r.Context(), c.OrgID, c.Subjects, id)
+		if gerr != nil {
+			writeErr(w, http.StatusInternalServerError, "could not create")
+			return
+		}
+		made = d
+	}
+	writeJSON(w, http.StatusCreated, render(made))
 }
 
 func (s *Service) update(w http.ResponseWriter, r *http.Request) {

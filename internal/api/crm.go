@@ -172,6 +172,17 @@ func (s *Service) once(ctx context.Context, orgID, source, externalID, entityTyp
 	return id, false, nil
 }
 
+// forget drops a remembered pair whose record is gone, so the next create with it makes a new one. It only drops the
+// pair that points at the id it was shown.
+func (s *Service) forget(ctx context.Context, orgID, source, entityType, externalID, id string) error {
+	if source == "" {
+		source = "api"
+	}
+	_, err := s.db.Exec(ctx, `DELETE FROM external_refs WHERE org_id=$1 AND source=$2 AND external_id=$3 AND entity_id=$4`,
+		orgID, source, entityType+":"+externalID, id)
+	return err
+}
+
 func replayHeader(w http.ResponseWriter, replay bool) int {
 	if replay {
 		w.Header().Set("Idempotent-Replay", "true")
