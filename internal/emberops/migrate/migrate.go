@@ -66,7 +66,33 @@ func (o Options) CurrencyPerCent() float64 {
 	return o.CurrencyUnit
 }
 
-type builder struct{ z mapping.TZ }
+type builder struct {
+	z mapping.TZ
+	// known is the emails EmberOPS already holds a User for, read once when the people steps run (nil in a dry run, which
+	// calls nothing). A person who is not active is carried only when they are in it: a suspended colleague already in
+	// EmberOPS stays up to date, and a throwaway or proof principal is never made into a User.
+	known map[string]bool
+	// built is the emails this run has already written a User or an Employee for. Principals can share an address (the
+	// proof tooling makes a fresh one each run), and only one record can carry it.
+	built map[string]bool
+}
+
+// person decides whether a principal becomes a User or an Employee, and why not. kind is "user" or "employee", so each
+// step keeps its own record of the addresses it has taken.
+func (b *builder) person(r mapping.Rec, kind string) string {
+	email := strings.ToLower(r.S("email"))
+	if s := r.S("status"); s != "" && s != "active" && !b.known[email] {
+		return "not active and not in EmberOps, so no " + kind + " is made for them"
+	}
+	if b.built == nil {
+		b.built = map[string]bool{}
+	}
+	if b.built[kind+"\x00"+email] {
+		return "another principal with the same email already carries this " + kind
+	}
+	b.built[kind+"\x00"+email] = true
+	return ""
+}
 
 // StepReport is the outcome of one step.
 type StepReport struct {
@@ -202,6 +228,17 @@ func (m *Runner) Run(ctx context.Context, opts Options) (Report, error) {
 	}
 	rep := Report{DryRun: opts.DryRun}
 	b := &builder{z: mapping.TZ{Loc: opts.Loc}}
+	if !opts.DryRun && m.C != nil {
+		users, err := m.C.ListAll(ctx, emberops.ListQuery{Doctype: "User", Fields: []string{"name"}, Reference: true,
+			Filters: []emberops.Filter{{Field: "hearth_id", Op: "is", Value: "set"}}}, 0)
+		if err != nil {
+			return Report{}, fmt.Errorf("migrate: read the Users EmberOPS holds: %w", err)
+		}
+		b.known = map[string]bool{}
+		for _, u := range users {
+			b.known[strings.ToLower(u.S("name"))] = true
+		}
+	}
 	all := append(steps(opts), documentSteps(opts)...)
 	for _, st := range all {
 		if len(opts.Only) > 0 && !contains(opts.Only, st.name) {

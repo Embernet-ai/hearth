@@ -82,6 +82,9 @@ func steps(opts Options) []Step {
 				if !r.Has("email") {
 					return nil, "no email address on file, so there is no User to make"
 				}
+				if why := b.person(r, "User"); why != "" {
+					return nil, why
+				}
 				return item("User", r.S("id"), mapping.UserDoc(r)), ""
 			},
 		},
@@ -94,6 +97,9 @@ func steps(opts Options) []Step {
 			build: func(b *builder, r mapping.Rec) ([]emberops.BulkItem, string) {
 				if !r.Has("email") {
 					return nil, "no email address on file, so there is no User to attach an Employee to"
+				}
+				if why := b.person(r, "Employee"); why != "" {
+					return nil, why
 				}
 				return item("Employee", r.S("id"), mapping.EmployeeDoc(r)), ""
 			},
