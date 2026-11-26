@@ -45,3 +45,7 @@ With `HEARTH_BACKEND=emberops` the request is a `Hearth Time Off Request`, or an
 * Cancelling: EmberOps cancels the document rather than deleting it, so it stays, cancelled.
 
 The audit row is written in Hearth's database in both modes.
+
+## Vacation that approves itself
+
+A person whose time is approved by standing order (the auto-approve setting a super admin turns on for salaried staff) takes vacation without waiting on anybody, up to five working days in a calendar month. The request is approved when it is filed, by the setting and not by a person: the Out goes on the calendar, the requester is told, and a `time_off.auto_approve` audit row is written that names no actor. The days already approved in that month, in either back end, count toward the five, and a request that spans two months is counted in each. A request that would pass five working days is filed pending for the usual decision, and a person can still submit anything. Other kinds of leave always wait for a person.

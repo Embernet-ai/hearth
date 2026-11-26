@@ -21,6 +21,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Embernet-ai/hearth/internal/audit"
 )
 
 var (
@@ -139,24 +141,127 @@ func (s *Service) Ask(ctx context.Context, orgID, actorID string, p Params) (*Re
 		Comments: strings.TrimSpace(p.Comments), Status: "pending",
 	}
 	r.HalfDay = p.HalfDay
-	err = s.db.QueryRow(ctx, `
-		INSERT INTO time_off_requests (id, org_id, requester_id, starts_on, ends_on, days, kind, reason, comments, half_day)
-		SELECT $1, $2, p.id, $4, $5, $6, $7, $8, $9, $10 FROM principals p WHERE p.id = $3 AND p.org_id = $2
-		RETURNING created_at, (SELECT display_name FROM principals WHERE id = $3)`,
-		r.ID, orgID, actorID, r.StartsOn, r.EndsOn, r.Days, r.Kind, r.Reason, r.Comments, r.HalfDay).
-		Scan(&r.CreatedAt, &r.RequesterName)
+	auto, err := s.autoApproves(ctx, orgID, actorID, p)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("timeoff: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	status := "pending"
+	if auto {
+		status = "approved"
+	}
+	err = tx.QueryRow(ctx, `
+		INSERT INTO time_off_requests (id, org_id, requester_id, starts_on, ends_on, days, kind, reason, comments, half_day,
+		                               status, decided_by, decided_at, decision_note)
+		SELECT $1, $2, p.id, $4, $5, $6, $7, $8, $9, $10, $11::text,
+		       CASE WHEN $11::text = 'approved' THEN p.id END, CASE WHEN $11::text = 'approved' THEN now() END,
+		       CASE WHEN $11::text = 'approved' THEN $12::text ELSE '' END
+		  FROM principals p WHERE p.id = $3 AND p.org_id = $2
+		RETURNING created_at, (SELECT display_name FROM principals WHERE id = $3), decided_at`,
+		r.ID, orgID, actorID, r.StartsOn, r.EndsOn, r.Days, r.Kind, r.Reason, r.Comments, r.HalfDay, status, AutoApprovedNote).
+		Scan(&r.CreatedAt, &r.RequesterName, &r.DecidedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrDenied
 	}
 	if err != nil {
 		return nil, fmt.Errorf("timeoff: ask: %w", err)
 	}
+	if auto {
+		r.Status, r.DeciderName, r.DecisionNote = "approved", r.RequesterName, AutoApprovedNote
+		if err := putOut(ctx, tx, orgID, r, actorID); err != nil {
+			return nil, err
+		}
+		if err := audit.Record(ctx, tx, AutoApproveAudit(orgID, r)); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("timeoff: commit: %w", err)
+	}
 	if s.notify != nil {
 		if ids, err := s.deciders(ctx, orgID, actorID); err == nil {
 			s.notify.TimeOffRequested(ctx, orgID, r, ids)
 		}
+		if auto {
+			s.notify.TimeOffDecided(ctx, orgID, actorID, r)
+		}
 	}
 	return r, nil
+}
+
+// autoApproves is whether a request approves itself on the way in: vacation, from a
+// person whose auto-approve is on, that keeps every month it touches within the
+// week.
+func (s *Service) autoApproves(ctx context.Context, orgID, principalID string, p Params) (bool, error) {
+	if p.Kind != AutoKind {
+		return false, nil
+	}
+	since, err := s.AutoApproveSince(ctx, orgID, principalID)
+	if err != nil || since == nil {
+		return false, err
+	}
+	taken, err := s.ApprovedVacation(ctx, orgID, principalID, p.StartsOn, p.EndsOn)
+	if err != nil {
+		return false, err
+	}
+	return WithinMonthlyCap(taken, p.StartsOn, p.EndsOn, p.HalfDay), nil
+}
+
+// AutoApproveSince is when a person's time began approving itself, nil while the
+// setting is off. It lives on the person, which stays in Postgres in every back end.
+func (s *Service) AutoApproveSince(ctx context.Context, orgID, principalID string) (*time.Time, error) {
+	var since *time.Time
+	err := s.db.QueryRow(ctx, `SELECT time_auto_approve_since FROM principals WHERE id = $1 AND org_id = $2`,
+		principalID, orgID).Scan(&since)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("timeoff: auto approve since: %w", err)
+	}
+	return since, nil
+}
+
+// ApprovedVacation is the person's approved vacation that touches the calendar
+// months the dates span, for the monthly cap.
+func (s *Service) ApprovedVacation(ctx context.Context, orgID, principalID string, from, to time.Time) ([]*Request, error) {
+	first := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
+	last := time.Date(to.Year(), to.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+	rows, err := s.db.Query(ctx, `SELECT `+columns+`
+		WHERE r.org_id = $1 AND r.requester_id = $2 AND r.status = 'approved' AND r.kind = 'vacation'
+		  AND r.ends_on >= $3 AND r.starts_on <= $4`, orgID, principalID, first, last)
+	if err != nil {
+		return nil, fmt.Errorf("timeoff: approved vacation: %w", err)
+	}
+	return scan(rows)
+}
+
+// putOut puts the "Out" on the calendar, in the transaction that approved the
+// request: the team's view, a name and dates and never the reason, on the
+// requester's department if they have one and their own calendar if not.
+func putOut(ctx context.Context, tx pgx.Tx, orgID string, r *Request, createdBy string) error {
+	eventID := uuid.NewString()
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO calendar_events (id, org_id, principal_id, space_id, title, starts_at, ends_at, all_day, created_by)
+		SELECT $1, $2,
+		       CASE WHEN d.space_id IS NULL THEN $3::uuid END,
+		       d.space_id,
+		       'Out: ' || p.display_name, $4::date::timestamptz, ($5::date + 1)::timestamptz, true, $6
+		  FROM principals p
+		  LEFT JOIN LATERAL (SELECT space_id FROM principal_departments
+		                      WHERE principal_id = p.id AND org_id = $2 LIMIT 1) d ON true
+		 WHERE p.id = $3`,
+		eventID, orgID, r.RequesterID, r.StartsOn, r.EndsOn, createdBy); err != nil {
+		return fmt.Errorf("timeoff: calendar: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE time_off_requests SET calendar_event_id = $2 WHERE id = $1`, r.ID, eventID); err != nil {
+		return fmt.Errorf("timeoff: link calendar: %w", err)
+	}
+	return nil
 }
 
 // deciders is who should hear about a new request: the named approver and
@@ -280,24 +385,8 @@ func (s *Service) Decide(ctx context.Context, orgID, actorID, id string, approve
 	}
 
 	if approve {
-		// The team's view: a name and dates, no reason. On the requester's
-		// department if they have one, so their colleagues see it.
-		eventID := uuid.NewString()
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO calendar_events (id, org_id, principal_id, space_id, title, starts_at, ends_at, all_day, created_by)
-			SELECT $1, $2,
-			       CASE WHEN d.space_id IS NULL THEN $3::uuid END,
-			       d.space_id,
-			       'Out: ' || p.display_name, $4::date::timestamptz, ($5::date + 1)::timestamptz, true, $6
-			  FROM principals p
-			  LEFT JOIN LATERAL (SELECT space_id FROM principal_departments
-			                      WHERE principal_id = p.id AND org_id = $2 LIMIT 1) d ON true
-			 WHERE p.id = $3`,
-			eventID, orgID, r.RequesterID, r.StartsOn, r.EndsOn, actorID); err != nil {
-			return fmt.Errorf("timeoff: calendar: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `UPDATE time_off_requests SET calendar_event_id = $2 WHERE id = $1`, r.ID, eventID); err != nil {
-			return fmt.Errorf("timeoff: link calendar: %w", err)
+		if err := putOut(ctx, tx, orgID, r, actorID); err != nil {
+			return err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

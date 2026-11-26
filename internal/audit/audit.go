@@ -102,6 +102,10 @@ const (
 	ActionTimeOffChange = "time_off.change"
 	ActionTimeOffCancel = "time_off.cancel"
 
+	// ActionTimeOffAutoApprove is a vacation request approved when it was filed, by the requester's auto-approve
+	// setting and not by a person, so it names no actor.
+	ActionTimeOffAutoApprove = "time_off.auto_approve"
+
 	// ActionChannelArchive is an admin taking a channel out of every list (hearthctl channel-remove).
 	ActionChannelArchive = "channel.archive"
 )

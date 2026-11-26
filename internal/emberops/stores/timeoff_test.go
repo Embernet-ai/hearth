@@ -16,6 +16,16 @@ import (
 type structure struct {
 	dept  string
 	audit *[]audit.Entry
+	// auto is the people whose time approves itself.
+	auto map[string]bool
+}
+
+func (s structure) AutoApproveSince(_ context.Context, _, principal string) (*time.Time, error) {
+	if !s.auto[principal] {
+		return nil, nil
+	}
+	t := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	return &t, nil
 }
 
 func (s structure) Record(_ context.Context, e audit.Entry) error {
@@ -360,5 +370,66 @@ func TestAPrivateOutComesOffWhenTheRequestIsChangedOrCancelled(t *testing.T) {
 	}
 	if ev := e.f.All("Event"); len(ev) != 0 {
 		t.Fatalf("the Out stayed after a cancel: %v", ev)
+	}
+}
+
+// A salaried person's vacation approves itself on submit, up to five working days in a calendar month, with the
+// calendar Out and the notices a manual approval gives. Over the week it waits for a person, and nothing is refused.
+func TestSalariedVacationApprovesItselfUpToAWeekAMonth(t *testing.T) {
+	e := newEnv(t)
+	e.f.Put("Hearth Space", map[string]any{"name": "Ops", "hearth_id": "space-ops"})
+	n := &notified{}
+	var rows []audit.Entry
+	s := &stores.TimeOff{Base: e.base, Dir: e.dir, PG: structure{dept: "space-ops", audit: &rows, auto: map[string]bool{ann: true}}, Notify: n}
+	ask := func(kind string, from time.Time, days int) *timeoff.Request {
+		t.Helper()
+		r, err := s.Ask(e.as("ann-tok"), org, ann, timeoff.Params{StartsOn: from, EndsOn: from.AddDate(0, 0, days-1), Kind: kind, Acknowledged: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	mon := time.Date(2030, 1, 7, 0, 0, 0, 0, time.UTC)
+
+	r := ask("vacation", mon, 3) // Mon to Wed
+	if r.Status != "approved" || r.DecisionNote != timeoff.AutoApprovedNote || r.DecidedAt == nil {
+		t.Fatalf("a fitting vacation was not approved on submit: %+v", r)
+	}
+	if ev := e.f.All("Event"); len(ev) != 1 || ev[0]["event_type"] != "Public" || ev[0]["hearth_space"] != "Ops" {
+		t.Fatalf("calendar event = %v", ev)
+	}
+	if n.asked != 1 || n.decided != 1 {
+		t.Fatalf("notices: asked %d, decided %d, want 1 and 1", n.asked, n.decided)
+	}
+	if len(rows) != 1 || rows[0].Action != audit.ActionTimeOffAutoApprove || rows[0].ActorID != "" || rows[0].EntityID != r.ID {
+		t.Fatalf("audit = %+v", rows)
+	}
+
+	// Two more days in the same month make five and still fit; a third does not.
+	if r2 := ask("vacation", mon.AddDate(0, 0, 14), 2); r2.Status != "approved" {
+		t.Fatalf("five days in the month: %+v", r2)
+	}
+	over := ask("vacation", mon.AddDate(0, 0, 21), 1)
+	if over.Status != "pending" || over.DecidedAt != nil {
+		t.Fatalf("a sixth day was approved by the setting: %+v", over)
+	}
+	if len(e.f.All("Event")) != 2 || len(rows) != 2 {
+		t.Fatalf("a pending request left an Out (%d) or an audit row (%d)", len(e.f.All("Event")), len(rows))
+	}
+	// A person still decides the one over the cap.
+	if err := s.Decide(e.as("bob-tok"), org, bob, over.ID, true, "ok"); err != nil {
+		t.Fatalf("a normal decision on the over-cap request: %v", err)
+	}
+	// Another month is its own week, and other kinds of leave always wait.
+	if r3 := ask("vacation", time.Date(2030, 2, 4, 0, 0, 0, 0, time.UTC), 5); r3.Status != "approved" {
+		t.Fatalf("next month: %+v", r3)
+	}
+	if sick := ask("sick", time.Date(2030, 3, 4, 0, 0, 0, 0, time.UTC), 1); sick.Status != "pending" {
+		t.Fatalf("sick leave approved itself: %+v", sick)
+	}
+	// Somebody whose setting is off is unchanged.
+	off := &stores.TimeOff{Base: e.base, Dir: e.dir, PG: structure{dept: "space-ops"}, Notify: n}
+	if r4, err := off.Ask(e.as("ann-tok"), org, ann, timeoff.Params{StartsOn: time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC), EndsOn: time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC), Kind: "vacation", Acknowledged: true}); err != nil || r4.Status != "pending" {
+		t.Fatalf("setting off: %+v %v", r4, err)
 	}
 }
