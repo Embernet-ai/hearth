@@ -338,3 +338,49 @@ func TestTimeOfAPersonWithNoEmailIsSkippedWithAReason(t *testing.T) {
 		t.Fatalf("an entry with a person email was not carried: %v %q", items, why)
 	}
 }
+
+// A throwaway or proof principal (suspended, never in EmberOPS) is never made into a User or an Employee, a suspended
+// colleague EmberOPS already holds stays up to date, and principals that share an address make one record: the run that
+// made eight proof Users and reported 73 mapped against 54 Users came from carrying all of them.
+func TestThePeopleStepsCarryOnlyPeopleWhoBelongInEmberOps(t *testing.T) {
+	var users, employees func(*builder, mapping.Rec) ([]emberops.BulkItem, string)
+	for _, s := range steps(Options{}) {
+		switch s.name {
+		case "users":
+			users = s.build
+		case "employees":
+			employees = s.build
+		}
+	}
+	b := &builder{z: mapping.TZ{}, known: map[string]bool{"gone@example.com": true}}
+	rec := func(id, status, email string) mapping.Rec {
+		return mapping.Rec{"id": id, "display_name": "P " + id, "kind": "user", "status": status, "email": email}
+	}
+	for _, c := range []struct {
+		name   string
+		r      mapping.Rec
+		carry  bool
+		reason string
+	}{
+		{"an active person", rec("1", "active", "ann@example.com"), true, ""},
+		{"the same address again", rec("2", "active", "Ann@example.com"), false, "same email"},
+		{"a suspended proof principal", rec("3", "suspended", "hp-sales@example.com"), false, "not active and not in EmberOps"},
+		{"a deleted lab principal", rec("4", "deleted", "zz@example.com"), false, "not active and not in EmberOps"},
+		{"a suspended colleague EmberOPS holds", rec("5", "suspended", "gone@example.com"), true, ""},
+	} {
+		for kind, build := range map[string]func(*builder, mapping.Rec) ([]emberops.BulkItem, string){"user": users, "employee": employees} {
+			bb := &builder{z: b.z, known: b.known}
+			if c.name == "the same address again" {
+				build(bb, rec("1", "active", "ann@example.com"))
+			}
+			items, why := build(bb, c.r)
+			if (len(items) == 1) != c.carry || (!c.carry && !strings.Contains(why, c.reason)) {
+				t.Errorf("%s as a %s: items %d, why %q", c.name, kind, len(items), why)
+			}
+		}
+	}
+	// A dry run reads nothing from EmberOPS, so a person who is not active is left out of it.
+	if items, _ := users(&builder{z: mapping.TZ{}}, rec("6", "suspended", "gone@example.com")); len(items) != 0 {
+		t.Error("a dry run carried a suspended person")
+	}
+}
