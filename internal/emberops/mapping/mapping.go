@@ -676,8 +676,25 @@ func TeamDoc(t Rec, memberIDs []string) Doc {
 	})
 }
 
+// SplitName is a display name as a first name and the rest: the first word, then everything after it. A one word name
+// has no last name.
+func SplitName(display string) (first, last string) {
+	parts := strings.SplitN(strings.TrimSpace(display), " ", 2)
+	first = parts[0]
+	if len(parts) > 1 {
+		last = strings.TrimSpace(parts[1])
+	}
+	return first, last
+}
+
 // UserDoc maps a principal with an email to a User.
+//
+// The name goes in as a first and a last name, never whole in first_name. ERPNext copies an Employee's name onto its
+// User when the User has no last name, and it keeps the first name it was given: a User made with "Yessid Vargas" as
+// first_name and nothing else came back with last_name "Vargas" and a full name of "Yessid Vargas Vargas", which is
+// what every report and export then printed.
 func UserDoc(p Rec) Doc {
+	first, last := SplitName(p.S("display_name"))
 	kind := p.S("kind")
 	if kind == "" {
 		kind = "user"
@@ -687,7 +704,7 @@ func UserDoc(p Rec) Doc {
 		enabled = 0
 	}
 	return Clean(Doc{
-		"doctype": "User", "email": p.S("email"), "first_name": p.S("display_name"), "hearth_id": p.S("id"),
+		"doctype": "User", "email": p.S("email"), "first_name": first, "last_name": orNil(last), "hearth_id": p.S("id"),
 		"hearth_kind": kind, "hearth_handle": orNil(p.S("handle")), "enabled": enabled, "send_welcome_email": 0,
 	})
 }
