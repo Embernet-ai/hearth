@@ -65,7 +65,7 @@ func readEntryIDs(r io.Reader) ([]string, error) {
 
 func runTimeRemove(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("time-remove", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin removing the entries (required)")
 	file := fs.String("file", "", "the entry ids, one per line or a CSV with the id first (required)")
 	reason := fs.String("reason", "", "why: it goes on every audit row (required)")

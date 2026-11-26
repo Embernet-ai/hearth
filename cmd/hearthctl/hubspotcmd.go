@@ -32,7 +32,7 @@ import (
 
 func runHubSpotImport(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("hubspot-import", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	apply := fs.Bool("apply", false, "write the changes. Without it nothing is written and no high-water mark moves")
 	sinceFlag := fs.String("since", "", "RFC 3339 time to read from for an object with no high-water mark yet (when the last import ran)")
 	force := fs.Bool("force-since", false, "read from -since even where an object has a high-water mark (the mark never moves back), to fill what could not be filled before, such as owners")

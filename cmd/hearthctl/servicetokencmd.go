@@ -34,7 +34,7 @@ import (
 
 func runServiceToken(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("service-token", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin making the token (required)")
 	name := fs.String("name", "", "the service's name, for example phone-bridge (required)")
 	team := fs.String("team", "Sales", "the team the service joins, which decides what it can read")

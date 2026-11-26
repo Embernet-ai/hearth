@@ -28,7 +28,7 @@ func runMauticSync(ctx context.Context, args []string) error {
 	write := fs.Bool("write", false, "send and record; without it nothing is written to either side")
 	only := fs.String("only", "", "comma separated Hearth contact ids; empty is every contact with an email address")
 	workers := fs.Int("workers", 8, "contacts sent at once")
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

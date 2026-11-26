@@ -29,7 +29,7 @@ import (
 
 func runServiceHistory(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("service-history", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	under := fs.String("under", "White Team Service", "the department whose child folders are the customers")
 	out := fs.String("out", "", "directory to write the PDFs and the CSV into")
 	as := fs.String("as", "", "email of the account to read as (default: the owner)")

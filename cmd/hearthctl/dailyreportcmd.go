@@ -242,7 +242,7 @@ func readReportDir(dir string) ([]reportJob, error) {
 
 func runDailyReport(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("daily-report", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the person the report is filed as (required)")
 	day := fs.String("date", "", "the day the report is for, YYYY-MM-DD, in the office's time zone")
 	file := fs.String("file", "", "read the body from this file; default standard input (with -date)")

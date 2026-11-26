@@ -267,7 +267,7 @@ func (t *timeImporter) findOrMakeTag(ctx context.Context, name string, log io.Wr
 
 func runTimeImport(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("time-import", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the person the time belongs to (required)")
 	file := fs.String("file", "", "the CSV: start,minutes,note (required)")
 	tag := fs.String("tag", "reconstructed", "tag to put on each entry; empty for none")

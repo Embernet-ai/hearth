@@ -14,7 +14,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Embernet-ai/hearth/internal/authz"
@@ -25,7 +24,7 @@ import (
 
 func runSpaceMove(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("space-move", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin moving the space (required)")
 	space := fs.String("space", "", "id of the space to move (required)")
 	parent := fs.String("parent", "", "id of the space it goes inside (required)")

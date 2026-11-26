@@ -19,7 +19,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Embernet-ai/hearth/internal/authz"
@@ -30,7 +29,7 @@ import (
 
 func runCRMDelete(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("crm-delete", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	ids := fs.String("company", "", "comma separated company ids to delete, with their contacts")
 	contactIDs := fs.String("contact", "", "comma separated contact ids to delete on their own")
 	dealIDs := fs.String("deal", "", "comma separated deal ids to delete")

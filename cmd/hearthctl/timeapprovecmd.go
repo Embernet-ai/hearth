@@ -19,7 +19,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -46,7 +45,7 @@ func waitingOf(es []timelog.Entry) []timelog.Entry {
 
 func runTimeApprove(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("time-approve", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	person := fs.String("person", "", "email of the person whose waiting time is approved; their auto-approve must be on (required)")
 	reason := fs.String("reason", "", "why: it is the decision note on every entry and goes on the audit rows (required)")
 	apply := fs.Bool("apply", false, "approve them. Without this nothing changes")

@@ -28,7 +28,7 @@ import (
 func runZohoContactsImport(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("zoho-contacts-import", flag.ExitOnError)
 	file := fs.String("file", "", "the Zoho Contacts export, an .xlsx")
-	site := fs.String("url", os.Getenv("HEARTH_URL"), "the Hearth site, https://hearth.example.com, or HEARTH_URL")
+	site := envFlag(fs, "url", "HEARTH_URL", "the Hearth site, https://hearth.example.com, or HEARTH_URL")
 	owner := fs.String("owner", "", "the id of the person every company and contact is assigned to (their /people/<id>)")
 	token := fs.String("token", "", "an API token with the write scope; prefer HEARTH_API_TOKEN")
 	dry := fs.Bool("dry-run", false, "read the file and Hearth, print what would happen, write nothing")

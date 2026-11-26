@@ -19,7 +19,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -38,14 +37,12 @@ import (
 
 func runImportClickUp(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("import-clickup", flag.ExitOnError)
-	token := fs.String("token", os.Getenv("CLICKUP_TOKEN"),
-		"ClickUp personal API token (pk_...), or CLICKUP_TOKEN")
+	token := envFlag(fs, "token", "CLICKUP_TOKEN", "ClickUp personal API token (pk_...), or CLICKUP_TOKEN")
 	only := fs.String("space", "",
 		"import only this ClickUp space, by name. Empty means all of them")
 	dry := fs.Bool("dry-run", false,
 		"walk the workspace and report what would be imported, writing nothing")
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"),
-		"Postgres connection string, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres connection string, or HEARTH_DATABASE_URL")
 	people := fs.Bool("people", true,
 		"create an account for each workspace member, so assignees resolve")
 	withDocs := fs.Bool("docs", true,

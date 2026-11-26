@@ -16,7 +16,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -43,7 +42,7 @@ func personByEmail(ctx context.Context, db *pgxpool.Pool, orgID, email string) (
 
 func runPersonTime(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("person-time", flag.ExitOnError)
-	dsn := fs.String("dsn", os.Getenv("HEARTH_DATABASE_URL"), "Postgres URL, or HEARTH_DATABASE_URL")
+	dsn := envFlag(fs, "dsn", "HEARTH_DATABASE_URL", "Postgres URL, or HEARTH_DATABASE_URL")
 	as := fs.String("as", "", "email of the super admin making the change (required)")
 	person := fs.String("person", "", "email of the person whose time routing changes (required)")
 	approver := fs.String("approver", "", "email of who signs off their time, or none to clear")
