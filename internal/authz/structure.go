@@ -373,6 +373,14 @@ func (s *Service) StructureFor(ctx context.Context, orgID string) (map[string]*S
 // audited with the person, what it was, and what it is. Setting it to what it
 // already is writes nothing and keeps the original moment.
 func (s *Service) SetTimeAutoApprove(ctx context.Context, orgID, actorID, principalID string, on bool) error {
+	return s.SetTimeAutoApproveFrom(ctx, orgID, actorID, principalID, on, nil)
+}
+
+// SetTimeAutoApproveFrom is SetTimeAutoApprove with the moment chosen: from is the day the setting is counted from, so
+// salaried people whose time has always been approved by standing order cover every entry they file, including one
+// dated before the day the switch was thrown. Nil from keeps the old behaviour (now when it turns on, the original
+// moment when it is already on). With from set the setting is on, and moving the moment is audited like any change.
+func (s *Service) SetTimeAutoApproveFrom(ctx context.Context, orgID, actorID, principalID string, on bool, from *time.Time) error {
 	held, err := s.Capabilities(ctx, orgID, actorID)
 	if err != nil {
 		return err
@@ -391,15 +399,19 @@ func (s *Service) SetTimeAutoApprove(ctx context.Context, orgID, actorID, princi
 		 WHERE id = $1 AND org_id = $2 AND kind = 'user' FOR UPDATE`, principalID, orgID).Scan(&since); err != nil {
 		return errors.New("authz: no such person")
 	}
-	if (since != nil) == on {
+	if from != nil && !on {
+		return errors.New("authz: a start day goes with turning it on")
+	}
+	moved := from != nil && (since == nil || !since.Equal(*from))
+	if (since != nil) == on && !moved {
 		return nil
 	}
 	var after *time.Time
 	if err := tx.QueryRow(ctx, `
 		UPDATE principals
-		   SET time_auto_approve_since = CASE WHEN $3 THEN now() END, updated_at = now()
+		   SET time_auto_approve_since = CASE WHEN NOT $3 THEN NULL WHEN $4::timestamptz IS NOT NULL THEN $4::timestamptz ELSE now() END, updated_at = now()
 		 WHERE id = $1 AND org_id = $2
-		RETURNING time_auto_approve_since`, principalID, orgID, on).Scan(&after); err != nil {
+		RETURNING time_auto_approve_since`, principalID, orgID, on, from).Scan(&after); err != nil {
 		return fmt.Errorf("authz: set time auto approve: %w", err)
 	}
 	if err := audit.Record(ctx, tx, audit.Entry{

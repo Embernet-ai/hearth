@@ -146,7 +146,7 @@ func usage() {
   daily-report -as EMAIL (-date D [-file F] | -dir DIR) [-apply] [-append]  file a past day's report as that person, or add to one already filed (dry run by default)
   time-import -as EMAIL -file F.csv [-apply]  put a person's past time in as reconstructed entries, once (dry run by default)
   service-token -as ADMIN -name NAME [-team Sales] [-scope write|read] [-days N] -out FILE  make a service its own agent principal on a team with an API token (write by default, -scope read for read only)
-  person-time -as ADMIN -person EMAIL [-approver EMAIL|none] [-auto-approve on|off]  set who signs off a person's time, and whether it approves itself
+  person-time -as ADMIN -person EMAIL [-approver EMAIL|none] [-auto-approve on|off [-since YYYY-MM-DD]]  set who signs off a person's time, and whether it approves itself (and from which day)
   time-remove -as EMAIL -file IDS -reason WHY [-apply]  remove time entries as a super admin, audited, dry run by default
   time-approve -person EMAIL -reason WHY [-apply] [-limit N]  approve a salaried person's waiting time by their auto-approve, audited, dry run by default
   person-suspend -as ADMIN -email A,B -reason WHY [-apply]  suspend accounts (off their teams, sessions ended), audited, dry run by default

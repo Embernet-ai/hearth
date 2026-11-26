@@ -254,3 +254,41 @@ func TestTimeAutoApproveManyDecidesBySetting(t *testing.T) {
 		t.Fatalf("audit rows: %d %v", n, err)
 	}
 }
+
+// Salaried people whose time has always been approved by standing order are switched on from a chosen day, so an entry
+// dated before the switch was thrown is covered too, and moving the day is audited.
+func TestTimeAutoApproveFromAChosenDayCoversBackdatedEntries(t *testing.T) {
+	f := setup(t)
+	extra(t, f)
+	ctx := context.Background()
+	f.superAdmin(t, f.bob)
+	alice := f.subj(t, f.alice)
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	if err := f.az.SetTimeAutoApproveFrom(ctx, f.org, f.bob, f.alice, false, &from); err == nil {
+		t.Fatal("a start day with the setting off was accepted")
+	}
+	if err := f.az.SetTimeAutoApprove(ctx, f.org, f.bob, f.alice, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.az.SetTimeAutoApproveFrom(ctx, f.org, f.bob, f.alice, true, &from); err != nil {
+		t.Fatalf("moving the day: %v", err)
+	}
+	var since time.Time
+	_ = f.pools.Web.QueryRow(ctx, `SELECT time_auto_approve_since FROM principals WHERE id=$1`, f.alice).Scan(&since)
+	if !since.Equal(from) {
+		t.Fatalf("the day is %v, want %v", since, from)
+	}
+	back, err := f.svc.LogOwn(ctx, f.org, alice, "", 60, time.Now().Add(-48*time.Hour), "last week's work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := f.decisionOf(t, back.ID); !d.decided || !d.approved || !d.auto {
+		t.Fatalf("a backdated entry after the day was not approved by the setting: %+v", d)
+	}
+	var n int
+	if err := f.pools.Web.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE org_id=$1 AND action='person.time_auto_approve' AND entity_id=$2 AND actor_id=$3`,
+		f.org, f.alice, f.bob).Scan(&n); err != nil || n < 2 {
+		t.Fatalf("turning it on and moving the day left %d audit rows (%v), want 2", n, err)
+	}
+}

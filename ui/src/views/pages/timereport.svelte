@@ -26,7 +26,7 @@
       <span  class="muted small">{F.len(dot?.Report)} entries · {F.hours(dot?.ReportTotal)} total</span>
     </div>
     <p  class="muted small">
-      <a  href={("/reports/time?from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo))}>← All people</a>
+      <a  href={("/reports/time?from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS))}>← All people</a>
     </p>
   {:else}
     <div  class="row spread">
@@ -45,16 +45,50 @@
     <input  id="from"  name="from"  type="date"  value={S(dot?.ReportFrom)}>
     <label  for="to"  class="muted small">to</label>
     <input  id="to"  name="to"  type="date"  value={S(dot?.ReportTo)}>
+    <label  for="f-approval"  class="muted small">Approval</label>
+    <select  id="f-approval"  name="approval">
+      <option  value=""  selected={!F.t(dot?.ReportApproval)}>Any</option>
+      <option  value="approved"  selected={S(dot?.ReportApproval) === 'approved'}>Approved</option>
+      <option  value="pending"  selected={S(dot?.ReportApproval) === 'pending'}>Pending</option>
+      <option  value="rejected"  selected={S(dot?.ReportApproval) === 'rejected'}>Rejected</option>
+    </select>
+    {#if F.t(dot?.ReportTeams)}
+      <label  for="f-team"  class="muted small">Team</label>
+      <select  id="f-team"  name="team">
+        <option  value=""  selected={!F.t(dot?.ReportTeam)}>Everyone</option>
+        {#each F.rng(dot?.ReportTeams) as [kt, dt]}
+          <option  value={S(dt?.ID)}  selected={S(dot?.ReportTeam) === S(dt?.ID)}>{dt?.Name}</option>
+        {/each}
+      </select>
+    {/if}
+    {#if F.t(dot?.ReportSpaceOptions)}
+      <label  for="f-space"  class="muted small">Space</label>
+      <select  id="f-space"  name="space">
+        <option  value=""  selected={!F.t(dot?.ReportSpaceID)}>All spaces</option>
+        {#each F.rng(dot?.ReportSpaceOptions) as [ks, ds]}
+          <option  value={S(ds?.ID)}  selected={S(dot?.ReportSpaceID) === S(ds?.ID)}>{ds?.Path}</option>
+        {/each}
+      </select>
+    {/if}
+    {#if F.t(dot?.ReportTagOptions)}
+      <label  for="f-tag"  class="muted small">Tag</label>
+      <select  id="f-tag"  name="tag">
+        <option  value=""  selected={!F.t(dot?.ReportTag)}>Any tag</option>
+        {#each F.rng(dot?.ReportTagOptions) as [kg, dg]}
+          <option  value={S(dg?.Name)}  selected={S(dot?.ReportTag) === S(dg?.Name)}>{dg?.Name}</option>
+        {/each}
+      </select>
+    {/if}
     <button  type="submit">Show</button>
-    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + "&format=xlsx")}>Download Excel</a>
-    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + "&format=csv")}>Download CSV</a>
+    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=xlsx")}>Download Excel</a>
+    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=csv")}>Download CSV</a>
   </form>
 
   {#if F.t(dot?.ReportPerson)}
     {#if F.t(dot?.Report)}
       <table  class="list">
         <thead>
-          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Work</th><th>Tags</th><th>Note</th></tr>
+          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Work</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
         </thead>
         <tbody>
           {#each F.rng(dot?.Report) as [k1, d1]}
@@ -65,6 +99,7 @@
               <td  class="muted">{d1?.DocTitle}</td>
               <td  class="muted small">{#each F.rng(d1?.Tags) as [k2, d2]}{d2} {/each}</td>
               <td  class="muted small">{d1?.Note}</td>
+              <td  class="small">{#if S(d1?.Approval) === 'approved'}Approved{:else if S(d1?.Approval) === 'rejected'}Rejected{:else}Pending{/if}</td>
             </tr>
           {/each}
         </tbody>
@@ -79,7 +114,7 @@
         <tbody>
           {#each F.rng(dot?.Totals) as [k3, d3]}
             <tr>
-              <td><a  href={("/reports/time?person=" + S(d3?.PrincipalID) + "&from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo))}>{d3?.PersonName}</a></td>
+              <td><a  href={("/reports/time?person=" + S(d3?.PrincipalID) + "&from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS))}>{d3?.PersonName}</a></td>
               <td>{F.hours(d3?.Minutes)}</td>
             </tr>
           {/each}
@@ -96,11 +131,16 @@
         <p  class="muted small">
           One file with every entry, not just the totals, for the people you tick,
           {S(dot?.ReportFrom)} to {S(dot?.ReportTo)}. Each row carries the person's
-          name and id. To change the dates, set them above and press Show.
+          name and id, and whether the hours are approved, pending or rejected. To change
+          the dates or filter by approval, team, space or tag, set them above and press Show.
         </p>
         <input  type="hidden"  name="detail"  value="1">
         <input  type="hidden"  name="from"  value={S(dot?.ReportFrom)}>
         <input  type="hidden"  name="to"  value={S(dot?.ReportTo)}>
+        {#if F.t(dot?.ReportApproval)}<input  type="hidden"  name="approval"  value={S(dot?.ReportApproval)}>{/if}
+        {#if F.t(dot?.ReportTeam)}<input  type="hidden"  name="team"  value={S(dot?.ReportTeam)}>{/if}
+        {#if F.t(dot?.ReportSpaceID)}<input  type="hidden"  name="space"  value={S(dot?.ReportSpaceID)}>{/if}
+        {#if F.t(dot?.ReportTag)}<input  type="hidden"  name="tag"  value={S(dot?.ReportTag)}>{/if}
         {#if allPicked}<input  type="hidden"  name="all"  value="1">{/if}
         <p>
           <label>

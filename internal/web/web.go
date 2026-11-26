@@ -787,6 +787,15 @@ type page struct {
 	ReportNotice     string
 	ReportPerson     string
 	ReportPersonName string
+	// The time report's filters: what is chosen now, the choices, and the choices spelled as parameters for links.
+	ReportApproval     string
+	ReportTeam         string
+	ReportSpaceID      string
+	ReportTag          string
+	ReportFilterQS     string
+	ReportTeams        []*teams.Team
+	ReportSpaceOptions []*plant.Space
+	ReportTagOptions   []timelog.Tag
 
 	// Tags: the org's own taxonomy for a logged hour. CanManageTags gates the
 	// create form on the tags page, not reading the list -- picking a tag does

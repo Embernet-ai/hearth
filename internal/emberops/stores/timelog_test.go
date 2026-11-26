@@ -104,7 +104,7 @@ func newTimeEnv(t *testing.T, caps ...string) *timeEnv {
 	e.f.Put("Maintenance Work Order", map[string]any{"name": "MWO-1", "hearth_id": woID, "title": "PM press", "status": "In Progress",
 		"estimated_hours": 1.0, "hearth_primary_assignee": "ann@example.com", "asset": "AST-1"})
 	e.f.Put("Asset", map[string]any{"name": "AST-1", "hearth_id": assetID, "asset_name": "Press 4"})
-	e.f.Put("Hearth Space", map[string]any{"name": "SP-1", "space_name": "Customer A"})
+	e.f.Put("Hearth Space", map[string]any{"name": "SP-1", "space_name": "Customer A", "hearth_id": "space-customer-a"})
 	cs := map[string]bool{}
 	for _, c := range caps {
 		cs[c] = true
@@ -414,6 +414,11 @@ func TestTimeLogReportsNeedFinanceAndSayWhichSpace(t *testing.T) {
 	}
 	if task.SpaceName != "Customer A" || task.Minutes != 60 || task.Note != "belt" {
 		t.Fatalf("row = %+v", task)
+	}
+	// The space comes back as the id Hearth keeps it under, and an entry nobody has decided reads as pending, with no
+	// decision named, so an export can be narrowed by either.
+	if task.SpaceID != "space-customer-a" || task.Approval != timelog.ApprovalPending || task.DecidedAt != nil || task.DeciderName != "" {
+		t.Fatalf("approval or space id missing: %+v", task)
 	}
 }
 

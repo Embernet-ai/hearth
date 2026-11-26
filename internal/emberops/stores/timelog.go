@@ -122,6 +122,7 @@ type entryCtx struct {
 	refs     map[string]docRef // doctype + "\x00" + name
 	tags     map[string]timelog.Tag
 	spaces   map[string]string
+	spaceIDs map[string]string // Hearth Space name -> Hearth's space id
 }
 
 func refKey(doctype, name string) string { return doctype + "\x00" + name }
@@ -144,7 +145,7 @@ func target(r emberops.Row) (string, string) {
 }
 
 func (s *TimeLog) resolve(ctx context.Context, rows []emberops.Row, withSpace bool) (*entryCtx, error) {
-	ec := &entryCtx{sheetEmp: map[string]string{}, refs: map[string]docRef{}, tags: map[string]timelog.Tag{}, spaces: map[string]string{}}
+	ec := &entryCtx{sheetEmp: map[string]string{}, refs: map[string]docRef{}, tags: map[string]timelog.Tag{}, spaces: map[string]string{}, spaceIDs: map[string]string{}}
 	var parents []any
 	seenP := map[string]bool{}
 	byType := map[string][]string{}
@@ -219,11 +220,11 @@ func (s *TimeLog) resolve(ctx context.Context, rows []emberops.Row, withSpace bo
 		}
 	}
 	if withSpace && len(spaceNames) > 0 {
-		sp, err := s.spaceNames(ctx, spaceNames)
+		sp, ids, err := s.spaceNames(ctx, spaceNames)
 		if err != nil {
 			return nil, err
 		}
-		ec.spaces = sp
+		ec.spaces, ec.spaceIDs = sp, ids
 	}
 	tags, err := s.tags(ctx)
 	if err != nil {
@@ -235,7 +236,9 @@ func (s *TimeLog) resolve(ctx context.Context, rows []emberops.Row, withSpace bo
 	return ec, nil
 }
 
-func (s *TimeLog) spaceNames(ctx context.Context, names []string) (map[string]string, error) {
+// spaceNames reads each Hearth Space once: its display name, and the id Hearth keeps it under, so a report can be
+// narrowed to a space by the id its picker offers.
+func (s *TimeLog) spaceNames(ctx context.Context, names []string) (map[string]string, map[string]string, error) {
 	var in []any
 	seen := map[string]bool{}
 	for _, n := range names {
@@ -244,20 +247,23 @@ func (s *TimeLog) spaceNames(ctx context.Context, names []string) (map[string]st
 			in = append(in, n)
 		}
 	}
-	out := map[string]string{}
+	out, ids := map[string]string{}, map[string]string{}
 	for len(in) > 0 {
 		n := min(len(in), 200)
-		rows, err := s.C.List(ctx, emberops.ListQuery{Doctype: "Hearth Space", Fields: []string{"name", "space_name"}, Limit: 500, Reference: true,
+		rows, err := s.C.List(ctx, emberops.ListQuery{Doctype: "Hearth Space", Fields: []string{"name", "space_name", "hearth_id"}, Limit: 500, Reference: true,
 			Filters: []emberops.Filter{{Field: "name", Op: "in", Value: in[:n]}}})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, r := range rows {
 			out[r.S("name")] = r.S("space_name")
+			if id := r.S("hearth_id"); id != "" {
+				ids[r.S("name")] = id
+			}
 		}
 		in = in[n:]
 	}
-	return out, nil
+	return out, ids, nil
 }
 
 func minutesOf(r emberops.Row) int { return int(math.Round(r.F("hours") * 60)) }
@@ -1724,9 +1730,11 @@ func (s *TimeLog) TimeReport(ctx context.Context, orgID, actorID, principalID st
 			continue
 		}
 		rr := timelog.ReportRow{ID: e.ID, PrincipalID: e.PrincipalID, PersonName: e.PersonName, DocTitle: e.DocTitle,
-			StartedAt: e.StartedAt, Minutes: minutesOf(r), Note: e.Note}
+			StartedAt: e.StartedAt, Minutes: minutesOf(r), Note: e.Note,
+			Approval: timelog.ApprovalOf(e.Approved), DecidedAt: e.DecidedAt, DeciderName: e.DeciderName}
 		if dt, n := target(r); dt != "" {
-			rr.SpaceName = ec.spaces[ec.refs[refKey(dt, n)].space]
+			sp := ec.refs[refKey(dt, n)].space
+			rr.SpaceName, rr.SpaceID = ec.spaces[sp], ec.spaceIDs[sp]
 		}
 		for _, t := range e.Tags {
 			rr.Tags = append(rr.Tags, t.Name)

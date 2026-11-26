@@ -86,3 +86,60 @@ func TestTimeReportRowsNeedsBilling(t *testing.T) {
 		t.Fatalf("without Finance: err %v, called %v", err, called)
 	}
 }
+
+// Every row says where its hours stand: waiting, approved with who and when, or sent back. The two reads agree, and the
+// space the entry sits in comes back as an id so the report can be narrowed to it.
+func TestTimeReportRowsCarryApproval(t *testing.T) {
+	f := setup(t)
+	extra(t, f)
+	ctx := context.Background()
+	f.superAdmin(t, f.bob)
+	grant(t, f, f.bob, "finance")
+	okE, err := f.svc.LogOwn(ctx, f.org, f.subj(t, f.alice), "", 60, time.Now(), "approved one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	badE, err := f.svc.LogOwn(ctx, f.org, f.subj(t, f.alice), "", 30, time.Now(), "sent back")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitE, err := f.svc.LogOwn(ctx, f.org, f.subj(t, f.alice), "", 15, time.Now(), "waiting")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Decide(ctx, f.org, f.bob, okE.ID, true, "fine"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Decide(ctx, f.org, f.bob, badE.ID, false, "wrong job"); err != nil {
+		t.Fatal(err)
+	}
+	from, to := time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+	want := map[string]string{okE.ID: timelog.ApprovalApproved, badE.ID: timelog.ApprovalRejected, waitE.ID: timelog.ApprovalPending}
+	check := func(name string, rows []timelog.ReportRow) {
+		t.Helper()
+		if len(rows) != 3 {
+			t.Fatalf("%s: %d rows", name, len(rows))
+		}
+		for _, r := range rows {
+			if r.Approval != want[r.ID] {
+				t.Errorf("%s: %s reads %q, want %q", name, r.Note, r.Approval, want[r.ID])
+			}
+			if r.Approval == timelog.ApprovalPending && (r.DecidedAt != nil || r.DeciderName != "") {
+				t.Errorf("%s: a waiting entry names a decision: %+v", name, r)
+			}
+			if r.Approval != timelog.ApprovalPending && (r.DecidedAt == nil || r.DeciderName != "Bob") {
+				t.Errorf("%s: a decided entry does not say who and when: %+v", name, r)
+			}
+		}
+	}
+	rows, err := f.svc.TimeReport(ctx, f.org, f.bob, "", from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("TimeReport", rows)
+	var streamed []timelog.ReportRow
+	if err := f.svc.TimeReportRows(ctx, f.org, f.bob, nil, from, to, func(r timelog.ReportRow) error { streamed = append(streamed, r); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	check("TimeReportRows", streamed)
+}
