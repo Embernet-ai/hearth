@@ -132,10 +132,29 @@ func TestDetailAllAsksForEverybody(t *testing.T) {
 	}
 }
 
-func TestDetailNeedsSomebody(t *testing.T) {
-	rec := runDetail(t, &detailStore{rows: detailFixture()}, "detail=1&format=csv")
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status %d, want 400", rec.Code)
+// A details button with nobody ticked used to be disabled, and a request that arrived without people was refused with a 400.
+// Yessid pressed it and got nothing. Nobody ticked now means everybody in the report's current view.
+func TestDetailWithNobodyTickedExportsEveryoneInTheView(t *testing.T) {
+	for _, format := range []string{"csv", "xlsx"} {
+		st := &detailStore{rows: detailFixture()}
+		rec := runDetail(t, st, "detail=1&format="+format+"&from=2026-11-01&to=2026-11-30")
+		if rec.Code != http.StatusOK || len(st.gotPeop) != 0 {
+			t.Fatalf("%s: status %d, store asked for %v", format, rec.Code, st.gotPeop)
+		}
+		if format == "csv" {
+			recs, _ := csv.NewReader(rec.Body).ReadAll()
+			if len(recs) != 4 {
+				t.Fatalf("csv: %d records, want the header and 3 entries", len(recs))
+			}
+		}
+	}
+}
+
+func TestDetailWithNobodyTickedStillAppliesTheFilters(t *testing.T) {
+	st := &detailStore{rows: approvalFixture()}
+	got := ids(csvOf(t, runDetail(t, st, "detail=1&format=csv&approval=pending")))
+	if got != "a2,b2" {
+		t.Fatalf("pending with nobody ticked exported %q", got)
 	}
 }
 

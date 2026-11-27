@@ -46,9 +46,10 @@ func detailRow(row timelog.ReportRow) []string {
 	}
 }
 
-// detailPeople reads who was picked. all=1 means everybody, which the store takes
-// as an empty list; otherwise at least one id is needed.
-func detailPeople(r *http.Request) (ids []string, ok bool) {
+// detailPeople reads who was picked. all=1 means everybody, which the store takes as an empty list, and so does
+// choosing nobody: a details button with nobody ticked exports everyone in the report's current view (its dates and
+// filters still apply), never a refusal or a file with nothing in it.
+func detailPeople(r *http.Request) (ids []string, ok bool) { //nolint:unparam // ok is always true; callers keep the two-value form
 	q := r.URL.Query()
 	if q.Get("all") == "1" {
 		return nil, true
@@ -62,16 +63,12 @@ func detailPeople(r *http.Request) (ids []string, ok bool) {
 			}
 		}
 	}
-	return ids, len(ids) > 0
+	return ids, true
 }
 
 func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format string, from, to time.Time, filter reportFilter) {
 	id := auth.From(r.Context())
-	people, ok := detailPeople(r)
-	if !ok {
-		s.fail(w, r, http.StatusBadRequest, "Choose at least one person to export, or choose everybody.")
-		return
-	}
+	people, _ := detailPeople(r)
 	levels := s.reportLevels(r.Context(), id.OrgID)
 	name := "time details " + from.Format("2006-01-02") + " to " + to.AddDate(0, 0, -1).Format("2006-01-02")
 

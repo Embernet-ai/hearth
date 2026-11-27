@@ -8,7 +8,25 @@ const NOT_PAGES = /^\/(files|avatar|export|calendar\/feed|inbound|static|api|eve
 /** Whether an address (path and query, same origin) is a page the interface draws. */
 export function isPage(address: string): boolean {
   const path = address.split('?')[0];
-  return !NOT_PAGES.test(address) && !/\.[a-z0-9]{2,4}$/i.test(path);
+  return !NOT_PAGES.test(address) && !isFile(address) && !/\.[a-z0-9]{2,4}$/i.test(path);
+}
+
+/**
+ * Whether an address asks for a file: a report or list in csv or xlsx. The format is in the query, not on the path, so the
+ * extension check above cannot see it. Drawn as a page it was fetched as JSON, answered with a file and thrown away: every
+ * Download button on the time report did nothing. A link or a form for one is left to the browser, which saves the file or,
+ * when the sign-in has ended, is sent to sign in and back.
+ */
+export function isFile(address: string): boolean {
+  const q = address.split('?')[1] ?? '';
+  return /(^|&)format=(csv|xlsx)(&|#|$)/i.test(q.split('#')[0]);
+}
+
+/** The same address with the file format taken off: the report page a file came from. */
+export function withoutFormat(address: string): string {
+  const [path, rest = ''] = address.split('?');
+  const q = rest.split('&').filter((kv) => !/^format=/i.test(kv)).join('&');
+  return q ? `${path}?${q}` : path;
 }
 
 export class PageError extends Error {
@@ -48,6 +66,13 @@ export async function post(action: string, body: FormData | URLSearchParams): Pr
   const res = await fetch(action, { method: 'POST', body: body instanceof FormData ? encode(body) : body, headers: { Accept: 'application/json' }, credentials: 'same-origin' });
   const ct = res.headers.get('Content-Type') ?? '';
   if (!ct.includes('application/json')) {
+    // A sign-in that sends the person back to a file they asked for (a report download whose session had ended): the browser
+    // saves the file, and the interface shows the report it came from.
+    const to = new URL(res.url).pathname + new URL(res.url).search;
+    if (res.redirected && isFile(to)) {
+      location.assign(to);
+      return getPage(withoutFormat(to));
+    }
     throw new PageError(res.status, `The server answered ${res.status}.`);
   }
   return { env: (await res.json()) as Envelope, url: new URL(res.url).pathname + new URL(res.url).search, status: res.status };

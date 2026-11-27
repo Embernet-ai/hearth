@@ -2668,8 +2668,17 @@ func (s *Server) startSSO(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, "single sign-on is not configured")
 		return
 	}
+	// Where the person was going when their sign-in ended, kept across the identity provider's round trip so the callback
+	// can send them back to it (a report download, a page) and not to the front page.
+	if next := auth.SafeNext(r.URL.Query().Get("next")); next != "" {
+		http.SetCookie(w, &http.Cookie{Name: ssoNextCookie, Value: url.QueryEscape(next), Path: "/", MaxAge: 600,
+			HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
+	}
 	s.oidc.Start(w, r)
 }
+
+// ssoNextCookie holds the page a person wanted across a single sign-in round trip.
+const ssoNextCookie = "hearth_sso_next"
 
 func (s *Server) ssoCallback(w http.ResponseWriter, r *http.Request) {
 	if s.oidc == nil {
@@ -2686,7 +2695,16 @@ func (s *Server) ssoCallback(w http.ResponseWriter, r *http.Request) {
 			Message: "Single sign-in did not complete. Try again, or use a local account."})
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	to := "/"
+	if c, err := r.Cookie(ssoNextCookie); err == nil {
+		if v, err := url.QueryUnescape(c.Value); err == nil {
+			if next := auth.SafeNext(v); next != "" {
+				to = next
+			}
+		}
+		http.SetCookie(w, &http.Cookie{Name: ssoNextCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
+	}
+	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
 // departmentPromptOwed is whether somebody who is in no department is asked
