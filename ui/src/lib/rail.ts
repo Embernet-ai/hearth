@@ -34,6 +34,7 @@ export const mine: RailGroup = {
   dot: 'work',
   items: [
     { label: 'Dashboard', href: '/' },
+    { label: 'Tools', href: '/tools', show: (pg) => !!pg.ToolsOn },
     { label: 'Inbox', href: '/inbox', badge: (pg) => pg.Unread },
     { label: 'Outbox', href: '/outbox', badge: (pg) => pg.Undecided },
   ],
@@ -99,7 +100,6 @@ export const groups: RailGroup[] = [
       { label: 'Marketing', href: '/marketing' },
       { label: 'Forms', href: '/forms' },
       { label: 'Social', href: '/social' },
-      { label: 'Tools', href: '/tools', show: (pg) => !!pg.ToolsOn },
     ],
   },
   {
