@@ -35,9 +35,10 @@ function inspect() {
     const c = document.getElementById(id), l = document.querySelector(`label[for=${id}]`);
     if (!c || !l) out.push(`filter #${id} lost its label or its control`);
   }
-  const heights = [...document.querySelectorAll('table.list tbody tr')].map((r) => r.getBoundingClientRect().height);
-  const tall = Math.max(0, ...heights);
-  if (tall > (innerWidth < 600 ? 300 : 150)) out.push(`a row is ${Math.round(tall)}px tall: a long note is stretching it`);
+  // a note is cut at a paragraph, so its row is a few lines; the entry's own row is the same height with or without one
+  const noteRows = [...document.querySelectorAll('table.list tbody tr.noterow')].map((r) => r.getBoundingClientRect().height);
+  const tall = Math.max(0, ...noteRows);
+  if (tall > (innerWidth < 600 ? 230 : 120)) out.push(`a note row is ${Math.round(tall)}px tall: a long note is stretching it`);
   const table = document.querySelector('table.list');
   const notes = [...document.querySelectorAll('table.list tr.noterow > td')];
   if (table && document.querySelector('table.list tr.hasnote') && notes.length === 0) out.push('an entry with a note has no note row');
