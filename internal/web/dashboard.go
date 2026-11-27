@@ -173,7 +173,7 @@ func (s *Server) buildDashboard(ctx context.Context, id *auth.Identity, picked t
 
 	// The week strip always runs Sunday to Saturday around the picked day (today until somebody picks another on
 	// the month calendar), and every day carries what is on it and what is due, so nothing hides behind a click.
-	today := startOfDay(time.Now())
+	today := startOfDay(officeNow())
 	d.Week = sundayWeek(picked, today, d.Mine)
 	for _, day := range d.Week {
 		d.DueThisWeek = append(d.DueThisWeek, day.Items...)
@@ -186,8 +186,8 @@ func (s *Server) buildDashboard(ctx context.Context, id *auth.Identity, picked t
 
 	// The calendar, on the page everybody actually opens. One read covers the month grid, the week strip (a week
 	// can straddle two months) and the fortnight list; degrades to nothing, like every other region here.
-	gridFrom := sundayOf(time.Date(picked.Year(), picked.Month(), 1, 0, 0, 0, 0, time.Local))
-	gridTo := sundayOf(time.Date(picked.Year(), picked.Month()+1, 0, 0, 0, 0, 0, time.Local)).AddDate(0, 0, 7)
+	gridFrom := sundayOf(time.Date(picked.Year(), picked.Month(), 1, 0, 0, 0, 0, docs.OfficeZone()))
+	gridTo := sundayOf(time.Date(picked.Year(), picked.Month()+1, 0, 0, 0, 0, 0, docs.OfficeZone())).AddDate(0, 0, 7)
 	from, to := gridFrom, gridTo
 	if d.Week[0].Date.Before(from) {
 		from = d.Week[0].Date
@@ -242,17 +242,18 @@ func (s *Server) buildDashboard(ctx context.Context, id *auth.Identity, picked t
 
 // pickedDay reads the day chosen on the month calendar, today when it is missing or not a date.
 func pickedDay(v string) time.Time {
-	if t, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+	if t, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 		return t
 	}
-	return startOfDay(time.Now())
+	return startOfDay(officeNow())
 }
 
 func dayLink(t time.Time) string { return "/?day=" + t.Format("2006-01-02") }
 
 // sundayOf is the Sunday on or before t, at midnight.
 func sundayOf(t time.Time) time.Time {
-	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+	t = t.In(docs.OfficeZone())
+	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, docs.OfficeZone())
 	return d.AddDate(0, 0, -int(d.Weekday()))
 }
 
@@ -286,7 +287,7 @@ func sundayWeek(picked, today time.Time, rows []*docs.Row) []dashDay {
 		}
 		// The due date's own calendar day (it is stored as midnight UTC), placed on the same day of the local strip.
 		du := row.Task.DueAt.UTC()
-		due := time.Date(du.Year(), du.Month(), du.Day(), 0, 0, 0, 0, time.Local)
+		due := time.Date(du.Year(), du.Month(), du.Day(), 0, 0, 0, 0, docs.OfficeZone())
 		for i := range days {
 			if sameDay(due, days[i].Date) {
 				days[i].Items = append(days[i].Items, row)
@@ -301,13 +302,13 @@ func sundayWeek(picked, today time.Time, rows []*docs.Row) []dashDay {
 // buildMonth lays out the month of picked as weeks that start on Sunday, each day with a count and its first
 // titles, and a link that selects it.
 func buildMonth(picked, today time.Time, entries []cal.Entry, mine []*docs.Row) *dashMonth {
-	first := time.Date(picked.Year(), picked.Month(), 1, 0, 0, 0, 0, time.Local)
+	first := time.Date(picked.Year(), picked.Month(), 1, 0, 0, 0, 0, docs.OfficeZone())
 	m := &dashMonth{
 		Title: picked.Format("January 2006"),
 		Prev:  dayLink(first.AddDate(0, -1, 0)), Next: dayLink(first.AddDate(0, 1, 0)),
 		Names: []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
 	}
-	last := time.Date(picked.Year(), picked.Month()+1, 0, 0, 0, 0, 0, time.Local)
+	last := time.Date(picked.Year(), picked.Month()+1, 0, 0, 0, 0, 0, docs.OfficeZone())
 	for w := sundayOf(first); !w.After(last); w = w.AddDate(0, 0, 7) {
 		var week []monthCell
 		for i := 0; i < 7; i++ {
@@ -330,7 +331,7 @@ func buildMonth(picked, today time.Time, entries []cal.Entry, mine []*docs.Row) 
 					continue
 				}
 				du := row.Task.DueAt.UTC()
-				if sameDay(time.Date(du.Year(), du.Month(), du.Day(), 0, 0, 0, 0, time.Local), day) {
+				if sameDay(time.Date(du.Year(), du.Month(), du.Day(), 0, 0, 0, 0, docs.OfficeZone()), day) {
 					c.Count++
 					if len(c.Titles) < 3 {
 						c.Titles = append(c.Titles, row.Title)

@@ -204,13 +204,13 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 		return nil, http.StatusForbidden, "you can see your own numbers. Seeing a colleague's takes the everyone's time permission."
 	}
 
-	now := time.Now()
+	now := officeNow()
 	today := startOfDay(now)
 	// Sunday to Saturday, the same week as the strip above, so a card and the strip agree. The timesheet and approval pages keep
 	// the week EmberOps defines (Monday first), so a link into them names the Monday of this week.
 	weekFrom := sundayOf(now)
 	weekTo := weekFrom.AddDate(0, 0, 6)
-	monthFrom := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	monthFrom := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, docs.OfficeZone())
 	monthTo := monthFrom.AddDate(0, 1, -1)
 	weekLabel := rangeLabel(weekFrom, weekTo)
 	monthLabel := now.Format("January 2006")
@@ -310,7 +310,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 					continue
 				}
 				filed[e.Day] = true
-				if d, perr := time.ParseInLocation("2006-01-02", e.Day, time.Local); perr == nil &&
+				if d, perr := time.ParseInLocation("2006-01-02", e.Day, docs.OfficeZone()); perr == nil &&
 					(d.Weekday() == time.Saturday || d.Weekday() == time.Sunday) {
 					weekend++
 				}
@@ -352,7 +352,7 @@ func (s *Server) statsFor(ctx context.Context, id *auth.Identity, asked string, 
 			for _, r := range rows {
 				when := ""
 				if r.Task != nil && r.Task.CompletedAt != nil {
-					when = r.Task.CompletedAt.In(time.Local).Format("2 Jan")
+					when = r.Task.CompletedAt.In(docs.OfficeZone()).Format("2 Jan")
 				}
 				p.Recent = append(p.Recent, recentRow{Kind: "Task done", Title: r.Title, When: when,
 					Href: "/documents/" + r.ID})

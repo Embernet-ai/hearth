@@ -44,6 +44,10 @@ func reportZone() *time.Location {
 	return loc
 }
 
+// OfficeZone is the office's time zone: the zone a day, a week and a month are
+// counted in, whatever zone the server's own clock runs in.
+func OfficeZone() *time.Location { return reportZone() }
+
 // ReportDay is the calendar date, as YYYY-MM-DD, that t falls on in the office.
 func ReportDay(t time.Time) string {
 	return t.In(reportZone()).Format("2006-01-02")

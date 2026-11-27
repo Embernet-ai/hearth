@@ -1094,7 +1094,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	// line under the time form on the dashboard. Same source as the time page,
 	// so the two never disagree about the number.
 	if p.Identity != nil && s.time != nil && p.MyPending == 0 {
-		week := startOfWeek(time.Now())
+		week := startOfWeek(officeNow())
 		if _, pending, err := s.time.MineTotal(r.Context(), p.Identity.OrgID,
 			p.Identity.PrincipalID, week, week.AddDate(0, 0, 7)); err == nil {
 			p.MyPending = pending

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
+	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 )
 
@@ -86,7 +87,7 @@ func (s *Server) logTime(w http.ResponseWriter, r *http.Request) {
 	}
 	on := time.Now()
 	if v := strings.TrimSpace(r.FormValue("on")); v != "" {
-		if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			on = d
 		}
 	}
@@ -117,7 +118,7 @@ func parseCorrectedDate(v string) *time.Time {
 	if v == "" {
 		return nil
 	}
-	d, err := time.ParseInLocation("2006-01-02", v, time.Local)
+	d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone())
 	if err != nil {
 		return nil
 	}
@@ -287,7 +288,7 @@ func (s *Server) batchTag(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadRequest, "malformed form")
 		return
 	}
-	from, err := time.ParseInLocation("2006-01-02", r.FormValue("from"), time.Local)
+	from, err := time.ParseInLocation("2006-01-02", r.FormValue("from"), docs.OfficeZone())
 	if err != nil {
 		s.fail(w, r, http.StatusBadRequest, "that is not a date")
 		return
@@ -346,9 +347,9 @@ func (s *Server) getWorkload(w http.ResponseWriter, r *http.Request) {
 	// A week from Monday by default, because that is the window a planner
 	// works in and asking them to pick dates before showing anything is a page
 	// people bounce off.
-	from := startOfWeek(time.Now())
+	from := startOfWeek(officeNow())
 	if v := r.URL.Query().Get("from"); v != "" {
-		if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			from = d
 		}
 	}
@@ -380,8 +381,16 @@ func (s *Server) getWorkload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// officeNow is the present moment as the office's clock reads it. The server runs in UTC, so a week, a day or a month
+// taken from time.Now() turned over at 19:00 in the office and cut the evening off the person who works it.
+func officeNow() time.Time { return clock().In(docs.OfficeZone()) }
+
+// clock is the present moment. A test sets it; the server never does.
+var clock = time.Now
+
 func startOfWeek(t time.Time) time.Time {
-	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+	t = t.In(docs.OfficeZone())
+	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, docs.OfficeZone())
 	for d.Weekday() != time.Monday {
 		d = d.AddDate(0, 0, -1)
 	}

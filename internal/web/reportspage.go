@@ -23,6 +23,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
+	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 )
 
@@ -135,16 +136,16 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 
 	// The calendar month to date by default -- the window a billing run
 	// actually covers, unlike Workload's Monday-start week.
-	now := time.Now()
-	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	now := officeNow()
+	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, docs.OfficeZone())
 	if v := r.URL.Query().Get("from"); v != "" {
-		if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			from = d
 		}
 	}
 	to := from.AddDate(0, 1, 0)
 	if v := r.URL.Query().Get("to"); v != "" {
-		if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			// The field the reader sees is inclusive of its last day; the query
 			// below is half-open, so it needs to reach one day past it.
 			to = d.AddDate(0, 0, 1)
