@@ -289,32 +289,54 @@
    "Approval": "approved",
    "DecidedAt": null,
    "DeciderName": "",
-   "DocTitle": "On-Site Testing",
+   "DocTitle": "Panel Integration",
    "ID": "a1",
-   "LevelCustomer": "Cast Nylon",
-   "LevelPhase": "CNY0324 Process Update",
+   "LevelCustomer": "MCSI",
+   "LevelPhase": "MCS1002 Beachwood Ohio",
    "LevelSpace": "White Team Service",
-   "Minutes": 60,
+   "Minutes": 480,
    "Note": "",
-   "PersonName": "Ann Lee",
+   "PersonName": "Carlos Torrijos",
    "PrincipalID": "p1",
    "SpaceID": "",
    "SpaceName": "",
-   "StartedAt": "2026-11-03T09:00:00Z",
-   "Tags": null
+   "StartedAt": "2026-11-13T09:00:00Z",
+   "Tags": [
+    "Onsite"
+   ]
+  },
+  {
+   "Approval": "pending",
+   "DecidedAt": null,
+   "DeciderName": "",
+   "DocTitle": "Panel Integration",
+   "ID": "a2",
+   "LevelCustomer": "MCSI",
+   "LevelPhase": "MCS1002 Beachwood Ohio",
+   "LevelSpace": "White Team Service",
+   "Minutes": 360,
+   "Note": "Electrical Assembly: assembly of electrical power and control cabinet including installation of components, drawings, client requirements review, equipment layout, cab mounting, wiring of the main disconnect and the drive cabinet, labeling, and a first power-up check with the customer.",
+   "PersonName": "Carlos Torrijos",
+   "PrincipalID": "p1",
+   "SpaceID": "",
+   "SpaceName": "",
+   "StartedAt": "2026-11-14T09:00:00Z",
+   "Tags": [
+    "Onsite"
+   ]
   },
   {
    "Approval": "pending",
    "DecidedAt": null,
    "DeciderName": "",
    "DocTitle": "",
-   "ID": "a2",
+   "ID": "a3",
    "LevelCustomer": "",
    "LevelPhase": "",
    "LevelSpace": "",
    "Minutes": 120,
-   "Note": "",
-   "PersonName": "Ann Lee",
+   "Note": "short note",
+   "PersonName": "Carlos Torrijos",
    "PrincipalID": "p1",
    "SpaceID": "",
    "SpaceName": "",
@@ -326,21 +348,177 @@
  "ReportFilterQS": "",
  "ReportFrom": "2026-11-01",
  "ReportNotice": "",
- "ReportPeople": null,
  "ReportPerson": "p1",
- "ReportPersonName": "Ann Lee",
+ "ReportPersonName": "Carlos Torrijos",
  "ReportSpace": "",
  "ReportSpaceID": "",
  "ReportSpaceNames": null,
- "ReportSpaceOptions": null,
+ "ReportSpaceOptions": [
+  {
+   "Depth": 0,
+   "Documents": 0,
+   "ID": "s1",
+   "Kind": "",
+   "Name": "MCS1002 Beachwood Ohio",
+   "OrgID": "",
+   "ParentID": null,
+   "Path": "Engineering / White Team Service / MCSI / MCS1002 Beachwood Ohio"
+  }
+ ],
  "ReportSpaces": null,
  "ReportTag": "",
- "ReportTagOptions": null,
+ "ReportTagOptions": [
+  {
+   "Description": "",
+   "ID": "g1",
+   "Name": "Onsite"
+  }
+ ],
  "ReportTeam": "",
- "ReportTeams": null,
+ "ReportTeams": [
+  {
+   "CreatedAt": "0001-01-01T00:00:00Z",
+   "Description": "",
+   "ExternalID": null,
+   "ID": "t1",
+   "Managed": false,
+   "Members": 0,
+   "Name": "Field",
+   "OrgID": "",
+   "Source": ""
+  }
+ ],
  "ReportTo": "2026-11-30",
  "ReportTotal": 180,
  "ReportTree": null,
+ "ReportWho": null,
+ "ReportWhoOptions": [
+  {
+   "Minutes": 120,
+   "PersonName": "Ann Lee",
+   "PrincipalID": "p1"
+  },
+  {
+   "Minutes": 480,
+   "PersonName": "Bo Diaz",
+   "PrincipalID": "p2"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 3 with a Longer Name",
+   "PrincipalID": "p3"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 4 with a Longer Name",
+   "PrincipalID": "p4"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 5 with a Longer Name",
+   "PrincipalID": "p5"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 6 with a Longer Name",
+   "PrincipalID": "p6"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 7 with a Longer Name",
+   "PrincipalID": "p7"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 8 with a Longer Name",
+   "PrincipalID": "p8"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 9 with a Longer Name",
+   "PrincipalID": "p9"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 10 with a Longer Name",
+   "PrincipalID": "p10"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 11 with a Longer Name",
+   "PrincipalID": "p11"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 12 with a Longer Name",
+   "PrincipalID": "p12"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 13 with a Longer Name",
+   "PrincipalID": "p13"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 14 with a Longer Name",
+   "PrincipalID": "p14"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 15 with a Longer Name",
+   "PrincipalID": "p15"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 16 with a Longer Name",
+   "PrincipalID": "p16"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 17 with a Longer Name",
+   "PrincipalID": "p17"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 18 with a Longer Name",
+   "PrincipalID": "p18"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 19 with a Longer Name",
+   "PrincipalID": "p19"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 20 with a Longer Name",
+   "PrincipalID": "p20"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 21 with a Longer Name",
+   "PrincipalID": "p21"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 22 with a Longer Name",
+   "PrincipalID": "p22"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 23 with a Longer Name",
+   "PrincipalID": "p23"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 24 with a Longer Name",
+   "PrincipalID": "p24"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 25 with a Longer Name",
+   "PrincipalID": "p25"
+  }
+ ],
  "Results": null,
  "Routes": null,
  "RuleRuns": null,

@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/Embernet-ai/hearth/internal/github"
 	"os"
 	"path/filepath"
@@ -209,18 +210,24 @@ func fixtures() map[string]page {
 		"marketing-segments": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "segments",
 			Segments: []mautic.Segment{{ID: 3, Name: "Customers", Description: "Paying", Contacts: 40}}}},
 		"timereport-nobody-logged": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30",
-			ReportPeople: []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee"}, {PrincipalID: "p2", PersonName: "Bo Diaz"}},
-			ReportNotice: "Nothing to export: the people you chose have no finished time between 2026-11-01 and 2026-11-30. Widen the dates above, press Show, and try again."},
+			ReportWhoOptions: []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee"}, {PrincipalID: "p2", PersonName: "Bo Diaz"}},
+			ReportNotice:     "Nothing to export: the people you chose have no finished time between 2026-11-01 and 2026-11-30. Widen the dates above, press Show, and try again."},
 		"timereport-filtered": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30",
-			Totals:         []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee", Minutes: 120}},
-			ReportPeople:   []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee", Minutes: 120}, {PrincipalID: "p2", PersonName: "Bo Diaz"}},
-			ReportApproval: "pending", ReportTeam: "t1", ReportTag: "Billable", ReportFilterQS: "&approval=pending&team=t1&tag=Billable",
+			Totals:    []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee", Minutes: 120}},
+			ReportWho: []string{"p1"}, ReportWhoOptions: manyPeople(),
+			ReportApproval: "pending", ReportTeam: "t1", ReportTag: "Billable", ReportFilterQS: "&approval=pending&team=t1&tag=Billable&people=p1",
 			ReportTeams:      []*teams.Team{{ID: "t1", Name: "Field"}},
 			ReportTagOptions: []timelog.Tag{{ID: "g1", Name: "Billable"}}},
-		"timereport-person-approval": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30", ReportPerson: "p1", ReportPersonName: "Ann Lee", ReportTotal: 180,
+		"timereport-person-approval": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30", ReportPerson: "p1", ReportPersonName: "Carlos Torrijos", ReportTotal: 180,
+			ReportWhoOptions:   manyPeople(),
+			ReportTeams:        []*teams.Team{{ID: "t1", Name: "Field"}},
+			ReportTagOptions:   []timelog.Tag{{ID: "g1", Name: "Onsite"}},
+			ReportSpaceOptions: []*plant.Space{{ID: "s1", Name: "MCS1002 Beachwood Ohio", Path: "Engineering / White Team Service / MCSI / MCS1002 Beachwood Ohio"}},
 			Report: []timelog.ReportRow{
-				{ID: "a1", PrincipalID: "p1", PersonName: "Ann Lee", DocTitle: "On-Site Testing", LevelSpace: "White Team Service", LevelCustomer: "Cast Nylon", LevelPhase: "CNY0324 Process Update", StartedAt: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Minutes: 60, Approval: timelog.ApprovalApproved},
-				{ID: "a2", PrincipalID: "p1", PersonName: "Ann Lee", StartedAt: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), Minutes: 120, Approval: timelog.ApprovalPending}}},
+				{ID: "a1", PrincipalID: "p1", PersonName: "Carlos Torrijos", DocTitle: "Panel Integration", LevelSpace: "White Team Service", LevelCustomer: "MCSI", LevelPhase: "MCS1002 Beachwood Ohio", Tags: []string{"Onsite"}, StartedAt: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), Minutes: 480, Approval: timelog.ApprovalApproved},
+				{ID: "a2", PrincipalID: "p1", PersonName: "Carlos Torrijos", DocTitle: "Panel Integration", LevelSpace: "White Team Service", LevelCustomer: "MCSI", LevelPhase: "MCS1002 Beachwood Ohio", Tags: []string{"Onsite"}, StartedAt: time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC), Minutes: 360, Approval: timelog.ApprovalPending,
+					Note: "Electrical Assembly: assembly of electrical power and control cabinet including installation of components, drawings, client requirements review, equipment layout, cab mounting, wiring of the main disconnect and the drive cabinet, labeling, and a first power-up check with the customer."},
+				{ID: "a3", PrincipalID: "p1", PersonName: "Carlos Torrijos", StartedAt: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), Minutes: 120, Approval: timelog.ApprovalPending, Note: "short note"}}},
 		"marketing-contacts": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "contacts", Total: 2,
 			Contacts: []mautic.Contact{{ID: 7, First: "Ann", Last: "Lee", Email: "ann@example.com", Company: "Acme", Tags: []string{"vip"}, LastActive: "2026-11-20 10:00:00", DoNotEmail: true},
 				{ID: 5, Email: "bob@example.com"}}}},
@@ -460,4 +467,13 @@ func TestViewFixtures(t *testing.T) {
 			t.Errorf("ui/src/views/fixtures/%s.json is out of date: run go test ./internal/web -run TestViewFixtures -update-fixtures", name)
 		}
 	}
+}
+
+// manyPeople is the People selector's list for a real organisation: twenty-five names, the first two with time.
+func manyPeople() []timelog.ReportTotal {
+	out := []timelog.ReportTotal{{PrincipalID: "p1", PersonName: "Ann Lee", Minutes: 120}, {PrincipalID: "p2", PersonName: "Bo Diaz", Minutes: 480}}
+	for i := 3; i <= 25; i++ {
+		out = append(out, timelog.ReportTotal{PrincipalID: fmt.Sprintf("p%d", i), PersonName: fmt.Sprintf("Person Number %d with a Longer Name", i)})
+	}
+	return out
 }

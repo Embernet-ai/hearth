@@ -193,3 +193,25 @@ func TestDetailApprovalFilterWithChosenPeople(t *testing.T) {
 		t.Errorf("pending for p2: %s", got)
 	}
 }
+
+// The People selector's picks are the report's `people` filter: they narrow the entries, and they ride on every link the page builds.
+func TestPeopleFilterNarrowsRowsAndRidesOnTheLinks(t *testing.T) {
+	st := &detailStore{rows: approvalFixture()}
+	got := ids(csvOf(t, runDetail(t, st, "detail=1&format=csv&people=p2")))
+	if got != "b1,b2" {
+		t.Fatalf("people=p2 exported %q, want only Bo Diaz's entries b1,b2", got)
+	}
+	// nobody picked is everyone in the view
+	if got := ids(csvOf(t, runDetail(t, &detailStore{rows: approvalFixture()}, "detail=1&format=csv"))); got != "a1,a2,b1,b2" {
+		t.Fatalf("nobody picked exported %q", got)
+	}
+	// the picks are in the query the page puts on links, with the other filters
+	f := reportFilter{whoQ: []string{"p1", "p2"}, approvalQ: []string{"pending"}}
+	if q := f.query(); !strings.Contains(q, "people=p1") || !strings.Contains(q, "people=p2") || !strings.Contains(q, "approval=pending") {
+		t.Errorf("the filter query lost the people: %q", q)
+	}
+	// and they are an active filter, so the totals are rebuilt from the entries that survive
+	if !(reportFilter{who: map[string]bool{"p1": true}}).active() {
+		t.Error("picked people did not make the filter active")
+	}
+}

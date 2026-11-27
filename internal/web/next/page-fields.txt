@@ -210,7 +210,6 @@ Report
 ReportFrom
 ReportTo
 ReportTotal
-ReportPeople
 ReportNotice
 ReportPerson
 ReportPersonName
@@ -222,6 +221,8 @@ ReportFilterQS
 ReportTeams
 ReportSpaceOptions
 ReportTagOptions
+ReportWho
+ReportWhoOptions
 Tags
 CanManageTags
 Schedules

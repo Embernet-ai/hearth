@@ -4,18 +4,38 @@
   let { pg }: { pg: any; onEnv?: any } = $props();
   const dot: any = $derived(pg);
 
-  // The details export: which people are ticked. Empty means nobody yet, and the
-  // buttons stay off until somebody is. When every person is ticked the form sends
-  // all=1 instead of one id each, so a big organisation's address stays short.
-  let picked: string[] = $state([]);
-  const everyone: string[] = $derived((dot?.ReportPeople ?? dot?.Totals ?? []).map((t: any) => String(t.PrincipalID)));
-  const allPicked: boolean = $derived(everyone.length > 0 && picked.length === everyone.length);
-  function toggleAll(on: boolean) {
-    picked = on ? [...everyone] : [];
+  // The People selector in the filter bar: who the report covers, on screen and in every file. Nobody picked means everybody.
+  // The choices are searched in the page; the boxes stay in the form whether or not the search is showing them, so what is
+  // picked is what is sent. The details export reads the same picks, live, so it never goes out for somebody not ticked.
+  let whoSel: string[] = $state([...(pg?.ReportWho ?? [])]);
+  let whoQuery: string = $state('');
+  const whoOptions: any[] = $derived(dot?.ReportWhoOptions ?? []);
+  const whoShown = (name: string) => !whoQuery.trim() || String(name).toLowerCase().includes(whoQuery.trim().toLowerCase());
+  const allWho: boolean = $derived(whoOptions.length > 0 && whoSel.length === whoOptions.length);
+  const whoLabel: string = $derived(
+    whoSel.length === 0 ? 'Everyone'
+      : whoSel.length === 1 ? String(whoOptions.find((o: any) => String(o.PrincipalID) === whoSel[0])?.PersonName ?? '1 person')
+      : `${whoSel.length} people`);
+  function whoToggle(id: string, on: boolean) {
+    whoSel = on ? [...whoSel.filter((p) => p !== id), id] : whoSel.filter((p) => p !== id);
   }
-  function toggleOne(id: string, on: boolean) {
-    picked = on ? [...picked.filter((p) => p !== id), id] : picked.filter((p) => p !== id);
+  function whoSelectAll() {
+    const ids = whoOptions.filter((o) => whoShown(o.PersonName)).map((o) => String(o.PrincipalID));
+    whoSel = [...new Set([...whoSel, ...ids])];
   }
+  // The details export: one file with every entry for the picked people, under the filters as they stand. Everyone picked, or
+  // nobody, goes out as all=1 so an organisation's address stays short.
+  const detailHref = (fmt: string) => {
+    const q = new URLSearchParams();
+    q.set('detail', '1'); q.set('from', S(dot?.ReportFrom)); q.set('to', S(dot?.ReportTo));
+    if (F.t(dot?.ReportApproval)) q.set('approval', S(dot?.ReportApproval));
+    if (F.t(dot?.ReportTeam)) q.set('team', S(dot?.ReportTeam));
+    if (F.t(dot?.ReportSpaceID)) q.set('space', S(dot?.ReportSpaceID));
+    if (F.t(dot?.ReportTag)) q.set('tag', S(dot?.ReportTag));
+    if (whoSel.length === 0 || allWho) q.set('all', '1'); else for (const id of whoSel) q.append('people', id);
+    q.set('format', fmt);
+    return '/reports/time?' + q.toString();
+  };
 </script>
 
 {#snippet content(dot: any)}
@@ -39,61 +59,85 @@
     </p>
   {/if}
 
-  <form  class="row"  method="get"  action="/reports/time">
+  <form  class="reportfilters"  method="get"  action="/reports/time">
     {#if F.t(dot?.ReportPerson)}<input  type="hidden"  name="person"  value={S(dot?.ReportPerson)}>{/if}
-    <label  for="from"  class="muted small">From</label>
-    <input  id="from"  name="from"  type="date"  value={S(dot?.ReportFrom)}>
-    <label  for="to"  class="muted small">to</label>
-    <input  id="to"  name="to"  type="date"  value={S(dot?.ReportTo)}>
-    <label  for="f-approval"  class="muted small">Approval</label>
+    <div  class="fld"><label  for="from"  class="muted small">From</label>
+    <input  id="from"  name="from"  type="date"  value={S(dot?.ReportFrom)}></div>
+    <div  class="fld"><label  for="to"  class="muted small">To</label>
+    <input  id="to"  name="to"  type="date"  value={S(dot?.ReportTo)}></div>
+    <div  class="fld"><label  for="f-approval"  class="muted small">Approval</label>
     <select  id="f-approval"  name="approval">
       <option  value=""  selected={!F.t(dot?.ReportApproval)}>Any</option>
       <option  value="approved"  selected={S(dot?.ReportApproval) === 'approved'}>Approved</option>
       <option  value="pending"  selected={S(dot?.ReportApproval) === 'pending'}>Pending</option>
       <option  value="rejected"  selected={S(dot?.ReportApproval) === 'rejected'}>Rejected</option>
-    </select>
+    </select></div>
+    {#if whoOptions.length > 0}
+      <div  class="fld"><label  for="f-people">People</label>
+        <details  class="whopick"  data-who>
+          <summary  id="f-people"  class="whosummary">{whoLabel}</summary>
+          <div  class="card whopanel">
+            <input  type="search"  placeholder="Search people"  aria-label="Search people"  bind:value={whoQuery}>
+            <div  class="row">
+              <button  type="button"  data-who-all  onclick={whoSelectAll}>Select all</button>
+              <button  type="button"  data-who-clear  onclick={() => (whoSel = [])}>Clear</button>
+            </div>
+            <div  class="wholist">
+              {#each whoOptions as o}
+                <label  hidden={!whoShown(o.PersonName)}>
+                  <input  type="checkbox"  name="people"  value={S(o.PrincipalID)}  checked={whoSel.includes(String(o.PrincipalID))}
+                    onchange={(e) => whoToggle(String(o.PrincipalID), (e.currentTarget as HTMLInputElement).checked)}>
+                  {o.PersonName} <span  class="muted small">{F.hours(o.Minutes)}</span>
+                </label>
+              {/each}
+            </div>
+          </div>
+        </details>
+      </div>
+    {/if}
     {#if F.t(dot?.ReportTeams)}
-      <label  for="f-team"  class="muted small">Team</label>
+      <div  class="fld"><label  for="f-team"  class="muted small">Team</label>
       <select  id="f-team"  name="team">
         <option  value=""  selected={!F.t(dot?.ReportTeam)}>Everyone</option>
         {#each F.rng(dot?.ReportTeams) as [kt, dt]}
           <option  value={S(dt?.ID)}  selected={S(dot?.ReportTeam) === S(dt?.ID)}>{dt?.Name}</option>
         {/each}
-      </select>
+      </select></div>
     {/if}
     {#if F.t(dot?.ReportSpaceOptions)}
-      <label  for="f-space"  class="muted small">Space</label>
+      <div  class="fld"><label  for="f-space"  class="muted small">Space</label>
       <select  id="f-space"  name="space">
         <option  value=""  selected={!F.t(dot?.ReportSpaceID)}>All spaces</option>
         {#each F.rng(dot?.ReportSpaceOptions) as [ks, ds]}
           <option  value={S(ds?.ID)}  selected={S(dot?.ReportSpaceID) === S(ds?.ID)}>{ds?.Path}</option>
         {/each}
-      </select>
+      </select></div>
     {/if}
     {#if F.t(dot?.ReportTagOptions)}
-      <label  for="f-tag"  class="muted small">Tag</label>
+      <div  class="fld"><label  for="f-tag"  class="muted small">Tag</label>
       <select  id="f-tag"  name="tag">
         <option  value=""  selected={!F.t(dot?.ReportTag)}>Any tag</option>
         {#each F.rng(dot?.ReportTagOptions) as [kg, dg]}
           <option  value={S(dg?.Name)}  selected={S(dot?.ReportTag) === S(dg?.Name)}>{dg?.Name}</option>
         {/each}
-      </select>
+      </select></div>
     {/if}
-    <button  type="submit">Show</button>
+    <div  class="fld fld-go"><button  type="submit">Show</button>
     <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=xlsx")}>Download Excel</a>
-    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=csv")}>Download CSV</a>
+    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=csv")}>Download CSV</a></div>
   </form>
 
   {#if F.t(dot?.ReportPerson)}
     {#if F.t(dot?.Report)}
       <div  class="table-scroll">
-      <table  class="list">
+      <table  class="list reportrows">
+        <colgroup><col  style="width:10%"><col  style="width:8%"><col  style="width:14%"><col  style="width:14%"><col  style="width:18%"><col  style="width:16%"><col  style="width:8%"><col  style="width:12%"></colgroup>
         <thead>
-          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/Project</th><th>Service/Project Phase</th><th>Task</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
+          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/<wbr>Project</th><th>Service/<wbr>Project Phase</th><th>Task</th><th>Tags</th><th>Approval</th></tr>
         </thead>
         <tbody>
           {#each F.rng(dot?.Report) as [k1, d1]}
-            <tr>
+            <tr  class={S(d1?.Note) ? "hasnote" : ""}>
               <td  class="muted small">{F.date(d1?.StartedAt)}</td>
               <td>{F.hours(d1?.Minutes)}</td>
               <td  class="muted">{d1?.LevelSpace}</td>
@@ -101,9 +145,17 @@
               <td  class="muted">{d1?.LevelPhase}</td>
               <td  class="muted">{d1?.DocTitle}</td>
               <td  class="muted small">{#each F.rng(d1?.Tags) as [k2, d2]}{d2} {/each}</td>
-              <td  class="muted small">{d1?.Note}</td>
               <td  class="small">{#if S(d1?.Approval) === 'approved'}Approved{:else if S(d1?.Approval) === 'rejected'}Rejected{:else}Pending{/if}</td>
             </tr>
+            {#if S(d1?.Note)}
+              <tr  class="noterow">
+                <td  colspan="8"  class="muted small">
+                  {#if S(d1?.Note).length > 160}
+                    <details  class="note"><summary><span  class="short">{S(d1?.Note).slice(0, 160)}… <u>more</u></span><span  class="full">{d1?.Note} <u>less</u></span></summary></details>
+                  {:else}{d1?.Note}{/if}
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
@@ -129,46 +181,21 @@
     {/if}
 
     {#if F.t(dot?.ReportNotice)}<p  class="card small"  data-flash>{dot?.ReportNotice}</p>{/if}
-    {#if F.t(dot?.ReportPeople) || F.t(dot?.Totals)}
-      <form  class="detail-export"  method="get"  action="/reports/time"  style="margin-top:1.5rem">
+    {#if whoOptions.length > 0}
+      <div  class="detail-export"  style="margin-top:1.5rem">
         <h2>Export details</h2>
         <p  class="muted small">
-          One file with every entry, not just the totals, for the people you tick (nobody ticked means everyone in this view),
+          One file with every entry, not just the totals, for the people picked in People above (nobody picked means everyone in this view),
           {S(dot?.ReportFrom)} to {S(dot?.ReportTo)}. Each row carries the person's
           name and id, and whether the hours are approved, pending or rejected. To change
           the dates or filter by approval, team, space or tag, set them above and press Show.
         </p>
-        <input  type="hidden"  name="detail"  value="1">
-        <input  type="hidden"  name="from"  value={S(dot?.ReportFrom)}>
-        <input  type="hidden"  name="to"  value={S(dot?.ReportTo)}>
-        {#if F.t(dot?.ReportApproval)}<input  type="hidden"  name="approval"  value={S(dot?.ReportApproval)}>{/if}
-        {#if F.t(dot?.ReportTeam)}<input  type="hidden"  name="team"  value={S(dot?.ReportTeam)}>{/if}
-        {#if F.t(dot?.ReportSpaceID)}<input  type="hidden"  name="space"  value={S(dot?.ReportSpaceID)}>{/if}
-        {#if F.t(dot?.ReportTag)}<input  type="hidden"  name="tag"  value={S(dot?.ReportTag)}>{/if}
-        {#if allPicked || picked.length === 0}<input  type="hidden"  name="all"  value="1">{/if}
-        <p>
-          <label>
-            <input  id="detail-all"  type="checkbox"  checked={allPicked}
-              onchange={(e) => toggleAll((e.currentTarget as HTMLInputElement).checked)}>
-            Select all ({everyone.length})
-          </label>
-        </p>
-        <div  style="display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.25rem .75rem;margin-bottom:.75rem">
-          {#each F.rng(dot?.ReportPeople ?? dot?.Totals) as [k4, d4]}
-            <label>
-              <input  type="checkbox"  name={allPicked ? undefined : 'people'}  value={S(d4?.PrincipalID)}
-                checked={picked.includes(String(d4?.PrincipalID))}
-                onchange={(e) => toggleOne(String(d4?.PrincipalID), (e.currentTarget as HTMLInputElement).checked)}>
-              {d4?.PersonName} <span  class="muted small">{F.hours(d4?.Minutes)}</span>
-            </label>
-          {/each}
-        </div>
         <div  class="row">
-          <button  type="submit"  name="format"  value="csv">Download details CSV</button>
-          <button  type="submit"  name="format"  value="xlsx">Download details Excel</button>
-          <span  class="muted small">{#if picked.length === 0}Everyone in this view ({everyone.length}){:else}{picked.length} of {everyone.length} chosen{/if}</span>
+          <a  class="chip"  data-detail="csv"  href={detailHref('csv')}>Download details CSV</a>
+          <a  class="chip"  data-detail="xlsx"  href={detailHref('xlsx')}>Download details Excel</a>
+          <span  class="muted small">{#if whoSel.length === 0}Everyone in this view ({whoOptions.length}){:else}{whoSel.length} of {whoOptions.length} chosen{/if}</span>
         </div>
-      </form>
+      </div>
     {/if}
   {/if}
 </section>
