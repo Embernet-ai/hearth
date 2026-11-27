@@ -39,61 +39,62 @@
     </p>
   {/if}
 
-  <form  class="row"  method="get"  action="/reports/time">
+  <form  class="reportfilters"  method="get"  action="/reports/time">
     {#if F.t(dot?.ReportPerson)}<input  type="hidden"  name="person"  value={S(dot?.ReportPerson)}>{/if}
-    <label  for="from"  class="muted small">From</label>
-    <input  id="from"  name="from"  type="date"  value={S(dot?.ReportFrom)}>
-    <label  for="to"  class="muted small">to</label>
-    <input  id="to"  name="to"  type="date"  value={S(dot?.ReportTo)}>
-    <label  for="f-approval"  class="muted small">Approval</label>
+    <div  class="fld"><label  for="from"  class="muted small">From</label>
+    <input  id="from"  name="from"  type="date"  value={S(dot?.ReportFrom)}></div>
+    <div  class="fld"><label  for="to"  class="muted small">To</label>
+    <input  id="to"  name="to"  type="date"  value={S(dot?.ReportTo)}></div>
+    <div  class="fld"><label  for="f-approval"  class="muted small">Approval</label>
     <select  id="f-approval"  name="approval">
       <option  value=""  selected={!F.t(dot?.ReportApproval)}>Any</option>
       <option  value="approved"  selected={S(dot?.ReportApproval) === 'approved'}>Approved</option>
       <option  value="pending"  selected={S(dot?.ReportApproval) === 'pending'}>Pending</option>
       <option  value="rejected"  selected={S(dot?.ReportApproval) === 'rejected'}>Rejected</option>
-    </select>
+    </select></div>
     {#if F.t(dot?.ReportTeams)}
-      <label  for="f-team"  class="muted small">Team</label>
+      <div  class="fld"><label  for="f-team"  class="muted small">Team</label>
       <select  id="f-team"  name="team">
         <option  value=""  selected={!F.t(dot?.ReportTeam)}>Everyone</option>
         {#each F.rng(dot?.ReportTeams) as [kt, dt]}
           <option  value={S(dt?.ID)}  selected={S(dot?.ReportTeam) === S(dt?.ID)}>{dt?.Name}</option>
         {/each}
-      </select>
+      </select></div>
     {/if}
     {#if F.t(dot?.ReportSpaceOptions)}
-      <label  for="f-space"  class="muted small">Space</label>
+      <div  class="fld"><label  for="f-space"  class="muted small">Space</label>
       <select  id="f-space"  name="space">
         <option  value=""  selected={!F.t(dot?.ReportSpaceID)}>All spaces</option>
         {#each F.rng(dot?.ReportSpaceOptions) as [ks, ds]}
           <option  value={S(ds?.ID)}  selected={S(dot?.ReportSpaceID) === S(ds?.ID)}>{ds?.Path}</option>
         {/each}
-      </select>
+      </select></div>
     {/if}
     {#if F.t(dot?.ReportTagOptions)}
-      <label  for="f-tag"  class="muted small">Tag</label>
+      <div  class="fld"><label  for="f-tag"  class="muted small">Tag</label>
       <select  id="f-tag"  name="tag">
         <option  value=""  selected={!F.t(dot?.ReportTag)}>Any tag</option>
         {#each F.rng(dot?.ReportTagOptions) as [kg, dg]}
           <option  value={S(dg?.Name)}  selected={S(dot?.ReportTag) === S(dg?.Name)}>{dg?.Name}</option>
         {/each}
-      </select>
+      </select></div>
     {/if}
-    <button  type="submit">Show</button>
+    <div  class="fld fld-go"><button  type="submit">Show</button>
     <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=xlsx")}>Download Excel</a>
-    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=csv")}>Download CSV</a>
+    <a  class="chip"  href={("/reports/time?" + S((F.t(dot?.ReportPerson) ? ("person=" + S(dot?.ReportPerson) + "&") : "")) + "from=" + S(dot?.ReportFrom) + "&to=" + S(dot?.ReportTo) + S(dot?.ReportFilterQS) + "&format=csv")}>Download CSV</a></div>
   </form>
 
   {#if F.t(dot?.ReportPerson)}
     {#if F.t(dot?.Report)}
       <div  class="table-scroll">
-      <table  class="list">
+      <table  class="list reportrows">
+        <colgroup><col  style="width:10%"><col  style="width:8%"><col  style="width:14%"><col  style="width:14%"><col  style="width:18%"><col  style="width:16%"><col  style="width:8%"><col  style="width:12%"></colgroup>
         <thead>
-          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/Project</th><th>Service/Project Phase</th><th>Task</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
+          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/<wbr>Project</th><th>Service/<wbr>Project Phase</th><th>Task</th><th>Tags</th><th>Approval</th></tr>
         </thead>
         <tbody>
           {#each F.rng(dot?.Report) as [k1, d1]}
-            <tr>
+            <tr  class={S(d1?.Note) ? "hasnote" : ""}>
               <td  class="muted small">{F.date(d1?.StartedAt)}</td>
               <td>{F.hours(d1?.Minutes)}</td>
               <td  class="muted">{d1?.LevelSpace}</td>
@@ -101,9 +102,17 @@
               <td  class="muted">{d1?.LevelPhase}</td>
               <td  class="muted">{d1?.DocTitle}</td>
               <td  class="muted small">{#each F.rng(d1?.Tags) as [k2, d2]}{d2} {/each}</td>
-              <td  class="muted small">{d1?.Note}</td>
               <td  class="small">{#if S(d1?.Approval) === 'approved'}Approved{:else if S(d1?.Approval) === 'rejected'}Rejected{:else}Pending{/if}</td>
             </tr>
+            {#if S(d1?.Note)}
+              <tr  class="noterow">
+                <td  colspan="8"  class="muted small">
+                  {#if S(d1?.Note).length > 240}
+                    <details  class="note"><summary><span  class="short">{S(d1?.Note).slice(0, 240)}… <u>more</u></span><span  class="full">{d1?.Note} <u>less</u></span></summary></details>
+                  {:else}{d1?.Note}{/if}
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>

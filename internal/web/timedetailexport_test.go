@@ -22,13 +22,15 @@ import (
 // anybody who is not allowed.
 type detailStore struct {
 	timelog.Store
-	rows    []timelog.ReportRow
-	refuse  bool
-	gotPeop []string
+	rows           []timelog.ReportRow
+	refuse         bool
+	gotPeop        []string
+	gotFrom, gotTo time.Time
 }
 
-func (d *detailStore) TimeReportRows(_ context.Context, _, _ string, ids []string, _, _ time.Time, fn func(timelog.ReportRow) error) error {
+func (d *detailStore) TimeReportRows(_ context.Context, _, _ string, ids []string, from, to time.Time, fn func(timelog.ReportRow) error) error {
 	d.gotPeop = ids
+	d.gotFrom, d.gotTo = from, to
 	if d.refuse {
 		return timelog.ErrNotAllowed
 	}
@@ -335,5 +337,16 @@ func TestTimeReportFilesCarryTheFourColumns(t *testing.T) {
 	}
 	if got := strings.Join(recs[2][2:6], "|"); got != "White Team Service|Cast Nylon|CNY0324 Process Update|Alarm map" {
 		t.Errorf("person row reads %q", got)
+	}
+}
+
+// Dates typed the wrong way round (From after To) are read the right way round with both days in the range. The report
+// used to hand the store a range whose end was a day short, so the last day was left out while the boxes showed other dates.
+func TestBackwardsDatesAreReadTheRightWayRoundWithBothDays(t *testing.T) {
+	st := &detailStore{rows: detailFixture()}
+	runDetail(t, st, "detail=1&format=csv&all=1&from=2026-11-30&to=2026-11-01")
+	day := func(s string) time.Time { d, _ := time.ParseInLocation("2006-01-02", s, time.Local); return d }
+	if !st.gotFrom.Equal(day("2026-11-01")) || !st.gotTo.Equal(day("2026-12-01")) {
+		t.Fatalf("the store was asked for %s to %s, want 2026-11-01 to 2026-12-01 (half open)", st.gotFrom.Format("2006-01-02"), st.gotTo.Format("2006-01-02"))
 	}
 }

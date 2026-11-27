@@ -150,6 +150,11 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 			to = d.AddDate(0, 0, 1)
 		}
 	}
+	// Dates typed the wrong way round are read the right way round, whole days included: the stores swap a backwards range
+	// themselves but kept the half-open end, which dropped the last day and left the boxes showing something else.
+	if !to.After(from) {
+		from, to = to.AddDate(0, 0, -1), from.AddDate(0, 0, 1)
+	}
 	reportFrom := from.Format("2006-01-02")
 	reportTo := to.AddDate(0, 0, -1).Format("2006-01-02")
 	format := r.URL.Query().Get("format")

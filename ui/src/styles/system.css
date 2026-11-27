@@ -152,6 +152,21 @@ pre { max-width: 100%; overflow-x: auto; }
 main section > .table-wrap, main section table.list { max-width: 100%; }
 /* a table with many columns scrolls inside its own box rather than widening the page */
 .table-scroll { max-width: 100%; overflow-x: auto; }
+/* the report's filter bar: every filter is a labelled box in a grid that wraps to the width, so none runs off the page or loses its label */
+form.reportfilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s-2) var(--s-3); align-items: end; margin: var(--s-3) 0; }
+form.reportfilters .fld { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+form.reportfilters .fld > label { white-space: normal; }
+form.reportfilters .fld > input, form.reportfilters .fld > select { width: 100%; min-width: 0; max-width: 100%; flex: none; }
+form.reportfilters .fld-go { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+/* the entries table is as wide as its box and its columns share it, so a long name wraps in its cell and the page never needs a sideways scroll */
+table.list.reportrows { table-layout: fixed; width: 100%; }
+table.list.reportrows th, table.list.reportrows td { overflow-wrap: anywhere; }
+/* an entry's note sits on a row of its own under the entry, the whole width of the table, so a long one wraps and reads
+   instead of widening a column; one longer than a paragraph is cut with a "more" that opens it */
+table.list tr.hasnote > td { border-bottom: 0; }
+table.list tr.noterow > td { padding-top: 0; white-space: normal; overflow-wrap: anywhere; }
+table.list tr.noterow details.note > summary { cursor: pointer; list-style: none; }
+table.list tr.noterow details.note[open] .short, table.list tr.noterow details.note:not([open]) .full { display: none; }
 
 /* ---- inline fields: a label with its control, controls in a row share the row rather than each taking all of it ----------- */
 label.muted.small, .row > label { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }

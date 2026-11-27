@@ -289,32 +289,54 @@
    "Approval": "approved",
    "DecidedAt": null,
    "DeciderName": "",
-   "DocTitle": "On-Site Testing",
+   "DocTitle": "Panel Integration",
    "ID": "a1",
-   "LevelCustomer": "Cast Nylon",
-   "LevelPhase": "CNY0324 Process Update",
+   "LevelCustomer": "MCSI",
+   "LevelPhase": "MCS1002 Beachwood Ohio",
    "LevelSpace": "White Team Service",
-   "Minutes": 60,
+   "Minutes": 480,
    "Note": "",
-   "PersonName": "Ann Lee",
+   "PersonName": "Carlos Torrijos",
    "PrincipalID": "p1",
    "SpaceID": "",
    "SpaceName": "",
-   "StartedAt": "2026-11-03T09:00:00Z",
-   "Tags": null
+   "StartedAt": "2026-11-13T09:00:00Z",
+   "Tags": [
+    "Onsite"
+   ]
+  },
+  {
+   "Approval": "pending",
+   "DecidedAt": null,
+   "DeciderName": "",
+   "DocTitle": "Panel Integration",
+   "ID": "a2",
+   "LevelCustomer": "MCSI",
+   "LevelPhase": "MCS1002 Beachwood Ohio",
+   "LevelSpace": "White Team Service",
+   "Minutes": 360,
+   "Note": "Electrical Assembly: assembly of electrical power and control cabinet including installation of components, drawings, client requirements review, equipment layout, cab mounting, wiring of the main disconnect and the drive cabinet, labeling, and a first power-up check with the customer.",
+   "PersonName": "Carlos Torrijos",
+   "PrincipalID": "p1",
+   "SpaceID": "",
+   "SpaceName": "",
+   "StartedAt": "2026-11-14T09:00:00Z",
+   "Tags": [
+    "Onsite"
+   ]
   },
   {
    "Approval": "pending",
    "DecidedAt": null,
    "DeciderName": "",
    "DocTitle": "",
-   "ID": "a2",
+   "ID": "a3",
    "LevelCustomer": "",
    "LevelPhase": "",
    "LevelSpace": "",
    "Minutes": 120,
-   "Note": "",
-   "PersonName": "Ann Lee",
+   "Note": "short note",
+   "PersonName": "Carlos Torrijos",
    "PrincipalID": "p1",
    "SpaceID": "",
    "SpaceName": "",
@@ -328,16 +350,45 @@
  "ReportNotice": "",
  "ReportPeople": null,
  "ReportPerson": "p1",
- "ReportPersonName": "Ann Lee",
+ "ReportPersonName": "Carlos Torrijos",
  "ReportSpace": "",
  "ReportSpaceID": "",
  "ReportSpaceNames": null,
- "ReportSpaceOptions": null,
+ "ReportSpaceOptions": [
+  {
+   "Depth": 0,
+   "Documents": 0,
+   "ID": "s1",
+   "Kind": "",
+   "Name": "MCS1002 Beachwood Ohio",
+   "OrgID": "",
+   "ParentID": null,
+   "Path": "Engineering / White Team Service / MCSI / MCS1002 Beachwood Ohio"
+  }
+ ],
  "ReportSpaces": null,
  "ReportTag": "",
- "ReportTagOptions": null,
+ "ReportTagOptions": [
+  {
+   "Description": "",
+   "ID": "g1",
+   "Name": "Onsite"
+  }
+ ],
  "ReportTeam": "",
- "ReportTeams": null,
+ "ReportTeams": [
+  {
+   "CreatedAt": "0001-01-01T00:00:00Z",
+   "Description": "",
+   "ExternalID": null,
+   "ID": "t1",
+   "Managed": false,
+   "Members": 0,
+   "Name": "Field",
+   "OrgID": "",
+   "Source": ""
+  }
+ ],
  "ReportTo": "2026-11-30",
  "ReportTotal": 180,
  "ReportTree": null,

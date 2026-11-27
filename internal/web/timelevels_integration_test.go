@@ -12,6 +12,7 @@ package web
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -106,6 +107,18 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	if _, err := set.Time.Log(ctx, org, subj, task.ID, 195, time.Date(2026, 11, 4, 9, 0, 0, 0, ny), "Travel to Mt. Clemens"); err != nil {
 		t.Fatalf("log: %v", err)
 	}
+	// The three-level case from Carlos Torrijos's November rows: White Team Service > MCSI > MCS1002 Beachwood Ohio, a task
+	// "Panel Integration" in it, and an entry with a long note.
+	mcsi := mk("MCSI", "folder", &wts)
+	beachwood := mk("MCS1002 Beachwood Ohio", "folder", &mcsi)
+	panel, err := set.Docs.Create(ctx, org, subj, docs.CreateParams{Kind: docs.KindTask, Title: "Panel Integration", SpaceID: &beachwood, Task: &docs.TaskFields{}})
+	if err != nil {
+		t.Fatalf("panel task: %v", err)
+	}
+	longNote := "Electrical Assembly: assembly of electrical power and control cabinet including installation of components, drawings, client requirements review, equipment layout, cab mounting."
+	if _, err := set.Time.Log(ctx, org, subj, panel.ID, 480, time.Date(2026, 11, 9, 9, 0, 0, 0, ny), longNote); err != nil {
+		t.Fatalf("log panel: %v", err)
+	}
 
 	// The real router, with the session wall the live server puts around it.
 	site, err := New(Deps{Docs: set.Docs, Auth: authSvc, Time: set.Time, Plant: set.Plant, Authz: azSvc, Teams: set.Teams, Log: log})
@@ -129,13 +142,14 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	}
 	const q = "/reports/time?detail=1&all=1&from=2026-11-01&to=2026-11-30&format="
 	want := []string{"White Team Service", "Expert Crane", "", "On-Site Testing at Mt. Clemens"}
+	want3 := []string{"White Team Service", "MCSI", "MCS1002 Beachwood Ohio", "Panel Integration"}
 
 	w := get(q + "csv")
 	if w.Code != http.StatusOK {
 		t.Fatalf("details csv: %d %s", w.Code, w.Body.String())
 	}
 	recs, err := csv.NewReader(w.Body).ReadAll()
-	if err != nil || len(recs) != 2 {
+	if err != nil || len(recs) != 3 {
 		t.Fatalf("details csv: %v %v", recs, err)
 	}
 	if got := strings.Join(recs[0][6:10], ","); got != "space,customer_project,service_project_phase,task" {
@@ -143,6 +157,9 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	}
 	if got := recs[1][6:10]; strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("details csv row reads %q, want %q", got, want)
+	}
+	if got := recs[2][6:10]; strings.Join(got, "|") != strings.Join(want3, "|") {
+		t.Errorf("details csv three-level row reads %q, want %q", got, want3)
 	}
 
 	w = get(q + "xlsx")
@@ -155,8 +172,13 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	}
 	defer f.Close()
 	rows, err := f.GetRows("Time details")
-	if err != nil || len(rows) != 2 {
+	if err != nil || len(rows) != 3 {
 		t.Fatalf("details xlsx rows: %v %v", rows, err)
+	}
+	for i, c := range want3 {
+		if rows[2][6+i] != c {
+			t.Errorf("details xlsx three-level column %d reads %q, want %q", 6+i, rows[2][6+i], c)
+		}
 	}
 	if strings.Join(rows[0][6:10], ",") != "space,customer_project,service_project_phase,task" {
 		t.Fatalf("details xlsx header %v", rows[0])
@@ -167,13 +189,44 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 		}
 	}
 
-	// The per-person files and the page's own data, the same four columns.
+	// The per-person files and the page itself, the same four columns for both shapes.
 	person := "/reports/time?from=2026-11-01&to=2026-11-30&person=" + owen
 	w = get(person + "&format=csv")
 	cr := csv.NewReader(w.Body)
 	cr.FieldsPerRecord = -1
 	recs, err = cr.ReadAll()
-	if err != nil || len(recs) < 2 || strings.Join(recs[1][2:6], "|") != strings.Join(want, "|") {
+	if err != nil || len(recs) < 4 || strings.Join(recs[1][2:6], "|") != strings.Join(want, "|") || strings.Join(recs[2][2:6], "|") != strings.Join(want3, "|") {
 		t.Errorf("per-person csv: %v %v", recs, err)
+	}
+	w = get(person + "&format=xlsx")
+	pf, err := excelize.OpenReader(w.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pf.Close()
+	prow, err := pf.GetRows("Time report")
+	if err != nil || len(prow) < 3 || strings.Join(prow[0][2:6], ",") != "Space,Customer/Project,Service/Project Phase,Task" || strings.Join(prow[2][2:6], "|") != strings.Join(want3, "|") {
+		t.Errorf("per-person xlsx: %v %v", prow, err)
+	}
+	// The page the interface draws, as the data it fetches.
+	r := httptest.NewRequest(http.MethodGet, person, nil)
+	r.Header.Set("Accept", "application/json")
+	for _, c := range cookies {
+		r.AddCookie(c)
+	}
+	pw := httptest.NewRecorder()
+	handler.ServeHTTP(pw, r)
+	var env struct {
+		Page struct {
+			Report []struct {
+				LevelSpace, LevelCustomer, LevelPhase, DocTitle, Note string
+			}
+		}
+	}
+	if err := json.Unmarshal(pw.Body.Bytes(), &env); err != nil || len(env.Page.Report) != 2 {
+		t.Fatalf("person page data: %v %s", err, pw.Body.String())
+	}
+	if g := env.Page.Report[1]; g.LevelSpace != want3[0] || g.LevelCustomer != want3[1] || g.LevelPhase != want3[2] || g.DocTitle != want3[3] || g.Note != longNote {
+		t.Errorf("person page three-level row = %+v", g)
 	}
 }
