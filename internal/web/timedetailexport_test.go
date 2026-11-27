@@ -13,6 +13,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
+	"github.com/Embernet-ai/hearth/internal/docs"
 	"github.com/Embernet-ai/hearth/internal/plant"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 )
@@ -345,7 +346,7 @@ func TestTimeReportFilesCarryTheFourColumns(t *testing.T) {
 func TestBackwardsDatesAreReadTheRightWayRoundWithBothDays(t *testing.T) {
 	st := &detailStore{rows: detailFixture()}
 	runDetail(t, st, "detail=1&format=csv&all=1&from=2026-11-30&to=2026-11-01")
-	day := func(s string) time.Time { d, _ := time.ParseInLocation("2006-01-02", s, time.Local); return d }
+	day := func(s string) time.Time { d, _ := time.ParseInLocation("2006-01-02", s, docs.OfficeZone()); return d }
 	if !st.gotFrom.Equal(day("2026-11-01")) || !st.gotTo.Equal(day("2026-12-01")) {
 		t.Fatalf("the store was asked for %s to %s, want 2026-11-01 to 2026-12-01 (half open)", st.gotFrom.Format("2006-01-02"), st.gotTo.Format("2006-01-02"))
 	}
