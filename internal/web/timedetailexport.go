@@ -33,15 +33,15 @@ import (
 
 // detailHeaders are the columns of the details file. date, hours, space, work,
 // tags and note are the per-person export's own columns, in its order and under
-// its names; the person and the entry's identity are added around them.
-var detailHeaders = []string{"employee", "employee_id", "date", "start", "hours", "minutes", "space", "work", "tags", "note", "entry_id", "approval_status", "decided_by", "decided_on"}
+// its names (the work column is now the three space levels and the task); the person and the entry's identity are added around them.
+var detailHeaders = []string{"employee", "employee_id", "date", "start", "hours", "minutes", "space", "customer_project", "service_project_phase", "task", "tags", "note", "entry_id", "approval_status", "decided_by", "decided_on"}
 
 func detailRow(row timelog.ReportRow) []string {
 	return []string{
 		row.PersonName, row.PrincipalID,
 		row.StartedAt.Format("2006-01-02"), row.StartedAt.Format("15:04"),
 		hoursAndMinutes(row.Minutes), strconv.Itoa(row.Minutes),
-		row.SpaceName, row.DocTitle, strings.Join(row.Tags, "; "), row.Note, row.ID,
+		row.LevelSpace, row.LevelCustomer, row.LevelPhase, row.DocTitle, strings.Join(row.Tags, "; "), row.Note, row.ID,
 		row.Approval, row.DeciderName, decidedOn(row.DecidedAt),
 	}
 }
@@ -72,6 +72,7 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 		s.fail(w, r, http.StatusBadRequest, "Choose at least one person to export, or choose everybody.")
 		return
 	}
+	levels := s.reportLevels(r.Context(), id.OrgID)
 	name := "time details " + from.Format("2006-01-02") + " to " + to.AddDate(0, 0, -1).Format("2006-01-02")
 
 	refuse := func(err error) {
@@ -116,6 +117,7 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 			if !filter.keep(row) {
 				return nil
 			}
+			levels(&row)
 			n++
 			cells := detailRow(row)
 			out := make([]any, len(cells))
@@ -166,6 +168,7 @@ func (s *Server) timeDetailExport(w http.ResponseWriter, r *http.Request, format
 		if !filter.keep(row) {
 			return nil
 		}
+		levels(&row)
 		begin()
 		if err := cw.Write(detailRow(row)); err != nil {
 			return err

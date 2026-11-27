@@ -262,8 +262,10 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := entries[:0:0]
+	levels := s.reportLevels(r.Context(), id.OrgID)
 	for _, row := range entries {
 		if filter.keep(row) {
+			levels(&row)
 			rows = append(rows, row)
 		}
 	}
@@ -284,12 +286,12 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		for _, row := range rows {
 			out = append(out, []string{
 				row.StartedAt.Format("2006-01-02"), hoursAndMinutes(row.Minutes),
-				row.SpaceName, row.DocTitle, strings.Join(row.Tags, "; "), row.Note,
+				row.LevelSpace, row.LevelCustomer, row.LevelPhase, row.DocTitle, strings.Join(row.Tags, "; "), row.Note,
 				approvalLabel(row.Approval), row.DeciderName, decidedOn(row.DecidedAt),
 			})
 		}
 		if err := writeXLSX(w, who+" time "+stamp,
-			[]string{"Date", "Hours", "Space", "Work", "Tags", "Note", "Approval", "Decided by", "Decided on"},
+			[]string{"Date", "Hours", "Space", "Customer/Project", "Service/Project Phase", "Task", "Tags", "Note", "Approval", "Decided by", "Decided on"},
 			out, "Total", hoursAndMinutes(total)); err != nil {
 			s.log.ErrorContext(r.Context(), "write xlsx", "error", err)
 		}
@@ -299,11 +301,11 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+
 			safeFilename(who+" time "+stamp)+`.csv"`)
 		cw := csv.NewWriter(w)
-		_ = cw.Write([]string{"date", "hours", "space", "work", "tags", "note", "approval_status", "decided_by", "decided_on"})
+		_ = cw.Write([]string{"date", "hours", "space", "customer_project", "service_project_phase", "task", "tags", "note", "approval_status", "decided_by", "decided_on"})
 		for _, row := range rows {
 			_ = cw.Write([]string{
 				row.StartedAt.Format("2006-01-02"), hoursAndMinutes(row.Minutes),
-				row.SpaceName, row.DocTitle, strings.Join(row.Tags, "; "), row.Note,
+				row.LevelSpace, row.LevelCustomer, row.LevelPhase, row.DocTitle, strings.Join(row.Tags, "; "), row.Note,
 				row.Approval, row.DeciderName, decidedOn(row.DecidedAt),
 			})
 		}

@@ -53,14 +53,14 @@ func csvOf(t *testing.T, rec *httptest.ResponseRecorder) [][]string {
 func ids(recs [][]string) string {
 	var out []string
 	for _, r := range recs[1:] {
-		out = append(out, r[10])
+		out = append(out, r[12])
 	}
 	return strings.Join(out, ",")
 }
 
 func TestDetailRowsSayWhereEachHourStands(t *testing.T) {
 	recs := csvOf(t, runDetail(t, &detailStore{rows: approvalFixture()}, "detail=1&format=csv&all=1"))
-	if got := strings.Join(recs[0][11:], ","); got != "approval_status,decided_by,decided_on" {
+	if got := strings.Join(recs[0][13:], ","); got != "approval_status,decided_by,decided_on" {
 		t.Fatalf("the file ends in %q", got)
 	}
 	want := map[string][3]string{
@@ -70,9 +70,9 @@ func TestDetailRowsSayWhereEachHourStands(t *testing.T) {
 		"b2": {"pending", "", ""},
 	}
 	for _, r := range recs[1:] {
-		w := want[r[10]]
-		if r[11] != w[0] || r[12] != w[1] || r[13] != w[2] {
-			t.Errorf("%s reads %v, want %v", r[10], r[11:], w)
+		w := want[r[12]]
+		if r[13] != w[0] || r[14] != w[1] || r[15] != w[2] {
+			t.Errorf("%s reads %v, want %v", r[12], r[13:], w)
 		}
 	}
 }

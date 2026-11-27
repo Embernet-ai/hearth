@@ -88,14 +88,16 @@
     {#if F.t(dot?.Report)}
       <table  class="list">
         <thead>
-          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Work</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
+          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/Project</th><th>Service/Project Phase</th><th>Task</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
         </thead>
         <tbody>
           {#each F.rng(dot?.Report) as [k1, d1]}
             <tr>
               <td  class="muted small">{F.date(d1?.StartedAt)}</td>
               <td>{F.hours(d1?.Minutes)}</td>
-              <td  class="muted">{d1?.SpaceName}</td>
+              <td  class="muted">{d1?.LevelSpace}</td>
+              <td  class="muted">{d1?.LevelCustomer}</td>
+              <td  class="muted">{d1?.LevelPhase}</td>
               <td  class="muted">{d1?.DocTitle}</td>
               <td  class="muted small">{#each F.rng(d1?.Tags) as [k2, d2]}{d2} {/each}</td>
               <td  class="muted small">{d1?.Note}</td>

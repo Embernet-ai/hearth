@@ -219,7 +219,7 @@ func fixtures() map[string]page {
 			ReportTagOptions: []timelog.Tag{{ID: "g1", Name: "Billable"}}},
 		"timereport-person-approval": {Title: "Time report", ReportFrom: "2026-11-01", ReportTo: "2026-11-30", ReportPerson: "p1", ReportPersonName: "Ann Lee", ReportTotal: 180,
 			Report: []timelog.ReportRow{
-				{ID: "a1", PrincipalID: "p1", PersonName: "Ann Lee", StartedAt: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Minutes: 60, Approval: timelog.ApprovalApproved},
+				{ID: "a1", PrincipalID: "p1", PersonName: "Ann Lee", DocTitle: "On-Site Testing", LevelSpace: "White Team Service", LevelCustomer: "Cast Nylon", LevelPhase: "CNY0324 Process Update", StartedAt: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Minutes: 60, Approval: timelog.ApprovalApproved},
 				{ID: "a2", PrincipalID: "p1", PersonName: "Ann Lee", StartedAt: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), Minutes: 120, Approval: timelog.ApprovalPending}}},
 		"marketing-contacts": {Title: "Marketing", Marketing: &MarketingView{Configured: true, Tab: "contacts", Total: 2,
 			Contacts: []mautic.Contact{{ID: 7, First: "Ann", Last: "Lee", Email: "ann@example.com", Company: "Acme", Tags: []string{"vip"}, LastActive: "2026-11-20 10:00:00", DoNotEmail: true},
