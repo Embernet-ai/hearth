@@ -775,15 +775,11 @@ type page struct {
 	// Billing's view, not planning's -- gated on Finance rather than TimeAll.
 	// Totals is the whole-org roll-up (the default view); Report is one
 	// person's entries, reached by clicking through from Totals.
-	Totals      []timelog.ReportTotal
-	Report      []timelog.ReportRow
-	ReportFrom  string
-	ReportTo    string
-	ReportTotal int
-	// ReportPeople is everybody the details export can be made for: every active person, with the time they logged in the
-	// range (none is 0). It is not the people who logged time, because a picker that only lists those is empty in a range
-	// with no time in it and a person cannot choose anybody. ReportNotice says why an export made nothing.
-	ReportPeople     []timelog.ReportTotal
+	Totals           []timelog.ReportTotal
+	Report           []timelog.ReportRow
+	ReportFrom       string
+	ReportTo         string
+	ReportTotal      int
 	ReportNotice     string
 	ReportPerson     string
 	ReportPersonName string
@@ -796,6 +792,10 @@ type page struct {
 	ReportTeams        []*teams.Team
 	ReportSpaceOptions []*plant.Space
 	ReportTagOptions   []timelog.Tag
+	// ReportWho is the people picked in the People selector (empty means everybody); ReportWhoOptions is everyone the selector
+	// offers, whatever the filters now keep.
+	ReportWho        []string
+	ReportWhoOptions []timelog.ReportTotal
 
 	// Tags: the org's own taxonomy for a logged hour. CanManageTags gates the
 	// create form on the tags page, not reading the list -- picking a tag does

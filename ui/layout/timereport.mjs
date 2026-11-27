@@ -3,6 +3,7 @@
 //   - sideways scrolling of the page,
 //   - a filter (its label or its control) that is not fully on screen,
 //   - a row that a long note turned into a block (taller than a note's first lines),
+//   - the People selector open with anything off the screen or a list that does not scroll in itself,
 //   - a note that is not the width of the table, or runs off its edge.
 // usage: npm run build && npm run build:ssr && node layout/timereport.mjs [--shots DIR]
 import fs from 'node:fs';
@@ -63,7 +64,29 @@ for (const name of ['timereport-person-approval', 'timereport-filtered']) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 800 }, colorScheme: 'light' });
     const p = await ctx.newPage();
     await p.setContent(html, { waitUntil: 'load' });
-    const found = await p.evaluate(inspect);
+    let found = await p.evaluate(inspect);
+    // the People selector open: its whole list on screen, scrolling inside itself, nothing off the edge
+    if (await p.locator('details.whopick').count()) {
+      await p.locator('details.whopick > summary').click();
+      const open = await p.evaluate(() => {
+        const out = [];
+        if (document.documentElement.scrollWidth > innerWidth + 1) out.push('the page scrolls sideways with the People selector open');
+        const panel = document.querySelector('details.whopick .whopanel');
+        const r = panel.getBoundingClientRect();
+        if (r.left < -1 || r.right > innerWidth + 1) out.push(`the open People list is off the screen (${Math.round(r.left)} to ${Math.round(r.right)} of ${innerWidth}px)`);
+        for (const el of panel.querySelectorAll('input[type=search], button, .wholist label')) {
+          const q = el.getBoundingClientRect();
+          if (q.width > 1 && (q.right > innerWidth + 1 || q.left < -1) && !el.closest('.wholist')) out.push(`a People control is off the screen: ${(el.textContent || el.placeholder || '').trim().slice(0, 20)}`);
+        }
+        const list = panel.querySelector('.wholist');
+        if (list.scrollHeight > list.clientHeight + 1 && getComputedStyle(list).overflowY === 'visible') out.push('a long People list does not scroll inside itself');
+        const summary = document.querySelector('details.whopick > summary').textContent.trim();
+        if (!summary) out.push('the People selector says nothing collapsed');
+        return out;
+      });
+      found = found.concat(open);
+      if (shots) await p.screenshot({ path: path.join(shots, `${name}-open-${w}.png`), fullPage: false });
+    }
     if (shots) await p.screenshot({ path: path.join(shots, `${name}-${w}.png`), fullPage: false });
     if (found.length) { bad++; console.log(`FAIL ${name} at ${w}px:\n  ${found.join('\n  ')}`); } else console.log(`ok   ${name} at ${w}px`);
     await ctx.close();

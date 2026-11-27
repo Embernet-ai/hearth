@@ -11,7 +11,9 @@ package web
 //	team=<id>                            the people in a team (repeat for several)
 //	space=<id>                           entries on work in a space or any space under it (repeat)
 //	tag=<name>                           entries carrying that time tag (repeat)
-//	person / people / all                who, as the report already took them
+//	people=<principal id>                only these people: on the page, in every file and in the details export (repeat or
+//	                                     comma-separate); none means everybody. all=1 still means everybody.
+//	person                               one person's page
 //	from, to                             the dates, as the report already took them
 //
 // Hearth has no billable flag on an hour. A time tag is how a team marks one, so
@@ -36,12 +38,13 @@ type reportFilter struct {
 	people    map[string]bool // from the chosen teams; nil when no team was chosen
 	spaces    map[string]bool // the chosen spaces and everything under them; nil when none was chosen
 	tags      map[string]bool // lower-cased
+	who       map[string]bool // the people picked in the People selector; nil when nobody was, which means everybody
 	// the parameters as the request spelled them, for the links the page builds
-	approvalQ, teamQ, spaceQ, tagQ []string
+	approvalQ, teamQ, spaceQ, tagQ, whoQ []string
 }
 
 func (f reportFilter) active() bool {
-	return len(f.approvals) > 0 || f.people != nil || f.spaces != nil || len(f.tags) > 0
+	return len(f.approvals) > 0 || f.people != nil || f.spaces != nil || len(f.tags) > 0 || f.who != nil
 }
 
 // values reads a repeatable, comma-separable parameter, each value once and trimmed.
@@ -115,6 +118,13 @@ func (s *Server) parseReportFilter(ctx context.Context, r *http.Request) (f repo
 			}
 		}
 	}
+	if who := values(q, "people"); len(who) > 0 && q.Get("all") != "1" {
+		f.whoQ = who
+		f.who = map[string]bool{}
+		for _, p := range who {
+			f.who[p] = true
+		}
+	}
 	if tags := values(q, "tag"); len(tags) > 0 {
 		f.tagQ = tags
 		f.tags = map[string]bool{}
@@ -153,6 +163,9 @@ func (f reportFilter) keep(row timelog.ReportRow) bool {
 	if f.people != nil && !f.people[row.PrincipalID] {
 		return false
 	}
+	if f.who != nil && !f.who[row.PrincipalID] {
+		return false
+	}
 	if f.spaces != nil && !f.spaces[row.SpaceID] {
 		return false
 	}
@@ -186,6 +199,9 @@ func (f reportFilter) query() string {
 	}
 	for _, t := range f.tagQ {
 		v.Add("tag", t)
+	}
+	for _, p := range f.whoQ {
+		v.Add("people", p)
 	}
 	if len(v) == 0 {
 		return ""

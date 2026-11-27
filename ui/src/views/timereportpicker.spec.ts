@@ -2,19 +2,42 @@ import { describe, expect, test } from 'vitest';
 import { draw, text } from './testing/draw';
 import { fixture } from './testing/fixture';
 
-describe('the time report details export', () => {
-  test('offers every person even when nobody logged time in the range, and the buttons wake up when somebody is ticked', () => {
+describe('the time report people selector and details export', () => {
+  test('the People selector is in the filter bar, offers every person even when nobody logged time, and the export is never dead', () => {
     const d = draw('timereport', fixture('timereport-nobody-logged'));
     expect(text(d)).toContain('Nothing logged in this range');
-    const panel = d.querySelector('form.detail-export');
-    expect(panel, 'the Export details panel is missing when nobody logged time').not.toBeNull();
-    expect(panel!.querySelectorAll('input[name=people]').length).toBe(2);
+    const bar = d.querySelector('form.reportfilters');
+    const picker = bar?.querySelector('details.whopick');
+    expect(picker, 'the People selector is not in the filter bar').not.toBeNull();
+    expect(bar!.querySelector('label[for=f-people]')?.textContent).toBe('People');
+    expect(picker!.querySelector('summary')?.textContent?.trim()).toBe('Everyone');
+    expect(picker!.querySelectorAll('input[name=people]').length).toBe(2);
+    expect(picker!.querySelector('input[type=search]')).not.toBeNull();
+    expect(picker!.querySelector('[data-who-all]')?.textContent).toBe('Select all');
+    expect(picker!.querySelector('[data-who-clear]')?.textContent).toBe('Clear');
     expect(text(d)).toContain('Ann Lee');
-    expect(text(d)).toContain('Select all (2)');
-    // nothing ticked: the buttons stay live and ask for everyone in the view (a dead button gave Yessid nothing)
-    expect((panel!.querySelector('button[value=csv]') as HTMLButtonElement).disabled).toBe(false);
-    expect((panel!.querySelector('button[value=xlsx]') as HTMLButtonElement).disabled).toBe(false);
-    expect(panel!.querySelector('input[name=all][value="1"]')).not.toBeNull();
+    // the list of ticks at the bottom is gone, and the export asks for everyone in the view when nobody is picked
+    expect(d.querySelector('form.detail-export')).toBeNull();
+    const csv = d.querySelector('a[data-detail=csv]') as HTMLAnchorElement;
+    const xlsx = d.querySelector('a[data-detail=xlsx]') as HTMLAnchorElement;
+    expect(csv.getAttribute('href')).toContain('detail=1');
+    expect(csv.getAttribute('href')).toContain('all=1');
+    expect(csv.getAttribute('href')).toContain('format=csv');
+    expect(xlsx.getAttribute('href')).toContain('format=xlsx');
+    expect(text(d)).toContain('Everyone in this view (2)');
+  });
+  test('what is picked is shown collapsed, kept in the downloads and carried by the details export', () => {
+    const d = draw('timereport', fixture('timereport-filtered'));
+    const picker = d.querySelector('details.whopick')!;
+    expect(picker.querySelector('summary')?.textContent?.trim()).toBe('Ann Lee');
+    expect((picker.querySelector('input[name=people][value=p1]') as HTMLInputElement).hasAttribute('checked')).toBe(true);
+    expect((picker.querySelector('input[name=people][value=p2]') as HTMLInputElement).hasAttribute('checked')).toBe(false);
+    const csv = Array.from(d.querySelectorAll('a.chip')).find((a) => a.textContent?.includes('CSV') && !a.hasAttribute('data-detail')) as HTMLAnchorElement;
+    expect(csv.getAttribute('href')).toContain('&people=p1');
+    const details = d.querySelector('a[data-detail=csv]') as HTMLAnchorElement;
+    expect(details.getAttribute('href')).toContain('people=p1');
+    expect(details.getAttribute('href')).not.toContain('all=1');
+    expect(text(d)).toContain('1 of 25 chosen');
   });
   test('says why an export came back empty', () => {
     const d = draw('timereport', fixture('timereport-nobody-logged'));
@@ -34,9 +57,9 @@ describe('the time report filters', () => {
     expect(chosen(d.querySelector('select[name=tag]'))).toBe('Billable');
     const csv = Array.from(d.querySelectorAll('a.chip')).find((a) => a.textContent?.includes('CSV')) as HTMLAnchorElement;
     expect(csv.getAttribute('href')).toContain('&approval=pending&team=t1&tag=Billable');
-    const panel = d.querySelector('form.detail-export')!;
-    expect((panel.querySelector('input[name=approval]') as HTMLInputElement).value).toBe('pending');
-    expect((panel.querySelector('input[name=team]') as HTMLInputElement).value).toBe('t1');
+    const href = (d.querySelector('a[data-detail=csv]') as HTMLAnchorElement).getAttribute('href')!;
+    expect(href).toContain('approval=pending');
+    expect(href).toContain('team=t1');
     expect(text(d)).toContain('approved, pending or rejected');
   });
   test('shows each entry\'s approval on a person\'s report', () => {

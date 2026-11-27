@@ -152,6 +152,15 @@ pre { max-width: 100%; overflow-x: auto; }
 main section > .table-wrap, main section table.list { max-width: 100%; }
 /* a table with many columns scrolls inside its own box rather than widening the page */
 .table-scroll { max-width: 100%; overflow-x: auto; }
+/* the People selector in the filter bar: a box like the other filters that opens a searchable list, scrolling inside itself */
+.whopick { position: relative; min-width: 0; }
+.whopick > summary { display: flex; align-items: center; min-height: var(--control-h); padding: 0 var(--s-3); border: 1px solid var(--line); border-radius: var(--r-2, 8px); background: var(--surface, transparent); cursor: pointer; list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.whopick > summary::after { content: "\25BE"; margin-left: auto; padding-left: var(--s-2); }
+.whopick .whopanel { margin-top: var(--s-1); width: 100%; max-width: 100%; }
+/* open, the selector takes the whole row of the filter grid and pushes the rest down, so its list is never cut by the screen edge */
+form.reportfilters .fld:has(> details.whopick[open]) { grid-column: 1 / -1; }
+.whopick .whopanel .wholist { max-height: 16rem; overflow-y: auto; display: grid; gap: var(--s-1); margin-top: var(--s-2); }
+.whopick .whopanel .wholist label { display: flex; gap: var(--s-2); align-items: center; white-space: normal; }
 /* the report's filter bar: every filter is a labelled box in a grid that wraps to the width, so none runs off the page or loses its label */
 form.reportfilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s-2) var(--s-3); align-items: end; margin: var(--s-3) 0; }
 form.reportfilters .fld { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }

@@ -348,7 +348,6 @@
  "ReportFilterQS": "",
  "ReportFrom": "2026-11-01",
  "ReportNotice": "",
- "ReportPeople": null,
  "ReportPerson": "p1",
  "ReportPersonName": "Carlos Torrijos",
  "ReportSpace": "",
@@ -392,6 +391,134 @@
  "ReportTo": "2026-11-30",
  "ReportTotal": 180,
  "ReportTree": null,
+ "ReportWho": null,
+ "ReportWhoOptions": [
+  {
+   "Minutes": 120,
+   "PersonName": "Ann Lee",
+   "PrincipalID": "p1"
+  },
+  {
+   "Minutes": 480,
+   "PersonName": "Bo Diaz",
+   "PrincipalID": "p2"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 3 with a Longer Name",
+   "PrincipalID": "p3"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 4 with a Longer Name",
+   "PrincipalID": "p4"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 5 with a Longer Name",
+   "PrincipalID": "p5"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 6 with a Longer Name",
+   "PrincipalID": "p6"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 7 with a Longer Name",
+   "PrincipalID": "p7"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 8 with a Longer Name",
+   "PrincipalID": "p8"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 9 with a Longer Name",
+   "PrincipalID": "p9"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 10 with a Longer Name",
+   "PrincipalID": "p10"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 11 with a Longer Name",
+   "PrincipalID": "p11"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 12 with a Longer Name",
+   "PrincipalID": "p12"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 13 with a Longer Name",
+   "PrincipalID": "p13"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 14 with a Longer Name",
+   "PrincipalID": "p14"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 15 with a Longer Name",
+   "PrincipalID": "p15"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 16 with a Longer Name",
+   "PrincipalID": "p16"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 17 with a Longer Name",
+   "PrincipalID": "p17"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 18 with a Longer Name",
+   "PrincipalID": "p18"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 19 with a Longer Name",
+   "PrincipalID": "p19"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 20 with a Longer Name",
+   "PrincipalID": "p20"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 21 with a Longer Name",
+   "PrincipalID": "p21"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 22 with a Longer Name",
+   "PrincipalID": "p22"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 23 with a Longer Name",
+   "PrincipalID": "p23"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 24 with a Longer Name",
+   "PrincipalID": "p24"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Person Number 25 with a Longer Name",
+   "PrincipalID": "p25"
+  }
+ ],
  "Results": null,
  "Routes": null,
  "RuleRuns": null,

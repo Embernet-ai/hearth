@@ -251,11 +251,19 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Everyone this account can report on, for the People selector, whatever the filters now keep (people with no time
+		// in the range included, so a range with nothing in it still offers them).
+		every := totals
+		if filter.active() {
+			if all, err := s.time.TimeReportSummary(r.Context(), id.OrgID, id.PrincipalID, from, to); err == nil {
+				every = all
+			}
+		}
 		pg := page{
 			Title: "Time report", Totals: totals, ReportTotal: grand,
-			ReportPeople: s.reportPeople(r.Context(), id.OrgID, totals),
-			ReportNotice: r.URL.Query().Get("notice"),
-			ReportFrom:   reportFrom, ReportTo: reportTo,
+			ReportWhoOptions: s.reportPeople(r.Context(), id.OrgID, every),
+			ReportNotice:     r.URL.Query().Get("notice"),
+			ReportFrom:       reportFrom, ReportTo: reportTo,
 		}
 		s.reportFilterPage(r.Context(), &pg, filter)
 		s.render(w, r, "timereport", pg)
@@ -325,6 +333,10 @@ func (s *Server) getTimeReport(w http.ResponseWriter, r *http.Request) {
 		ReportFrom: reportFrom, ReportTo: reportTo,
 		ReportPerson: person, ReportPersonName: name,
 	}
+	// The People selector is on this page too, so a person can step from one person's entries to another's.
+	if all, err := s.time.TimeReportSummary(r.Context(), id.OrgID, id.PrincipalID, from, to); err == nil {
+		pg.ReportWhoOptions = s.reportPeople(r.Context(), id.OrgID, all)
+	}
 	s.reportFilterPage(r.Context(), &pg, filter)
 	s.render(w, r, "timereport", pg)
 }
@@ -379,6 +391,7 @@ func (s *Server) reportFilterPage(ctx context.Context, pg *page, f reportFilter)
 	if len(f.tagQ) == 1 {
 		pg.ReportTag = f.tagQ[0]
 	}
+	pg.ReportWho = f.whoQ
 	id := auth.From(ctx)
 	if id == nil {
 		return

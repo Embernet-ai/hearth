@@ -74,6 +74,15 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	client := emberops.New(emberops.Config{BaseURL: opsURL, Service: emberops.StaticToken("svc")})
 	ops.Put("User", map[string]any{"name": "owen@example.com", "hearth_id": owen, "full_name": "Owen Ellis"})
 	ops.Put("Employee", map[string]any{"name": "EMP-owen", "hearth_id": owen, "user_id": "owen@example.com"})
+	zoe, err := authSvc.AddPerson(ctx, org, owen, "Zoe Hall", "zoe@example.com", "a-long-enough-password")
+	if err != nil {
+		t.Fatalf("zoe: %v", err)
+	}
+	if _, err := pools.Web.Exec(ctx, `INSERT INTO capability_grants (org_id, principal_id, capability, granted_by) VALUES ($1,$2,'super_admin',$3)`, org, zoe, owen); err != nil {
+		t.Fatal(err)
+	}
+	ops.Put("User", map[string]any{"name": "zoe@example.com", "hearth_id": zoe, "full_name": "Zoe Hall"})
+	ops.Put("Employee", map[string]any{"name": "EMP-zoe", "hearth_id": zoe, "user_id": "zoe@example.com"})
 
 	ny, _ := time.LoadLocation("America/New_York")
 
@@ -120,6 +129,14 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 		t.Fatalf("log panel: %v", err)
 	}
 
+	zoeSubj, err := azSvc.SubjectsFor(ctx, org, zoe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := set.Time.Log(ctx, org, zoeSubj, task.ID, 120, time.Date(2026, 11, 5, 9, 0, 0, 0, ny), "Zoe on site"); err != nil {
+		t.Fatalf("log zoe: %v", err)
+	}
+
 	// The real router, with the session wall the live server puts around it.
 	site, err := New(Deps{Docs: set.Docs, Auth: authSvc, Time: set.Time, Plant: set.Plant, Authz: azSvc, Teams: set.Teams, Log: log})
 	if err != nil {
@@ -149,7 +166,7 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 		t.Fatalf("details csv: %d %s", w.Code, w.Body.String())
 	}
 	recs, err := csv.NewReader(w.Body).ReadAll()
-	if err != nil || len(recs) != 3 {
+	if err != nil || len(recs) != 4 {
 		t.Fatalf("details csv: %v %v", recs, err)
 	}
 	if got := strings.Join(recs[0][6:10], ","); got != "space,customer_project,service_project_phase,task" {
@@ -172,7 +189,7 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	}
 	defer f.Close()
 	rows, err := f.GetRows("Time details")
-	if err != nil || len(rows) != 3 {
+	if err != nil || len(rows) != 4 {
 		t.Fatalf("details xlsx rows: %v %v", rows, err)
 	}
 	for i, c := range want3 {
@@ -228,5 +245,49 @@ func TestTimeReportColumnsOnTheLiveStoreSet(t *testing.T) {
 	}
 	if g := env.Page.Report[1]; g.LevelSpace != want3[0] || g.LevelCustomer != want3[1] || g.LevelPhase != want3[2] || g.DocTitle != want3[3] || g.Note != longNote {
 		t.Errorf("person page three-level row = %+v", g)
+	}
+
+	// The People selector: the picks are the `people` filter, on the page, in the summary files and in the details export.
+	rowsOf := func(path string) [][]string {
+		cr := csv.NewReader(get(path).Body)
+		cr.FieldsPerRecord = -1
+		r, err := cr.ReadAll()
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		return r
+	}
+	const base = "/reports/time?from=2026-11-01&to=2026-11-30"
+	if r := rowsOf(base + "&detail=1&format=csv&people=" + zoe); len(r) != 2 || r[1][0] != "Zoe Hall" {
+		t.Errorf("details for Zoe alone: %v", r)
+	}
+	if r := rowsOf(base + "&detail=1&format=csv&people=" + owen); len(r) != 3 || r[1][0] != "Owen Ellis" || r[2][0] != "Owen Ellis" {
+		t.Errorf("details for Owen alone: %v", r)
+	}
+	if r := rowsOf(base + "&detail=1&format=csv"); len(r) != 4 {
+		t.Errorf("details with nobody picked should be everyone in the view: %d rows", len(r))
+	}
+	if r := rowsOf(base + "&format=csv&people=" + zoe); len(r) < 3 || r[1][0] != "Zoe Hall" || r[2][0] != "total" {
+		t.Errorf("summary csv for Zoe alone: %v", r)
+	}
+	pr := httptest.NewRequest(http.MethodGet, base+"&people="+owen, nil)
+	pr.Header.Set("Accept", "application/json")
+	for _, c := range cookies {
+		pr.AddCookie(c)
+	}
+	pw2 := httptest.NewRecorder()
+	handler.ServeHTTP(pw2, pr)
+	var pg struct {
+		Page struct {
+			Totals           []struct{ PersonName string }
+			ReportWho        []string
+			ReportWhoOptions []struct{ PersonName string }
+		}
+	}
+	if err := json.Unmarshal(pw2.Body.Bytes(), &pg); err != nil {
+		t.Fatal(err)
+	}
+	if len(pg.Page.Totals) != 1 || pg.Page.Totals[0].PersonName != "Owen Ellis" || len(pg.Page.ReportWho) != 1 || pg.Page.ReportWho[0] != owen || len(pg.Page.ReportWhoOptions) != 2 {
+		t.Errorf("totals page with Owen picked: %+v", pg.Page)
 	}
 }

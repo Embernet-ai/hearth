@@ -289,18 +289,6 @@
  "ReportFilterQS": "",
  "ReportFrom": "2026-11-01",
  "ReportNotice": "Nothing to export: the people you chose have no finished time between 2026-11-01 and 2026-11-30. Widen the dates above, press Show, and try again.",
- "ReportPeople": [
-  {
-   "Minutes": 0,
-   "PersonName": "Ann Lee",
-   "PrincipalID": "p1"
-  },
-  {
-   "Minutes": 0,
-   "PersonName": "Bo Diaz",
-   "PrincipalID": "p2"
-  }
- ],
  "ReportPerson": "",
  "ReportPersonName": "",
  "ReportSpace": "",
@@ -315,6 +303,19 @@
  "ReportTo": "2026-11-30",
  "ReportTotal": 0,
  "ReportTree": null,
+ "ReportWho": null,
+ "ReportWhoOptions": [
+  {
+   "Minutes": 0,
+   "PersonName": "Ann Lee",
+   "PrincipalID": "p1"
+  },
+  {
+   "Minutes": 0,
+   "PersonName": "Bo Diaz",
+   "PrincipalID": "p2"
+  }
+ ],
  "Results": null,
  "Routes": null,
  "RuleRuns": null,
