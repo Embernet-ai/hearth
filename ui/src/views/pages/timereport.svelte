@@ -150,8 +150,8 @@
             {#if S(d1?.Note)}
               <tr  class="noterow">
                 <td  colspan="8"  class="muted small">
-                  {#if S(d1?.Note).length > 240}
-                    <details  class="note"><summary><span  class="short">{S(d1?.Note).slice(0, 240)}… <u>more</u></span><span  class="full">{d1?.Note} <u>less</u></span></summary></details>
+                  {#if S(d1?.Note).length > 160}
+                    <details  class="note"><summary><span  class="short">{S(d1?.Note).slice(0, 160)}… <u>more</u></span><span  class="full">{d1?.Note} <u>less</u></span></summary></details>
                   {:else}{d1?.Note}{/if}
                 </td>
               </tr>
