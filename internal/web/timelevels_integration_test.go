@@ -29,9 +29,9 @@ import (
 	"github.com/Embernet-ai/hearth/internal/emberops"
 	"github.com/Embernet-ai/hearth/internal/emberops/fake"
 	"github.com/Embernet-ai/hearth/internal/emberops/stores"
+	"github.com/Embernet-ai/hearth/internal/plant"
 	"github.com/Embernet-ai/hearth/internal/platform/pg"
 	"github.com/Embernet-ai/hearth/internal/platform/pg/pgtest"
-	"github.com/Embernet-ai/hearth/internal/plant"
 	"github.com/Embernet-ai/hearth/internal/teams"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 )
