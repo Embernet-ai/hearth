@@ -231,3 +231,30 @@ func sortTotals(out []timelog.ReportTotal) {
 		return strings.ToLower(out[i].PersonName) < strings.ToLower(out[j].PersonName)
 	})
 }
+
+// spaceChainer is what reads the whole space tree for the report's levels. The Postgres plant service has it; a
+// store that does not leaves the levels as the entry's space alone.
+type spaceChainer interface {
+	SpaceChains(ctx context.Context, orgID string) (map[string][]plant.SpaceLink, error)
+}
+
+// reportLevels returns what fills a row's Space, Customer/Project and Service/Project Phase from the space tree, read
+// once for the request. If the tree cannot be read the row keeps the space it already names, in the Space column, and
+// the failure is logged; the other two stay empty rather than guessed.
+func (s *Server) reportLevels(ctx context.Context, orgID string) func(*timelog.ReportRow) {
+	var chains map[string][]plant.SpaceLink
+	if c, ok := s.plant.(spaceChainer); ok && s.plant != nil {
+		var err error
+		if chains, err = c.SpaceChains(ctx, orgID); err != nil {
+			s.log.WarnContext(ctx, "time report: space chains", "error", err)
+			chains = nil
+		}
+	}
+	return func(row *timelog.ReportRow) {
+		if chain, ok := chains[row.SpaceID]; ok && row.SpaceID != "" {
+			row.LevelSpace, row.LevelCustomer, row.LevelPhase = plant.ReportLevels(chain)
+			return
+		}
+		row.LevelSpace = row.SpaceName
+	}
+}

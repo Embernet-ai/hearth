@@ -77,7 +77,7 @@ func (e *expiryWriter) replace() {
 		to += "?next=" + url.QueryEscape(next)
 	}
 	switch {
-	case wantsJSON(e.r):
+	case strings.HasPrefix(e.r.URL.Path, "/api/"):
 		h.Set("Content-Type", "application/json")
 		e.ResponseWriter.WriteHeader(http.StatusUnauthorized)
 		_, _ = e.ResponseWriter.Write([]byte(`{"error":"your sign-in has ended; sign in again"}` + "\n"))
@@ -87,6 +87,10 @@ func (e *expiryWriter) replace() {
 	}
 }
 
+// wantsJSON is kept for the callers that decide by Accept. The expired-session answer no longer uses it: the interface
+// fetches its pages with an Accept of application/json, and a 401 with a JSON body there was drawn as page data, so a
+// person whose sign-in had ended saw a broken page or a dead download. Only the machine API answers 401 now; everything
+// else is sent to sign-in with the page they wanted, and the fetch follows the redirect to the sign-in page.
 func wantsJSON(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, "/api/") ||
 		strings.Contains(r.Header.Get("Accept"), "application/json")

@@ -767,6 +767,11 @@ type ReportRow struct {
 	// SpaceID is the space the entry's document sits in, empty when it is not
 	// attached to one. The time report filters on it.
 	SpaceID string
+	// LevelSpace, LevelCustomer and LevelPhase are the report's Space, Customer/Project and Service/Project Phase
+	// columns: the levels of the space tree above the entry's document, empty where a level does not exist. The
+	// report fills them from the tree (plant.ReportLevels); a store does not. The document's own title is the Task
+	// column, DocTitle.
+	LevelSpace, LevelCustomer, LevelPhase string
 	// Approval is where the entry stands: ApprovalApproved, ApprovalPending or
 	// ApprovalRejected. DecidedAt and DeciderName say who settled it and when, and
 	// are empty while it is pending.

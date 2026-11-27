@@ -86,16 +86,19 @@
 
   {#if F.t(dot?.ReportPerson)}
     {#if F.t(dot?.Report)}
+      <div  class="table-scroll">
       <table  class="list">
         <thead>
-          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Work</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
+          <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/Project</th><th>Service/Project Phase</th><th>Task</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
         </thead>
         <tbody>
           {#each F.rng(dot?.Report) as [k1, d1]}
             <tr>
               <td  class="muted small">{F.date(d1?.StartedAt)}</td>
               <td>{F.hours(d1?.Minutes)}</td>
-              <td  class="muted">{d1?.SpaceName}</td>
+              <td  class="muted">{d1?.LevelSpace}</td>
+              <td  class="muted">{d1?.LevelCustomer}</td>
+              <td  class="muted">{d1?.LevelPhase}</td>
               <td  class="muted">{d1?.DocTitle}</td>
               <td  class="muted small">{#each F.rng(d1?.Tags) as [k2, d2]}{d2} {/each}</td>
               <td  class="muted small">{d1?.Note}</td>
@@ -104,6 +107,7 @@
           {/each}
         </tbody>
       </table>
+      </div>
     {:else}
       <p  class="muted">Nothing logged in this range.</p>
     {/if}
@@ -129,7 +133,7 @@
       <form  class="detail-export"  method="get"  action="/reports/time"  style="margin-top:1.5rem">
         <h2>Export details</h2>
         <p  class="muted small">
-          One file with every entry, not just the totals, for the people you tick,
+          One file with every entry, not just the totals, for the people you tick (nobody ticked means everyone in this view),
           {S(dot?.ReportFrom)} to {S(dot?.ReportTo)}. Each row carries the person's
           name and id, and whether the hours are approved, pending or rejected. To change
           the dates or filter by approval, team, space or tag, set them above and press Show.
@@ -141,7 +145,7 @@
         {#if F.t(dot?.ReportTeam)}<input  type="hidden"  name="team"  value={S(dot?.ReportTeam)}>{/if}
         {#if F.t(dot?.ReportSpaceID)}<input  type="hidden"  name="space"  value={S(dot?.ReportSpaceID)}>{/if}
         {#if F.t(dot?.ReportTag)}<input  type="hidden"  name="tag"  value={S(dot?.ReportTag)}>{/if}
-        {#if allPicked}<input  type="hidden"  name="all"  value="1">{/if}
+        {#if allPicked || picked.length === 0}<input  type="hidden"  name="all"  value="1">{/if}
         <p>
           <label>
             <input  id="detail-all"  type="checkbox"  checked={allPicked}
@@ -160,9 +164,9 @@
           {/each}
         </div>
         <div  class="row">
-          <button  type="submit"  name="format"  value="csv"  disabled={picked.length === 0}>Download details CSV</button>
-          <button  type="submit"  name="format"  value="xlsx"  disabled={picked.length === 0}>Download details Excel</button>
-          <span  class="muted small">{picked.length} of {everyone.length} chosen</span>
+          <button  type="submit"  name="format"  value="csv">Download details CSV</button>
+          <button  type="submit"  name="format"  value="xlsx">Download details Excel</button>
+          <span  class="muted small">{#if picked.length === 0}Everyone in this view ({everyone.length}){:else}{picked.length} of {everyone.length} chosen{/if}</span>
         </div>
       </form>
     {/if}

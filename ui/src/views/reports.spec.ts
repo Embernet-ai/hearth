@@ -118,8 +118,10 @@ describe('time report', () => {
     expect(form?.querySelector('#detail-all')).not.toBeNull();
     for (const id of ['p1', 'p2']) expect(form?.querySelector(`input[name=people][value=${id}]`), id).not.toBeNull();
     for (const f of ['csv', 'xlsx']) expect(form?.querySelector(`button[name=format][value=${f}]`), f).not.toBeNull();
-    // Nobody is ticked to begin with, so neither button can send an empty request.
-    expect(form?.querySelector('button[name=format][value=csv]')?.hasAttribute('disabled')).toBe(true);
+    // Nobody is ticked to begin with and neither button is dead: with nobody ticked the form asks for everyone in the view.
+    expect(form?.querySelector('button[name=format][value=csv]')?.hasAttribute('disabled')).toBe(false);
+    expect(form?.querySelector('button[name=format][value=xlsx]')?.hasAttribute('disabled')).toBe(false);
+    expect(form?.querySelector('input[name=all][value="1"]')).not.toBeNull();
   });
 
   test('one person drilled into has no details form and keeps its own downloads', () => {

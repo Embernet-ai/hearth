@@ -13,6 +13,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/Embernet-ai/hearth/internal/auth"
+	"github.com/Embernet-ai/hearth/internal/plant"
 	"github.com/Embernet-ai/hearth/internal/timelog"
 )
 
@@ -44,6 +45,16 @@ func (d *detailStore) TimeReportRows(_ context.Context, _, _ string, ids []strin
 		}
 	}
 	return nil
+}
+
+func (d *detailStore) TimeReport(_ context.Context, _, _, person string, _, _ time.Time) ([]timelog.ReportRow, error) {
+	var out []timelog.ReportRow
+	for _, r := range d.rows {
+		if person == "" || r.PrincipalID == person {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func detailFixture() []timelog.ReportRow {
@@ -86,8 +97,8 @@ func TestDetailCSVForChosenPeople(t *testing.T) {
 	}
 	first := recs[1]
 	if first[0] != "Ann Lee" || first[1] != "p1" || first[2] != "2026-11-03" || first[3] != "09:30" ||
-		first[4] != "1h 30m" || first[5] != "90" || first[6] != "Acme" || first[7] != "Wire the panel" ||
-		first[8] != "billable; onsite" || first[9] != `day one, "tight"` || first[10] != "e1" {
+		first[4] != "1h 30m" || first[5] != "90" || first[6] != "Acme" || first[7] != "" || first[8] != "" || first[9] != "Wire the panel" ||
+		first[10] != "billable; onsite" || first[11] != `day one, "tight"` || first[12] != "e1" {
 		t.Errorf("first row %v", first)
 	}
 	if recs[3][0] != "Bo Diaz" || recs[3][1] != "p2" {
@@ -121,10 +132,29 @@ func TestDetailAllAsksForEverybody(t *testing.T) {
 	}
 }
 
-func TestDetailNeedsSomebody(t *testing.T) {
-	rec := runDetail(t, &detailStore{rows: detailFixture()}, "detail=1&format=csv")
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status %d, want 400", rec.Code)
+// A details button with nobody ticked used to be disabled, and a request that arrived without people was refused with a 400.
+// Yessid pressed it and got nothing. Nobody ticked now means everybody in the report's current view.
+func TestDetailWithNobodyTickedExportsEveryoneInTheView(t *testing.T) {
+	for _, format := range []string{"csv", "xlsx"} {
+		st := &detailStore{rows: detailFixture()}
+		rec := runDetail(t, st, "detail=1&format="+format+"&from=2026-11-01&to=2026-11-30")
+		if rec.Code != http.StatusOK || len(st.gotPeop) != 0 {
+			t.Fatalf("%s: status %d, store asked for %v", format, rec.Code, st.gotPeop)
+		}
+		if format == "csv" {
+			recs, _ := csv.NewReader(rec.Body).ReadAll()
+			if len(recs) != 4 {
+				t.Fatalf("csv: %d records, want the header and 3 entries", len(recs))
+			}
+		}
+	}
+}
+
+func TestDetailWithNobodyTickedStillAppliesTheFilters(t *testing.T) {
+	st := &detailStore{rows: approvalFixture()}
+	got := ids(csvOf(t, runDetail(t, st, "detail=1&format=csv&approval=pending")))
+	if got != "a2,b2" {
+		t.Fatalf("pending with nobody ticked exported %q", got)
 	}
 }
 
@@ -150,7 +180,7 @@ func TestDetailXLSXRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	for cell, want := range map[string]string{"A1": "employee", "B1": "employee_id", "A2": "Ann Lee", "B2": "p1", "A4": "Bo Diaz", "K4": "e3"} {
+	for cell, want := range map[string]string{"A1": "employee", "B1": "employee_id", "A2": "Ann Lee", "B2": "p1", "A4": "Bo Diaz", "M4": "e3", "G1": "space", "H1": "customer_project", "I1": "service_project_phase", "J1": "task"} {
 		if got, _ := f.GetCellValue("Time details", cell); got != want {
 			t.Errorf("%s = %q, want %q", cell, got, want)
 		}
@@ -230,5 +260,80 @@ func TestDetailExportLeavesALogLine(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("the log lacks %s:\n%s", want, out)
 		}
+	}
+}
+
+// chainStore stands in for the plant service's tree read.
+type chainPlant struct {
+	plant.Store
+	chains map[string][]plant.SpaceLink
+}
+
+func (c chainPlant) SpaceChains(context.Context, string) (map[string][]plant.SpaceLink, error) {
+	return c.chains, nil
+}
+
+func levelFixture() ([]timelog.ReportRow, chainPlant) {
+	at := time.Date(2026, 11, 4, 9, 0, 0, 0, time.Local)
+	rows := []timelog.ReportRow{
+		{ID: "l1", PrincipalID: "p1", PersonName: "Ann Lee", DocTitle: "On-Site Testing at Mt. Clemens", SpaceID: "crane", SpaceName: "Expert Crane", StartedAt: at, Minutes: 195},
+		{ID: "l2", PrincipalID: "p1", PersonName: "Ann Lee", DocTitle: "Alarm map", SpaceID: "cny", SpaceName: "CNY0324 Process Update", StartedAt: at, Minutes: 60},
+		{ID: "l3", PrincipalID: "p1", PersonName: "Ann Lee", StartedAt: at, Minutes: 30},
+	}
+	chains := map[string][]plant.SpaceLink{
+		"crane": {{Name: "Engineering", Kind: "area"}, {Name: "White Team Service", Kind: "folder"}, {Name: "Expert Crane", Kind: "folder"}},
+		"cny":   {{Name: "Engineering", Kind: "area"}, {Name: "White Team Service", Kind: "folder"}, {Name: "Cast Nylon", Kind: "folder"}, {Name: "CNY0324 Process Update", Kind: "project"}},
+	}
+	return rows, chainPlant{chains: chains}
+}
+
+func TestTimeReportFilesCarryTheFourColumns(t *testing.T) {
+	rows, pl := levelFixture()
+	run := func(query string) [][]string {
+		st := &detailStore{rows: rows}
+		s := &Server{time: st, plant: pl, log: slog.New(slog.NewTextHandler(&strings.Builder{}, nil))}
+		req := httptest.NewRequest(http.MethodGet, "/reports/time?"+query, nil)
+		req = req.WithContext(auth.WithIdentity(req.Context(), &auth.Identity{OrgID: "o", PrincipalID: "me"}))
+		rec := httptest.NewRecorder()
+		s.getTimeReport(rec, req)
+		recs, err := csv.NewReader(rec.Body).ReadAll()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return recs
+	}
+	want := [][]string{
+		{"White Team Service", "Expert Crane", "", "On-Site Testing at Mt. Clemens"},
+		{"White Team Service", "Cast Nylon", "CNY0324 Process Update", "Alarm map"},
+		{"", "", "", ""},
+	}
+	// details file, filtered by a space the way the report's filter does
+	d := run("detail=1&format=csv&all=1&from=2026-11-01&to=2026-11-30")
+	if strings.Join(d[0][6:10], ",") != "space,customer_project,service_project_phase,task" {
+		t.Fatalf("details header %v", d[0])
+	}
+	for i, w := range want {
+		if got := d[i+1][6:10]; strings.Join(got, "|") != strings.Join(w, "|") {
+			t.Errorf("details row %d reads %v, want %v", i, got, w)
+		}
+	}
+	// the per-person file
+	st := &detailStore{rows: rows}
+	sv := &Server{time: st, plant: pl, log: slog.New(slog.NewTextHandler(&strings.Builder{}, nil))}
+	req := httptest.NewRequest(http.MethodGet, "/reports/time?person=p1&format=csv&from=2026-11-01&to=2026-11-30", nil)
+	req = req.WithContext(auth.WithIdentity(req.Context(), &auth.Identity{OrgID: "o", PrincipalID: "me"}))
+	rec := httptest.NewRecorder()
+	sv.getTimeReport(rec, req)
+	cr := csv.NewReader(rec.Body)
+	cr.FieldsPerRecord = -1
+	recs, err := cr.ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(recs[0][:6], ",") != "date,hours,space,customer_project,service_project_phase,task" {
+		t.Fatalf("person header %v", recs[0])
+	}
+	if got := strings.Join(recs[2][2:6], "|"); got != "White Team Service|Cast Nylon|CNY0324 Process Update|Alarm map" {
+		t.Errorf("person row reads %q", got)
 	}
 }

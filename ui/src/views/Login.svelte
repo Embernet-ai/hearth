@@ -34,7 +34,7 @@
   <section class="door-card">
     {#if pg.Message}<p class="err door-err" role="alert">{pg.Message}</p>{/if}
     {#if !showForm}
-      <a class="door-btn" href="/login/sso">
+      <a class="door-btn" href={"/login/sso" + (pg.Next ? "?next=" + encodeURIComponent(pg.Next) : "")}>
         {#if isVord}<img class="door-btn-icon" src="/vord.svg" alt="" />{/if}
         Login with {ssoName}
       </a>
@@ -49,7 +49,7 @@
       </form>
       {#if pg.SSO}
         <p class="door-or">or</p>
-        <a class="door-btn" href="/login/sso">
+        <a class="door-btn" href={"/login/sso" + (pg.Next ? "?next=" + encodeURIComponent(pg.Next) : "")}>
           {#if isVord}<img class="door-btn-icon" src="/vord.svg" alt="" />{/if}
           Login with {ssoName}
         </a>

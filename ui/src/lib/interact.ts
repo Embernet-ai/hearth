@@ -1,6 +1,6 @@
 import type { Envelope } from './types';
 import { router } from './router.svelte';
-import { isPage, encode } from './api';
+import { isPage, isFile, withoutFormat, encode } from './api';
 
 // Forms in the pages post to the address they name, with the fields the form carries. One listener turns every such
 // post into a fetch whose answer (the server redirects to where the action leads, and fetch follows with the JSON
@@ -31,13 +31,18 @@ function submit(ev: SubmitEvent) {
   const address = u.pathname + u.search;
   if (!isPage(address) && u.pathname !== '/logout') return;
   const method = (form.method || 'get').toLowerCase();
-  ev.preventDefault();
   const data = new FormData(form, ev.submitter as HTMLElement | null);
   if (method === 'get') {
     const q = new URLSearchParams(data as any).toString();
-    router.go(u.pathname + (q ? '?' + q : ''));
+    const target = u.pathname + (q ? '?' + q : '');
+    // A form whose button asks for a file (the submitter's format=csv or xlsx) is left to the browser: drawn as a page it was
+    // fetched as JSON and the file thrown away.
+    if (isFile(target)) return;
+    ev.preventDefault();
+    router.go(target);
     return;
   }
+  ev.preventDefault();
   const host = form.closest('[data-embedded]');
   fetch(address, { method: 'POST', body: encode(data), headers: { Accept: 'application/json' }, credentials: 'same-origin' })
     .then(async (res) => {
@@ -62,7 +67,13 @@ function submit(ev: SubmitEvent) {
         // The service worker answers a post made without a signal with a page of its own: a redirect back to where the person was
         // (the post is kept and sent later), or a "that one needs a connection" page. A browser would follow the redirect or show
         // that page, so this does the same. An answer that is neither (a toggle, a drop) has nothing to show.
-        if (res.redirected) { router.go(new URL(res.url).pathname + new URL(res.url).search); return; }
+        if (res.redirected) {
+          const to = new URL(res.url).pathname + new URL(res.url).search;
+          // Signing in again sends a person back to the file they asked for: that is the browser's to download, not a page.
+          if (isFile(to)) { location.assign(to); router.go(withoutFormat(to)); return; }
+          router.go(to);
+          return;
+        }
         const html = await res.text();
         if (ct.includes('text/html') && html.trim()) { document.open(); document.write(html); document.close(); return; }
         if (res.ok) return;

@@ -150,6 +150,8 @@ form.card > .row > select { flex: 1 1 14rem; min-width: 0; }
 .settingsgrid .card a.button { display: inline-flex; justify-content: center; align-items: center; padding: 0.5em 1.1em; align-self: flex-start; }
 pre { max-width: 100%; overflow-x: auto; }
 main section > .table-wrap, main section table.list { max-width: 100%; }
+/* a table with many columns scrolls inside its own box rather than widening the page */
+.table-scroll { max-width: 100%; overflow-x: auto; }
 
 /* ---- inline fields: a label with its control, controls in a row share the row rather than each taking all of it ----------- */
 label.muted.small, .row > label { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }

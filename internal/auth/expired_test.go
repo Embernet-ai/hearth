@@ -65,10 +65,23 @@ func TestExpiredSessionAnswersJSONAPIWith401(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized || rec.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("got %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
-	req := httptest.NewRequest("GET", "/something", nil)
+}
+
+// The interface fetches every page with Accept: application/json. A 401 with a JSON body was drawn as if it were the
+// page, so a person whose Vord session had ended got a broken report and no way back. A page fetch is sent to sign-in
+// with the page it wanted, as a browser is.
+func TestExpiredSessionOnAPageFetchGoesToSignInAndBack(t *testing.T) {
+	req := httptest.NewRequest("GET", "/reports/time?format=xlsx&from=2026-11-01", nil)
 	req.Header.Set("Accept", "application/json")
-	if rec := serve(t, ErrNoUserToken, 502, req); rec.Code != http.StatusUnauthorized {
-		t.Fatalf("Accept json: %d", rec.Code)
+	rec := serve(t, ErrTokenExpired, 401, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d, want 303", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/login?next=%2Freports%2Ftime%3Fformat%3Dxlsx%26from%3D2026-11-01" {
+		t.Fatalf("Location %q", got)
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("a body was sent: %q", rec.Body.String())
 	}
 }
 
