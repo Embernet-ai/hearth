@@ -54,6 +54,8 @@ type Store interface {
 		assetID string, f Fields) error
 	SpaceChildren(ctx context.Context, orgID string, actor core.Subjects, parentID string) ([]*Space, error)
 	SpaceTree(ctx context.Context, orgID string, actor core.Subjects) ([]*Space, error)
+	// SpaceChains is every space's links from its root down, with no access filter, for the time report's columns.
+	SpaceChains(ctx context.Context, orgID string) (map[string][]SpaceLink, error)
 	Tree(ctx context.Context, orgID string, actor core.Subjects) ([]*Asset, error)
 	Undelegate(ctx context.Context, orgID string, actor core.Subjects, spaceID, personID string) error
 }
