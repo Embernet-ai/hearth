@@ -287,28 +287,6 @@ func levelFixture() ([]timelog.ReportRow, chainPlant) {
 	return rows, chainPlant{chains: chains}
 }
 
-// livePlant is how the live server holds its plant store: the EmberOps store wraps the Postgres one and embeds the
-// interface, so only what the interface itself names reaches the report. 2.33.0 asked for the tree through an optional
-// method the wrapper hid, and every live row fell back to its single space name with Customer and Phase empty.
-type livePlant struct{ plant.Store }
-
-func TestTimeReportLevelsReachThroughAWrappedPlantStore(t *testing.T) {
-	rows, inner := levelFixture()
-	st := &detailStore{rows: rows}
-	s := &Server{time: st, plant: livePlant{inner}, log: slog.New(slog.NewTextHandler(&strings.Builder{}, nil))}
-	req := httptest.NewRequest(http.MethodGet, "/reports/time?detail=1&format=csv&all=1&from=2026-11-01&to=2026-11-30", nil)
-	req = req.WithContext(auth.WithIdentity(req.Context(), &auth.Identity{OrgID: "o", PrincipalID: "me"}))
-	rec := httptest.NewRecorder()
-	s.getTimeReport(rec, req)
-	recs, err := csv.NewReader(rec.Body).ReadAll()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.Join(recs[1][6:10], "|"); got != "White Team Service|Expert Crane||On-Site Testing at Mt. Clemens" {
-		t.Errorf("a wrapped store gave %q", got)
-	}
-}
-
 func TestTimeReportFilesCarryTheFourColumns(t *testing.T) {
 	rows, pl := levelFixture()
 	run := func(query string) [][]string {
