@@ -30,9 +30,9 @@ import (
 // Shared by both pages here so that moving between them keeps the week, and so
 // there is one place that decides a week starts on Monday.
 func weekOf(r *http.Request) (from, to time.Time) {
-	from = startOfWeek(time.Now())
+	from = startOfWeek(officeNow())
 	if v := r.URL.Query().Get("from"); v != "" {
-		if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			from = startOfWeek(d)
 		}
 	}
@@ -47,10 +47,10 @@ func (s *Server) getMyTime(w http.ResponseWriter, r *http.Request) {
 	// the address names, to the end of it.
 	month := r.URL.Query().Get("span") == "month"
 	if month {
-		from = time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.Local)
+		from = time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, docs.OfficeZone())
 		if v := r.URL.Query().Get("from"); v != "" {
-			if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
-				from = time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.Local)
+			if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
+				from = time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, docs.OfficeZone())
 			}
 		}
 		to = from.AddDate(0, 1, 0)
@@ -187,7 +187,7 @@ func (s *Server) postMyTime(w http.ResponseWriter, r *http.Request) {
 
 	on := time.Now()
 	if v := strings.TrimSpace(r.FormValue("on")); v != "" {
-		if d, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if d, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			on = d
 		}
 	}
@@ -254,7 +254,7 @@ func (s *Server) startMyTimer(w http.ResponseWriter, r *http.Request) {
 func (s *Server) backToTime(w http.ResponseWriter, r *http.Request) {
 	back := "/time"
 	if v := strings.TrimSpace(r.FormValue("week")); v != "" {
-		if _, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if _, err := time.ParseInLocation("2006-01-02", v, docs.OfficeZone()); err == nil {
 			back += "?from=" + v
 		}
 	}
