@@ -86,6 +86,7 @@
 
   {#if F.t(dot?.ReportPerson)}
     {#if F.t(dot?.Report)}
+      <div  class="table-scroll">
       <table  class="list">
         <thead>
           <tr><th>Date</th><th>Hours</th><th>Space</th><th>Customer/Project</th><th>Service/Project Phase</th><th>Task</th><th>Tags</th><th>Note</th><th>Approval</th></tr>
@@ -106,6 +107,7 @@
           {/each}
         </tbody>
       </table>
+      </div>
     {:else}
       <p  class="muted">Nothing logged in this range.</p>
     {/if}
